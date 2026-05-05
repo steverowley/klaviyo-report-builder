@@ -38,7 +38,7 @@ function reportBody(type, startDate, endDate, conversionMetricId) {
     },
     statistics: [
       'recipients', 'delivered', 'open_rate', 'click_rate',
-      'conversions', 'conversion_rate', 'revenue',
+      'conversions', 'conversion_rate', 'conversion_value',
     ],
   };
   if (conversionMetricId) attributes.conversion_metric_id = conversionMetricId;
