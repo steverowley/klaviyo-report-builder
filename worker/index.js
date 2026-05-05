@@ -67,17 +67,50 @@ function aggregateBody(metricId, startDate, endDate, measurements) {
 }
 
 // Klaviyo values-report responses nest rows at data.attributes.results.
-// Each row: { groupings: { flow_id, flow_name, ... }, statistics: { recipients, ... } }
 function extractResults(report) {
   const results = report?.data?.attributes?.results;
   if (Array.isArray(results)) return results;
-  // Fallback: top-level array (older revision shape)
   if (Array.isArray(report?.data)) return report.data;
   return [];
 }
 
+// Fetch all flows and return a map of { flowId -> flowName }.
+async function getFlowNames(klaviyoKey) {
+  try {
+    let url = '/flows/?fields[flow]=name&page[size]=100';
+    const names = {};
+    while (url) {
+      const res = await kFetch(url, klaviyoKey);
+      for (const f of (res.data ?? [])) {
+        names[f.id] = f.attributes?.name ?? f.id;
+      }
+      url = res.links?.next ? res.links.next.replace(KLAVIYO_BASE, '') : null;
+    }
+    return names;
+  } catch {
+    return {};
+  }
+}
+
+// Fetch all campaigns and return a map of { campaignId -> campaignName }.
+async function getCampaignNames(klaviyoKey) {
+  try {
+    let url = '/campaigns/?fields[campaign]=name&filter=equals(messages.channel,\'email\')&page[size]=100';
+    const names = {};
+    while (url) {
+      const res = await kFetch(url, klaviyoKey);
+      for (const c of (res.data ?? [])) {
+        names[c.id] = c.attributes?.name ?? c.id;
+      }
+      url = res.links?.next ? res.links.next.replace(KLAVIYO_BASE, '') : null;
+    }
+    return names;
+  } catch {
+    return {};
+  }
+}
+
 // Normalise a metric-aggregate response into {dates, counts}.
-// Handles both flat [5,3,7] and nested [[5],[3],[7]] Klaviyo response formats.
 function processAggregate(agg, measurement = 'count') {
   try {
     const attrs = agg?.data?.attributes;
@@ -93,35 +126,36 @@ function processAggregate(agg, measurement = 'count') {
 }
 
 // Normalise campaign results into a flat array for Claude.
-function normaliseCampaigns(report) {
+function normaliseCampaigns(report, campaignNames = {}) {
   return extractResults(report).map(row => {
     const g = row.groupings ?? {};
     const s = row.statistics ?? {};
+    const id = g.campaign_id ?? null;
     return {
-      campaign_id:       g.campaign_id ?? null,
-      campaign_name:     g.campaign_name ?? g.send_channel ?? 'Unknown',
+      campaign_id:       id,
+      campaign_name:     campaignNames[id] ?? g.campaign_name ?? g.name ?? id ?? 'Unknown Campaign',
       send_channel:      g.send_channel ?? null,
-      recipients:        Number(s.recipients ?? 0),
-      delivered:         Number(s.delivered ?? 0),
-      open_rate:         Number(s.open_rate ?? 0),
-      click_rate:        Number(s.click_rate ?? 0),
-      conversions:       Number(s.conversions ?? 0),
-      conversion_rate:   Number(s.conversion_rate ?? 0),
-      conversion_value:  Number(s.conversion_value ?? 0),
+      recipients:        Number(s.recipients       ?? 0),
+      delivered:         Number(s.delivered        ?? 0),
+      open_rate:         Number(s.open_rate         ?? 0),
+      click_rate:        Number(s.click_rate        ?? 0),
+      conversions:       Number(s.conversions       ?? 0),
+      conversion_rate:   Number(s.conversion_rate   ?? 0),
+      conversion_value:  Number(s.conversion_value  ?? 0),
     };
   });
 }
 
 // Roll up per-message flow rows into per-flow aggregates.
-function aggregateFlowRows(report) {
+function aggregateFlowRows(report, flowNames = {}) {
   const rows = extractResults(report);
   const byFlow = {};
 
   for (const row of rows) {
     const g = row.groupings ?? {};
     const s = row.statistics ?? {};
-    const flowId   = g.flow_id   ?? 'unknown';
-    const flowName = g.flow_name ?? flowId;
+    const flowId   = g.flow_id ?? 'unknown';
+    const flowName = flowNames[flowId] ?? g.flow_name ?? g.flow_message_name ?? flowId;
 
     if (!byFlow[flowId]) {
       byFlow[flowId] = {
@@ -135,11 +169,11 @@ function aggregateFlowRows(report) {
 
     const f = byFlow[flowId];
     const r = Number(s.recipients ?? 0);
-    f.recipients      += r;
-    f.delivered       += Number(s.delivered ?? 0);
-    f.opens           += Math.round(Number(s.open_rate  ?? 0) * r);
-    f.clicks          += Math.round(Number(s.click_rate ?? 0) * r);
-    f.conversions     += Number(s.conversions     ?? 0);
+    f.recipients       += r;
+    f.delivered        += Number(s.delivered        ?? 0);
+    f.opens            += Math.round(Number(s.open_rate  ?? 0) * r);
+    f.clicks           += Math.round(Number(s.click_rate ?? 0) * r);
+    f.conversions      += Number(s.conversions      ?? 0);
     f.conversion_value += Number(s.conversion_value ?? 0);
   }
 
@@ -148,7 +182,7 @@ function aggregateFlowRows(report) {
     open_rate:       f.recipients > 0 ? f.opens  / f.recipients : 0,
     click_rate:      f.recipients > 0 ? f.clicks / f.recipients : 0,
     ctor:            f.opens      > 0 ? f.clicks / f.opens      : 0,
-    conversion_rate: f.recipients > 0 ? f.conversions / f.recipients : 0,
+    conversion_rate: f.recipients > 0 ? f.conversions      / f.recipients : 0,
     rpr:             f.recipients > 0 ? f.conversion_value / f.recipients : 0,
   }));
 }
@@ -183,18 +217,22 @@ export default {
     }
 
     try {
-      const [accounts, metrics] = await Promise.all([
+      // Parallel: account info, metrics list, flow names, campaign names
+      const [accounts, metrics, flowNames, campaignNames] = await Promise.all([
         kFetch('/accounts/', klaviyoKey),
         kFetch('/metrics/', klaviyoKey),
+        getFlowNames(klaviyoKey),
+        getCampaignNames(klaviyoKey),
       ]);
 
       const metricList = metrics.data ?? [];
       const findMetric = (...keywords) =>
         metricList.find(m => keywords.some(k => (m.attributes?.name ?? '').toLowerCase().includes(k)));
 
-      const conversionMetric    = findMetric('placed order');
-      const subscribedMetric    = findMetric('subscribed to list', 'subscribe to list');
-      const unsubscribedMetric  = findMetric('unsubscribed', 'unsubscribe');
+      // Broad matching to handle Shopify/WooCommerce prefixed names and variations
+      const conversionMetric   = findMetric('placed order', 'place order', 'purchase');
+      const subscribedMetric   = findMetric('subscribed to list', 'subscribe to list', 'subscribed to email', 'added to list', 'joined list', 'subscribe');
+      const unsubscribedMetric = findMetric('unsubscribed from list', 'unsubscribed from email', 'removed from list', 'unsubscribed', 'unsubscribe');
 
       const conversionMetricId   = conversionMetric?.id   ?? null;
       const subscribedMetricId   = subscribedMetric?.id   ?? null;
@@ -231,22 +269,30 @@ export default {
           }),
         ]);
         comparison = {
-          campaigns: normaliseCampaigns(compCampaigns),
-          flows:     aggregateFlowRows(compFlows),
+          campaigns: normaliseCampaigns(compCampaigns, campaignNames),
+          flows:     aggregateFlowRows(compFlows, flowNames),
         };
       }
 
       return new Response(JSON.stringify({
-        account: accounts.data?.[0] ?? null,
+        account:  accounts.data?.[0] ?? null,
         period: {
-          campaigns: normaliseCampaigns(campaignReport),
-          flows:     aggregateFlowRows(flowReport),
+          campaigns: normaliseCampaigns(campaignReport, campaignNames),
+          flows:     aggregateFlowRows(flowReport, flowNames),
         },
         comparison,
         aggregates: {
           orders:       processAggregate(orderAgg, 'count'),
           subscribers:  processAggregate(subscriberAgg, 'count'),
           unsubscribes: processAggregate(unsubAgg, 'count'),
+        },
+        // Surface which metrics were matched to help debug null aggregates
+        _meta: {
+          conversionMetric:   conversionMetric?.attributes?.name   ?? null,
+          subscribedMetric:   subscribedMetric?.attributes?.name   ?? null,
+          unsubscribedMetric: unsubscribedMetric?.attributes?.name ?? null,
+          flowCount:    Object.keys(flowNames).length,
+          campaignCount: Object.keys(campaignNames).length,
         },
       }), {
         headers: { 'Content-Type': 'application/json', ...cors(origin) },
