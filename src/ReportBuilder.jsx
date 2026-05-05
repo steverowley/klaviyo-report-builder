@@ -280,7 +280,7 @@ Begin pulling data now, then output the final HTML document.`;
           tools: [
             {
               type: "mcp_toolset",
-              server_name: "klaviyo",
+              mcp_server_name: "klaviyo",
             },
           ],
         }),
