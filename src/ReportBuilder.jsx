@@ -1089,96 +1089,90 @@ function CompletionOverlay({ onDismiss, onNewReport }) {
         animation: "overlayFadeIn 0.4s ease-out",
       }}
     >
-      <div
-        style={{
-          position: "absolute",
-          left: "10%",
-          right: "10%",
-          top: "50%",
-          height: "1px",
-          background: "#0a0a0a",
-          transformOrigin: "center",
-          transform: "scaleX(0)",
-          animation: "drawHairline 0.6s cubic-bezier(0.65, 0, 0.35, 1) 0.1s forwards",
-        }}
-      />
-
+      {/* Checkmark */}
       <svg
-        width="64"
-        height="64"
+        width="48"
+        height="48"
         viewBox="0 0 64 64"
         xmlns="http://www.w3.org/2000/svg"
-        style={{ marginBottom: "28px", zIndex: 2, opacity: 0, animation: "markIn 0.5s ease-out 0.5s forwards" }}
+        style={{ marginBottom: "40px", opacity: 0, animation: "markIn 0.5s ease-out 0.3s forwards" }}
       >
         <circle
-          cx="32"
-          cy="32"
-          r="30"
-          fill="none"
-          stroke="#0a0a0a"
-          strokeWidth="1"
-          strokeDasharray="190"
-          strokeDashoffset="190"
-          style={{ animation: "drawCircle 0.7s cubic-bezier(0.65, 0, 0.35, 1) 0.5s forwards" }}
+          cx="32" cy="32" r="30"
+          fill="none" stroke="#0a0a0a" strokeWidth="1"
+          strokeDasharray="190" strokeDashoffset="190"
+          style={{ animation: "drawCircle 0.7s cubic-bezier(0.65, 0, 0.35, 1) 0.3s forwards" }}
         />
         <path
           d="M 18 33 L 28 43 L 46 23"
-          fill="none"
-          stroke="#0a0a0a"
-          strokeWidth="1.5"
-          strokeLinecap="square"
-          strokeLinejoin="miter"
-          strokeDasharray="50"
-          strokeDashoffset="50"
-          style={{ animation: "drawCheck 0.4s cubic-bezier(0.65, 0, 0.35, 1) 1s forwards" }}
+          fill="none" stroke="#0a0a0a" strokeWidth="1.5"
+          strokeLinecap="square" strokeLinejoin="miter"
+          strokeDasharray="50" strokeDashoffset="50"
+          style={{ animation: "drawCheck 0.4s cubic-bezier(0.65, 0, 0.35, 1) 0.8s forwards" }}
         />
       </svg>
 
-      <div
-        style={{
-          fontFamily: "'Cormorant Garamond', serif",
-          fontSize: "44px",
-          fontWeight: 300,
-          color: "#0a0a0a",
-          letterSpacing: "-0.01em",
-          fontStyle: "italic",
-          opacity: 0,
-          animation: "fadeUp 0.6s ease-out 1.1s forwards",
-          zIndex: 2,
-        }}
-      >
+      {/* Hairline above title */}
+      <div style={{
+        width: "min(480px, 60%)",
+        height: "1px",
+        background: "#0a0a0a",
+        transformOrigin: "left",
+        transform: "scaleX(0)",
+        animation: "drawHairline 0.5s cubic-bezier(0.65, 0, 0.35, 1) 1s forwards",
+      }} />
+
+      {/* Title */}
+      <div style={{
+        fontFamily: "'Cormorant Garamond', serif",
+        fontSize: "52px",
+        fontWeight: 300,
+        color: "#0a0a0a",
+        letterSpacing: "-0.01em",
+        fontStyle: "italic",
+        lineHeight: 1.1,
+        padding: "16px 0 12px",
+        opacity: 0,
+        animation: "fadeUp 0.6s ease-out 1.1s forwards",
+      }}>
         Ready.
       </div>
 
-      <div
-        style={{
-          marginTop: "12px",
-          fontSize: "10px",
-          textTransform: "uppercase",
-          letterSpacing: "0.24em",
-          color: "#6b6b6b",
-          opacity: 0,
-          animation: "fadeUp 0.6s ease-out 1.3s forwards",
-          zIndex: 2,
-        }}
-      >
+      {/* Hairline below title */}
+      <div style={{
+        width: "min(480px, 60%)",
+        height: "1px",
+        background: "#0a0a0a",
+        transformOrigin: "right",
+        transform: "scaleX(0)",
+        animation: "drawHairline 0.5s cubic-bezier(0.65, 0, 0.35, 1) 1.05s forwards",
+      }} />
+
+      {/* Subtitle */}
+      <div style={{
+        marginTop: "20px",
+        fontSize: "10px",
+        textTransform: "uppercase",
+        letterSpacing: "0.24em",
+        color: "#6b6b6b",
+        opacity: 0,
+        animation: "fadeUp 0.6s ease-out 1.3s forwards",
+      }}>
         Your report is rendered below
       </div>
 
-      <div
-        style={{
-          marginTop: "36px",
-          display: "flex",
-          gap: "12px",
-          opacity: 0,
-          animation: "fadeUp 0.6s ease-out 1.5s forwards",
-          zIndex: 2,
-        }}
-      >
+      {/* Buttons */}
+      <div style={{
+        marginTop: "36px",
+        display: "flex",
+        gap: "12px",
+        opacity: 0,
+        animation: "fadeUp 0.6s ease-out 1.5s forwards",
+      }}>
         <button
           onClick={onDismiss}
           style={{
-            padding: "12px 24px",
+            padding: "12px 28px",
             background: "#0a0a0a",
             color: "#ffffff",
             border: "1px solid #0a0a0a",
@@ -1198,7 +1192,7 @@ function CompletionOverlay({ onDismiss, onNewReport }) {
         <button
           onClick={onNewReport}
           style={{
-            padding: "12px 24px",
+            padding: "12px 28px",
             background: "transparent",
             color: "#0a0a0a",
             border: "1px solid #0a0a0a",
@@ -1208,7 +1202,10 @@ function CompletionOverlay({ onDismiss, onNewReport }) {
             letterSpacing: "0.18em",
             textTransform: "uppercase",
             cursor: "pointer",
+            transition: "background 0.2s ease",
           }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = "#ededed")}
+          onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
         >
           New report
         </button>
