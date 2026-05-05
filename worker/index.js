@@ -66,6 +66,16 @@ function aggregateBody(metricId, startDate, endDate, measurements) {
   });
 }
 
+// Klaviyo values-report responses nest rows at data.attributes.results.
+// Each row: { groupings: { flow_id, flow_name, ... }, statistics: { recipients, ... } }
+function extractResults(report) {
+  const results = report?.data?.attributes?.results;
+  if (Array.isArray(results)) return results;
+  // Fallback: top-level array (older revision shape)
+  if (Array.isArray(report?.data)) return report.data;
+  return [];
+}
+
 // Normalise a metric-aggregate response into {dates, counts}.
 // Handles both flat [5,3,7] and nested [[5],[3],[7]] Klaviyo response formats.
 function processAggregate(agg, measurement = 'count') {
@@ -82,51 +92,64 @@ function processAggregate(agg, measurement = 'count') {
   }
 }
 
+// Normalise campaign results into a flat array for Claude.
+function normaliseCampaigns(report) {
+  return extractResults(report).map(row => {
+    const g = row.groupings ?? {};
+    const s = row.statistics ?? {};
+    return {
+      campaign_id:       g.campaign_id ?? null,
+      campaign_name:     g.campaign_name ?? g.send_channel ?? 'Unknown',
+      send_channel:      g.send_channel ?? null,
+      recipients:        Number(s.recipients ?? 0),
+      delivered:         Number(s.delivered ?? 0),
+      open_rate:         Number(s.open_rate ?? 0),
+      click_rate:        Number(s.click_rate ?? 0),
+      conversions:       Number(s.conversions ?? 0),
+      conversion_rate:   Number(s.conversion_rate ?? 0),
+      conversion_value:  Number(s.conversion_value ?? 0),
+    };
+  });
+}
+
 // Roll up per-message flow rows into per-flow aggregates.
-function aggregateFlowRows(flowReport) {
-  const rows = Array.isArray(flowReport?.data) ? flowReport.data : [];
+function aggregateFlowRows(report) {
+  const rows = extractResults(report);
   const byFlow = {};
 
   for (const row of rows) {
-    const a = row.attributes ?? {};
-    // Klaviyo flow-values-report nests stats under groupings
-    const stats = a.statistics ?? a;
-    const flowId = a.flow_id ?? a.groupings?.flow_id ?? row.id ?? 'unknown';
-    const flowName = a.flow_name ?? a.groupings?.flow_name ?? a.name ?? flowId;
-    const trigger = a.flow_trigger ?? a.trigger_type ?? null;
+    const g = row.groupings ?? {};
+    const s = row.statistics ?? {};
+    const flowId   = g.flow_id   ?? 'unknown';
+    const flowName = g.flow_name ?? flowId;
 
     if (!byFlow[flowId]) {
       byFlow[flowId] = {
-        id: flowId,
-        name: flowName,
-        trigger,
-        recipients: 0,
-        delivered: 0,
-        opens: 0,
-        clicks: 0,
-        conversions: 0,
-        conversion_value: 0,
+        id: flowId, name: flowName,
+        send_channel: g.send_channel ?? null,
+        recipients: 0, delivered: 0,
+        opens: 0, clicks: 0,
+        conversions: 0, conversion_value: 0,
       };
     }
 
     const f = byFlow[flowId];
-    const r = Number(stats.recipients ?? 0);
-    f.recipients += r;
-    f.delivered += Number(stats.delivered ?? 0);
-    // open_rate and click_rate are fractions of recipients — recover event counts
-    f.opens += Math.round(Number(stats.open_rate ?? 0) * r);
-    f.clicks += Math.round(Number(stats.click_rate ?? 0) * r);
-    f.conversions += Number(stats.conversions ?? 0);
-    f.conversion_value += Number(stats.conversion_value ?? 0);
+    const r = Number(s.recipients ?? 0);
+    f.recipients      += r;
+    f.delivered       += Number(s.delivered ?? 0);
+    f.opens           += Math.round(Number(s.open_rate  ?? 0) * r);
+    f.clicks          += Math.round(Number(s.click_rate ?? 0) * r);
+    f.conversions     += Number(s.conversions     ?? 0);
+    f.conversion_value += Number(s.conversion_value ?? 0);
   }
 
   return Object.values(byFlow).map(f => ({
     ...f,
-    open_rate: f.recipients > 0 ? f.opens / f.recipients : 0,
-    click_rate: f.recipients > 0 ? f.clicks / f.recipients : 0,
-    ctor: f.opens > 0 ? f.clicks / f.opens : 0,
+    open_rate:       f.recipients > 0 ? f.opens  / f.recipients : 0,
+    click_rate:      f.recipients > 0 ? f.clicks / f.recipients : 0,
+    ctor:            f.opens      > 0 ? f.clicks / f.opens      : 0,
     conversion_rate: f.recipients > 0 ? f.conversions / f.recipients : 0,
-    rpr: f.recipients > 0 ? f.conversion_value / f.recipients : 0,
+    rpr:             f.recipients > 0 ? f.conversion_value / f.recipients : 0,
   }));
 }
 
@@ -173,8 +196,8 @@ export default {
       const subscribedMetric    = findMetric('subscribed to list', 'subscribe to list');
       const unsubscribedMetric  = findMetric('unsubscribed', 'unsubscribe');
 
-      const conversionMetricId   = conversionMetric?.id ?? null;
-      const subscribedMetricId   = subscribedMetric?.id ?? null;
+      const conversionMetricId   = conversionMetric?.id   ?? null;
+      const subscribedMetricId   = subscribedMetric?.id   ?? null;
       const unsubscribedMetricId = unsubscribedMetric?.id ?? null;
 
       const safeAgg = (metricId, measurements) =>
@@ -208,16 +231,16 @@ export default {
           }),
         ]);
         comparison = {
-          campaigns: campaignReport,
-          flows: aggregateFlowRows(compFlows),
+          campaigns: normaliseCampaigns(compCampaigns),
+          flows:     aggregateFlowRows(compFlows),
         };
       }
 
       return new Response(JSON.stringify({
         account: accounts.data?.[0] ?? null,
         period: {
-          campaigns: campaignReport,
-          flows: aggregateFlowRows(flowReport),
+          campaigns: normaliseCampaigns(campaignReport),
+          flows:     aggregateFlowRows(flowReport),
         },
         comparison,
         aggregates: {
