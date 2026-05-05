@@ -133,7 +133,7 @@ FONTS:
 PALETTE (strictly monochromatic — no other colours ever):
 --ink: #0a0a0a  --graphite: #2a2a2a  --ash: #6b6b6b  --silver: #b8b8b8  --bone: #ededed  --paper: #f8f6f2  --pearl: #ffffff
 
-LAYOUT: max-width 880px centred, generous whitespace, editorial magazine feel, 1px hairline rules.
+LAYOUT: max-width 1200px centred, generous whitespace, editorial magazine feel, 1px hairline rules. Tables must be full-width within the content area — never let columns squish; use adequate column widths so numbers and names are fully legible.
 
 REQUIRED STRUCTURE:
 1. Header with Swanky logo: <img src="https://swankyagency.com/wp-content/uploads/2022/05/swanky-2020-black.png" style="height:32px;opacity:0.9;">
@@ -695,12 +695,12 @@ Output ONLY a complete HTML document (<!DOCTYPE html>…</html>) with all CSS em
               onNewReport={handleNewReport}
             />
           )}
-          {/* Only show iframe when generation is complete and overlay is dismissed */}
-          {reportHtml && !isGenerating && (
+          {/* Render iframe whenever reportHtml exists so the ref is available for srcdoc */}
+          {reportHtml && (
             <iframe
               ref={iframeRef}
               title="Klaviyo report preview"
-              style={{ width: "100%", height: "100%", border: "none", background: "#ffffff" }}
+              style={{ width: "100%", height: "100%", border: "none", background: "#ffffff", display: isGenerating ? "none" : "block" }}
               sandbox="allow-same-origin"
             />
           )}
@@ -970,7 +970,7 @@ function LoadingState({ progress, line, elapsed, justFinished, onDismissCompleti
 
           <rect x="22" y="32" width="2" height="9" fill="#0a0a0a">
             <animate attributeName="x" values="22;78;22;90;22;70;22;98;22;84;22;92;22;66;22;22" keyTimes="0;0.08;0.10;0.18;0.20;0.27;0.36;0.46;0.48;0.55;0.57;0.65;0.67;0.72;0.95;1" dur="12s" repeatCount="indefinite" />
-            <animate attributeName="y" values="32;32;42;42;52;52;82;82;98;98;106;106;114;114;32;32" keyTimes="0;0.08;0.10;0.18;0.20;0.27;0.36;0.46;0.48;0.55;0.57;0.65;0.67;0.72;0.95;1" dur="12s" repeatCount="indefinite" />
+            <animate attributeName="y" values="32;32;42;42;52;52;98;98;106;106;114;114;122;122;32;32" keyTimes="0;0.08;0.10;0.18;0.20;0.27;0.36;0.46;0.48;0.55;0.57;0.65;0.67;0.72;0.95;1" dur="12s" repeatCount="indefinite" />
             <animate attributeName="opacity" values="1;0;1;0;1;0;1;0" keyTimes="0;0.07;0.14;0.21;0.28;0.35;0.42;1" dur="0.9s" repeatCount="indefinite" />
           </rect>
         </svg>
