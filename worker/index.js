@@ -74,47 +74,67 @@ function extractResults(report) {
   return [];
 }
 
-// Fetch all flows and return a map of { flowId -> flowName }.
+// Fetch all flows and return { flowId -> flowName }.
+// Uses plain /flows/ with no field filter to avoid 400 from encoding issues.
 async function getFlowNames(klaviyoKey) {
+  const names = {};
+  let errMsg = null;
   try {
-    let url = '/flows/?fields[flow]=name&page[size]=100';
-    const names = {};
+    let url = '/flows/?page[size]=100';
     while (url) {
       const res = await kFetch(url, klaviyoKey);
       for (const f of (res.data ?? [])) {
         names[f.id] = f.attributes?.name ?? f.id;
       }
-      url = res.links?.next ? res.links.next.replace(KLAVIYO_BASE, '') : null;
+      const next = res.links?.next ?? null;
+      url = next ? next.replace(KLAVIYO_BASE, '') : null;
     }
-    return names;
-  } catch {
-    return {};
+  } catch (e) {
+    errMsg = e.message;
   }
+  return { names, errMsg };
 }
 
-// Fetch all campaigns and return a map of { campaignId -> campaignName }.
+// Fetch all campaigns and return { campaignId -> campaignName }.
 async function getCampaignNames(klaviyoKey) {
+  const names = {};
+  let errMsg = null;
   try {
-    let url = '/campaigns/?fields[campaign]=name&filter=equals(messages.channel,\'email\')&page[size]=100';
-    const names = {};
+    // Use URLSearchParams to safely encode filter with quotes
+    const qs = new URLSearchParams({ 'page[size]': '100' }).toString();
+    let url = `/campaigns/?${qs}`;
     while (url) {
       const res = await kFetch(url, klaviyoKey);
       for (const c of (res.data ?? [])) {
         names[c.id] = c.attributes?.name ?? c.id;
       }
-      url = res.links?.next ? res.links.next.replace(KLAVIYO_BASE, '') : null;
+      const next = res.links?.next ?? null;
+      url = next ? next.replace(KLAVIYO_BASE, '') : null;
     }
-    return names;
-  } catch {
-    return {};
+  } catch (e) {
+    errMsg = e.message;
   }
+  return { names, errMsg };
 }
 
-// Normalise a metric-aggregate response into {dates, counts}.
+// Normalise metric-aggregate response into { dates, counts }.
+// Klaviyo returns either flat attrs.dates/attrs.data or nested attrs.results[].
 function processAggregate(agg, measurement = 'count') {
   try {
     const attrs = agg?.data?.attributes;
     if (!attrs) return null;
+
+    // Format A: nested results array (observed in 2024-10-15 revision)
+    if (Array.isArray(attrs.results) && attrs.results.length > 0) {
+      const r = attrs.results[0];
+      const dates = r.dates;
+      const raw = r.measurements?.[measurement] ?? r.data?.[measurement];
+      if (!dates?.length || !raw?.length) return null;
+      const counts = raw.map(v => Array.isArray(v) ? Number(v[0] ?? 0) : Number(v ?? 0));
+      return { dates: dates.map(d => d.slice(0, 10)), counts };
+    }
+
+    // Format B: flat dates + data object
     const dates = attrs.dates;
     const raw = attrs.data?.[measurement];
     if (!dates?.length || !raw?.length) return null;
@@ -132,16 +152,16 @@ function normaliseCampaigns(report, campaignNames = {}) {
     const s = row.statistics ?? {};
     const id = g.campaign_id ?? null;
     return {
-      campaign_id:       id,
-      campaign_name:     campaignNames[id] ?? g.campaign_name ?? g.name ?? id ?? 'Unknown Campaign',
-      send_channel:      g.send_channel ?? null,
-      recipients:        Number(s.recipients       ?? 0),
-      delivered:         Number(s.delivered        ?? 0),
-      open_rate:         Number(s.open_rate         ?? 0),
-      click_rate:        Number(s.click_rate        ?? 0),
-      conversions:       Number(s.conversions       ?? 0),
-      conversion_rate:   Number(s.conversion_rate   ?? 0),
-      conversion_value:  Number(s.conversion_value  ?? 0),
+      campaign_id:      id,
+      campaign_name:    campaignNames[id] ?? g.campaign_name ?? id ?? 'Unknown',
+      send_channel:     g.send_channel ?? null,
+      recipients:       Number(s.recipients      ?? 0),
+      delivered:        Number(s.delivered        ?? 0),
+      open_rate:        Number(s.open_rate        ?? 0),
+      click_rate:       Number(s.click_rate       ?? 0),
+      conversions:      Number(s.conversions      ?? 0),
+      conversion_rate:  Number(s.conversion_rate  ?? 0),
+      conversion_value: Number(s.conversion_value ?? 0),
     };
   });
 }
@@ -217,22 +237,37 @@ export default {
     }
 
     try {
-      // Parallel: account info, metrics list, flow names, campaign names
-      const [accounts, metrics, flowNames, campaignNames] = await Promise.all([
+      const [accounts, metrics, flowResult, campaignResult] = await Promise.all([
         kFetch('/accounts/', klaviyoKey),
         kFetch('/metrics/', klaviyoKey),
         getFlowNames(klaviyoKey),
         getCampaignNames(klaviyoKey),
       ]);
 
-      const metricList = metrics.data ?? [];
-      const findMetric = (...keywords) =>
-        metricList.find(m => keywords.some(k => (m.attributes?.name ?? '').toLowerCase().includes(k)));
+      const flowNames     = flowResult.names;
+      const campaignNames = campaignResult.names;
 
-      // Broad matching to handle Shopify/WooCommerce prefixed names and variations
-      const conversionMetric   = findMetric('placed order', 'place order', 'purchase');
-      const subscribedMetric   = findMetric('subscribed to list', 'subscribe to list', 'subscribed to email', 'added to list', 'joined list', 'subscribe');
-      const unsubscribedMetric = findMetric('unsubscribed from list', 'unsubscribed from email', 'removed from list', 'unsubscribed', 'unsubscribe');
+      const metricList = metrics.data ?? [];
+
+      // Precise matching — order matters (most specific first, exclude wrong categories)
+      const conversionMetric = metricList.find(m => {
+        const n = (m.attributes?.name ?? '').toLowerCase();
+        return n.includes('placed order') || n.includes('place order');
+      });
+
+      const subscribedMetric = metricList.find(m => {
+        const n = (m.attributes?.name ?? '').toLowerCase();
+        return (n.includes('subscribed to list') || n.includes('subscribe to list') ||
+                n.includes('added to list') || n.includes('joined list'))
+          && !n.includes('back in stock') && !n.includes('sms');
+      });
+
+      const unsubscribedMetric = metricList.find(m => {
+        const n = (m.attributes?.name ?? '').toLowerCase();
+        return (n.includes('unsubscribed from list') || n.includes('unsubscribed from email') ||
+                n.includes('removed from list') ||
+                (n.includes('unsubscribed') && !n.includes('sms')));
+      });
 
       const conversionMetricId   = conversionMetric?.id   ?? null;
       const subscribedMetricId   = subscribedMetric?.id   ?? null;
@@ -243,7 +278,7 @@ export default {
           ? kFetch('/metric-aggregates/', klaviyoKey, {
               method: 'POST',
               body: aggregateBody(metricId, startDate, endDate, measurements),
-            }).catch(() => null)
+            }).catch(e => ({ _error: e.message }))
           : Promise.resolve(null);
 
       const [campaignReport, flowReport, orderAgg, subscriberAgg, unsubAgg] = await Promise.all([
@@ -253,8 +288,8 @@ export default {
         kFetch('/flow-values-reports/', klaviyoKey, {
           method: 'POST', body: reportBody('flow-values-report', startDate, endDate, conversionMetricId),
         }),
-        safeAgg(conversionMetricId, ['count', 'sum_value']),
-        safeAgg(subscribedMetricId, ['count']),
+        safeAgg(conversionMetricId,   ['count', 'sum_value']),
+        safeAgg(subscribedMetricId,   ['count']),
         safeAgg(unsubscribedMetricId, ['count']),
       ]);
 
@@ -275,24 +310,28 @@ export default {
       }
 
       return new Response(JSON.stringify({
-        account:  accounts.data?.[0] ?? null,
+        account: accounts.data?.[0] ?? null,
         period: {
           campaigns: normaliseCampaigns(campaignReport, campaignNames),
           flows:     aggregateFlowRows(flowReport, flowNames),
         },
         comparison,
         aggregates: {
-          orders:       processAggregate(orderAgg, 'count'),
+          orders:       processAggregate(orderAgg,      'count'),
           subscribers:  processAggregate(subscriberAgg, 'count'),
-          unsubscribes: processAggregate(unsubAgg, 'count'),
+          unsubscribes: processAggregate(unsubAgg,      'count'),
         },
-        // Surface which metrics were matched to help debug null aggregates
         _meta: {
           conversionMetric:   conversionMetric?.attributes?.name   ?? null,
           subscribedMetric:   subscribedMetric?.attributes?.name   ?? null,
           unsubscribedMetric: unsubscribedMetric?.attributes?.name ?? null,
-          flowCount:    Object.keys(flowNames).length,
-          campaignCount: Object.keys(campaignNames).length,
+          flowNamesError:     flowResult.errMsg,
+          campaignNamesError: campaignResult.errMsg,
+          flowCount:          Object.keys(flowNames).length,
+          campaignCount:      Object.keys(campaignNames).length,
+          orderAggError:      orderAgg?._error ?? null,
+          subscriberAggError: subscriberAgg?._error ?? null,
+          unsubAggError:      unsubAgg?._error ?? null,
         },
       }), {
         headers: { 'Content-Type': 'application/json', ...cors(origin) },
