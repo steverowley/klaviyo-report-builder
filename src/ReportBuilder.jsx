@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect } from "react";
 // localStorage key names — never change these without migrating existing users
 const ANTHROPIC_KEY = "swanky_anthropic_key";
 const KLAVIYO_KEY = "swanky_klaviyo_key";
+const WORKER_URL = "swanky_worker_url";
 
 export default function KlaviyoReportBuilder({ onOpenSettings }) {
   const [accountName, setAccountName] = useState("");
@@ -110,75 +111,43 @@ export default function KlaviyoReportBuilder({ onOpenSettings }) {
     };
   };
 
-  const buildPrompt = () => {
+  const buildPrompt = (klaviyoData) => {
     const range = computeDateRange();
     const comparison = computeComparisonRange(range.start, range.end);
-
-    const swankyStyleGuide = `
-SWANKY REPORT DESIGN SYSTEM (must be followed exactly):
-
-Fonts:
-- Display/Headings: 'Cormorant Garamond', serif (weights 300, 400, 500)
-- Body/UI: 'Inter', sans-serif (weights 300, 400, 500, 600)
-- Load via: <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-
-Palette (strictly monochromatic, no other colors):
-- --ink: #0a0a0a (primary text, headings)
-- --graphite: #2a2a2a (secondary text)
-- --ash: #6b6b6b (tertiary text, captions)
-- --silver: #b8b8b8 (dividers, subtle borders)
-- --bone: #ededed (subtle backgrounds)
-- --paper: #f8f6f2 (warm off-white page background)
-- --pearl: #ffffff (cards)
-
-Layout:
-- Generous whitespace, editorial magazine feel
-- Max content width 880px, centered
-- Section padding: 64px vertical
-- Use thin hairline rules (1px solid var(--silver)) as dividers
-- Numbers should feel monumental: large Cormorant Garamond, light weight
-
-Logo header (top of report):
-<header style="text-align:center;padding:48px 0 32px;border-bottom:1px solid var(--silver);">
-  <img src="https://swankyagency.com/wp-content/uploads/2022/05/swanky-2020-black.png" alt="Swanky" style="height:32px;opacity:0.9;" />
-</header>
-
-Required structure:
-1. Header with Swanky logo
-2. Title block: account name (Cormorant Garamond, 56px, weight 300), date range (Inter, 13px uppercase, letter-spacing 0.15em, var(--ash))
-3. Executive Summary: 2-3 paragraphs of editorial prose summarising performance
-4. Headline Metrics grid (3-4 columns): big numbers + tiny labels + comparison delta if applicable
-5. Campaigns section: table with name, sent, open rate, click rate, revenue
-6. Flows section: table with flow name, recipients, conversions, revenue
-7. Insights & Recommendations: numbered list of 3-5 strategic observations
-8. Footer with Swanky logo and date generated
-
-Tone of writing: confident, editorial, considered. Avoid marketing buzzwords. Write like the Financial Times weekend supplement. Numbers carry the story; prose interprets them.
-
-Comparison rendering: if comparison data present, show delta as small text under each metric. Use up arrow ↑ for positive (no green), down arrow ↓ for negative (no red). Stay monochrome. Format like "↑ 12.4% vs previous period".
-
-Tables: minimal. No vertical lines. Hairline horizontal rules only. Numbers right-aligned in tabular figures (font-variant-numeric: tabular-nums). Headers in Inter 11px uppercase with letter-spacing 0.12em.
-
-Output ONLY a complete HTML document (<!DOCTYPE html>...</html>) with embedded CSS. No markdown fences, no commentary. No JavaScript needed.
-`;
 
     return `You are generating a Klaviyo performance report for the account "${accountName}".
 
 Reporting period: ${range.start} to ${range.end} (${reportType})
 ${comparison ? `Comparison period: ${comparison.start} to ${comparison.end} (${comparisonMode})` : "No comparison period."}
 
-STEP 1 - PULL DATA via the Klaviyo MCP tools:
-- Use klaviyo_get_account_details to confirm account context
-- Use klaviyo_get_campaign_report for campaign performance in the reporting period. Query statistics: recipients, delivered, open_rate, click_rate, conversions, conversion_rate. Include valueStatistics: conversion_value, average_order_value, revenue_per_recipient. Use timeframe with explicit start/end ISO datetimes.
-- Use klaviyo_get_flow_report for flow performance over the same period with the same statistics
-- Use klaviyo_get_metrics if you need to find the conversion metric ID (look for "Placed Order")
-${comparison ? `- Repeat the campaign and flow report queries for the comparison period (${comparison.start} to ${comparison.end}) so you can compute deltas` : ""}
+RAW KLAVIYO DATA (pre-fetched):
+${JSON.stringify(klaviyoData, null, 2)}
 
-STEP 2 - PRODUCE THE REPORT HTML:
+Using the data above, produce a complete HTML report following the Swanky design system exactly:
 
-${swankyStyleGuide}
+FONTS:
+- Display/Headings: 'Cormorant Garamond', serif (weights 300, 400, 500)
+- Body/UI: 'Inter', sans-serif (weights 300, 400, 500, 600)
+- Load via: <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 
-Begin pulling data now, then output the final HTML document.`;
+PALETTE (strictly monochromatic — no other colours ever):
+--ink: #0a0a0a  --graphite: #2a2a2a  --ash: #6b6b6b  --silver: #b8b8b8  --bone: #ededed  --paper: #f8f6f2  --pearl: #ffffff
+
+LAYOUT: max-width 880px centred, generous whitespace, editorial magazine feel, 1px hairline rules.
+
+REQUIRED STRUCTURE:
+1. Header with Swanky logo: <img src="https://swankyagency.com/wp-content/uploads/2022/05/swanky-2020-black.png" style="height:32px;opacity:0.9;">
+2. Title block: account name in Cormorant Garamond 56px weight 300; date range in Inter 13px uppercase letter-spacing 0.15em colour var(--ash)
+3. Executive Summary: 2–3 paragraphs of confident editorial prose (Financial Times weekend style). Numbers carry the story; prose interprets them.
+4. Headline Metrics grid (3–4 columns): large Cormorant Garamond numbers, Inter uppercase labels, comparison delta if available
+5. Campaigns table: name, sent, open rate, click rate, revenue — hairline horizontal rules only, tabular numerals, right-aligned numbers
+6. Flows table: flow name, recipients, conversions, revenue
+7. Insights & Recommendations: 3–5 numbered strategic observations
+8. Footer with Swanky logo and date generated
+
+COMPARISON DELTAS: use ↑ for positive, ↓ for negative — monochrome only, never green or red. Format: "↑ 12.4% vs previous period"
+
+Output ONLY a complete HTML document (<!DOCTYPE html>…</html>) with all CSS embedded. No markdown fences, no commentary, no JavaScript.`;
   };
 
   const clearTimers = () => {
@@ -204,11 +173,12 @@ Begin pulling data now, then output the final HTML document.`;
       return;
     }
 
-    // Read keys from localStorage — never log these values
+    // Read all three values from localStorage — never log these
     const anthropicKey = localStorage.getItem(ANTHROPIC_KEY);
     const klaviyoKey = localStorage.getItem(KLAVIYO_KEY);
+    const workerUrl = localStorage.getItem(WORKER_URL);
 
-    if (!anthropicKey || !klaviyoKey) {
+    if (!anthropicKey || !klaviyoKey || !workerUrl) {
       onOpenSettings();
       return;
     }
@@ -216,7 +186,7 @@ Begin pulling data now, then output the final HTML document.`;
     setIsGenerating(true);
     setReportHtml("");
     setProgress(0);
-    setLoadingLine(loadingLines[0].text);
+    setLoadingLine("Knocking politely on Klaviyo's door");
     setElapsedSeconds(0);
     setStatusMessage("");
     setJustFinished(false);
@@ -225,88 +195,109 @@ Begin pulling data now, then output the final HTML document.`;
     const myRequestId = requestIdRef.current;
 
     const startedAt = Date.now();
-    const ceiling = 92;
-    const expectedDurationMs = 90000;
     let holdingLineIndex = 0;
-
-    progressTimerRef.current = setInterval(() => {
-      const elapsed = Date.now() - startedAt;
-      const t = Math.min(elapsed / expectedDurationMs, 1);
-      const eased = 1 - Math.pow(1 - t, 2.2);
-      const next = Math.min(ceiling, eased * ceiling);
-      setProgress(next);
-      if (next < ceiling) {
-        const climbingLine = lineForProgress(next);
-        if (climbingLine) setLoadingLine(climbingLine);
-      }
-    }, 150);
-
-    lineTimerRef.current = setInterval(() => {
-      const elapsed = Date.now() - startedAt;
-      if (elapsed >= expectedDurationMs * 0.85) {
-        setLoadingLine(holdingLines[holdingLineIndex % holdingLines.length].text);
-        holdingLineIndex += 1;
-      }
-    }, 4000);
 
     elapsedTimerRef.current = setInterval(() => {
       setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
     }, 1000);
 
     abortControllerRef.current = new AbortController();
+    const { signal } = abortControllerRef.current;
 
     try {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+      // ── Phase 1: fetch Klaviyo data via the Worker ──────────────────────────
+      const range = computeDateRange();
+      const comparison = computeComparisonRange(range.start, range.end);
+
+      setLoadingLine("Producing credentials, removing hat");
+      setProgress(5);
+
+      const workerRes = await fetch(workerUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          klaviyoKey,
+          startDate: range.start,
+          endDate: range.end,
+          ...(comparison ? { comparisonStart: comparison.start, comparisonEnd: comparison.end } : {}),
+        }),
+        signal,
+      });
+
+      if (myRequestId !== requestIdRef.current) return;
+
+      if (!workerRes.ok) {
+        const errData = await workerRes.json().catch(() => ({}));
+        throw new Error(`Klaviyo data fetch failed: ${errData.error || `HTTP ${workerRes.status}`}`);
+      }
+
+      const klaviyoData = await workerRes.json();
+
+      if (myRequestId !== requestIdRef.current) return;
+
+      // Worker succeeded — jump to 20% and start the composing phase timers
+      setProgress(20);
+      setLoadingLine("Locating the campaign ledger");
+
+      const anthropicStartedAt = Date.now();
+      const ceiling = 92;
+      const expectedAnthropicMs = 75000;
+
+      progressTimerRef.current = setInterval(() => {
+        const elapsed = Date.now() - anthropicStartedAt;
+        const t = Math.min(elapsed / expectedAnthropicMs, 1);
+        const eased = 1 - Math.pow(1 - t, 2.2);
+        const next = Math.min(ceiling, 20 + eased * (ceiling - 20));
+        setProgress(next);
+        if (next < ceiling) {
+          const line = lineForProgress(next);
+          if (line) setLoadingLine(line);
+        }
+      }, 150);
+
+      lineTimerRef.current = setInterval(() => {
+        const elapsed = Date.now() - anthropicStartedAt;
+        if (elapsed >= expectedAnthropicMs * 0.85) {
+          setLoadingLine(holdingLines[holdingLineIndex % holdingLines.length].text);
+          holdingLineIndex += 1;
+        }
+      }, 4000);
+
+      // ── Phase 2: send data to Anthropic, get back HTML ──────────────────────
+      const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: {
           "x-api-key": anthropicKey,
           "anthropic-version": "2023-06-01",
-          "anthropic-beta": "mcp-client-2025-11-20",
           "anthropic-dangerous-direct-browser-access": "true",
           "content-type": "application/json",
         },
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
           max_tokens: 32000,
-          messages: [{ role: "user", content: buildPrompt() }],
-          mcp_servers: [
-            {
-              type: "url",
-              url: "https://mcp.klaviyo.com/mcp",
-              name: "klaviyo",
-              authorization_token: klaviyoKey,
-            },
-          ],
-          tools: [
-            {
-              type: "mcp_toolset",
-              mcp_server_name: "klaviyo",
-            },
-          ],
+          messages: [{ role: "user", content: buildPrompt(klaviyoData) }],
         }),
-        signal: abortControllerRef.current.signal,
+        signal,
       });
 
       if (myRequestId !== requestIdRef.current) return;
 
-      if (!response.ok) {
-        let message = `API error ${response.status}`;
+      if (!anthropicRes.ok) {
+        let message = `Anthropic API error ${anthropicRes.status}`;
         try {
-          const errData = await response.json();
+          const errData = await anthropicRes.json();
           message = errData.error?.message || message;
         } catch (_) {}
         throw new Error(message);
       }
 
-      const data = await response.json();
+      const data = await anthropicRes.json();
 
       if (myRequestId !== requestIdRef.current) return;
 
       const textBlock = data.content?.find((b) => b.type === "text");
       if (!textBlock?.text) {
-        throw new Error(
-          "The model returned no report content. This can happen if Klaviyo MCP authentication failed or the context limit was hit. Check your Klaviyo key and try again."
-        );
+        throw new Error("The model returned no report content. The prompt may have exceeded the context limit — try a shorter date range.");
       }
 
       clearTimers();
@@ -314,12 +305,13 @@ Begin pulling data now, then output the final HTML document.`;
       setLoadingLine("Ready");
       setReportHtml(textBlock.text);
       setJustFinished(true);
+
     } catch (e) {
       if (myRequestId !== requestIdRef.current) return;
       if (e.name === "AbortError") return;
 
       clearTimers();
-      setError(e.message || "Something went wrong. Check your API keys in Settings and try again.");
+      setError(e.message || "Something went wrong. Check your settings and try again.");
       setProgress(0);
       setJustFinished(false);
       setIsGenerating(false);
