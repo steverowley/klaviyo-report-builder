@@ -50,6 +50,22 @@ function reportBody(type, startDate, endDate, conversionMetricId) {
   return JSON.stringify({ data: { type, attributes } });
 }
 
+function aggregateBody(metricId, startDate, endDate, measurements) {
+  return JSON.stringify({
+    data: {
+      type: 'metric-aggregate',
+      attributes: {
+        metric_id: metricId,
+        interval: 'day',
+        measurements,
+        filter: `greater-or-equal(datetime,${startDate}T00:00:00+00:00),less-or-equal(datetime,${endDate}T23:59:59+00:00)`,
+        timezone: 'UTC',
+        page_size: 500,
+      },
+    },
+  });
+}
+
 export default {
   async fetch(request) {
     const origin = request.headers.get('Origin') || '*';
@@ -85,19 +101,37 @@ export default {
     }
 
     try {
-      // Account info + metrics list in parallel (metrics needed for conversion_metric_id)
       const [accounts, metrics] = await Promise.all([
         kFetch('/accounts/', klaviyoKey),
         kFetch('/metrics/', klaviyoKey),
       ]);
 
-      const conversionMetric = (metrics.data ?? []).find(m =>
+      const metricList = metrics.data ?? [];
+
+      const conversionMetric = metricList.find(m =>
         (m.attributes?.name ?? '').toLowerCase().includes('placed order')
       );
       const conversionMetricId = conversionMetric?.id ?? null;
 
-      // Campaign + flow reports for the primary period
-      const [campaignReport, flowReport] = await Promise.all([
+      const subscribedMetric = metricList.find(m =>
+        (m.attributes?.name ?? '').toLowerCase().includes('subscribed to list')
+      );
+      const subscribedMetricId = subscribedMetric?.id ?? null;
+
+      const unsubscribedMetric = metricList.find(m =>
+        (m.attributes?.name ?? '').toLowerCase().includes('unsubscribed')
+      );
+      const unsubscribedMetricId = unsubscribedMetric?.id ?? null;
+
+      const safeAggregate = (metricId, measurements) =>
+        metricId
+          ? kFetch('/metric-aggregates/', klaviyoKey, {
+              method: 'POST',
+              body: aggregateBody(metricId, startDate, endDate, measurements),
+            }).catch(() => null)
+          : Promise.resolve(null);
+
+      const [campaignReport, flowReport, orderAgg, subscriberAgg, unsubAgg] = await Promise.all([
         kFetch('/campaign-values-reports/', klaviyoKey, {
           method: 'POST',
           body: reportBody('campaign-values-report', startDate, endDate, conversionMetricId),
@@ -106,9 +140,11 @@ export default {
           method: 'POST',
           body: reportBody('flow-values-report', startDate, endDate, conversionMetricId),
         }),
+        safeAggregate(conversionMetricId, ['count', 'sum_value']),
+        safeAggregate(subscribedMetricId, ['count']),
+        safeAggregate(unsubscribedMetricId, ['count']),
       ]);
 
-      // Comparison period (if requested)
       let comparison = null;
       if (comparisonStart && comparisonEnd) {
         const [compCampaigns, compFlows] = await Promise.all([
@@ -128,6 +164,11 @@ export default {
         account: accounts.data?.[0] ?? null,
         period: { campaigns: campaignReport, flows: flowReport },
         comparison,
+        aggregates: {
+          orders: orderAgg,
+          subscribers: subscriberAgg,
+          unsubscribes: unsubAgg,
+        },
       }), {
         headers: { 'Content-Type': 'application/json', ...cors(origin) },
       });

@@ -115,39 +115,103 @@ export default function KlaviyoReportBuilder({ onOpenSettings }) {
     const range = computeDateRange();
     const comparison = computeComparisonRange(range.start, range.end);
 
-    return `You are generating a Klaviyo performance report for the account "${accountName}".
+    return `You are generating a Klaviyo email marketing performance report for "${accountName}".
 
 Reporting period: ${range.start} to ${range.end} (${reportType})
 ${comparison ? `Comparison period: ${comparison.start} to ${comparison.end} (${comparisonMode})` : "No comparison period."}
 
-RAW KLAVIYO DATA (pre-fetched):
+RAW KLAVIYO DATA:
 ${JSON.stringify(klaviyoData, null, 2)}
 
-Using the data above, produce a complete HTML report following the Swanky design system exactly:
+Produce a complete, polished HTML report. Follow every instruction below exactly.
 
-FONTS:
-- Display/Headings: 'Cormorant Garamond', serif (weights 300, 400, 500)
-- Body/UI: 'Inter', sans-serif (weights 300, 400, 500, 600)
-- Load via: <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+━━━ DESIGN SYSTEM ━━━
+Fonts: Load via Google Fonts — Cormorant Garamond (300,400,500,600 + italic) and Inter (300,400,500,600).
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500;1,600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 
-PALETTE (strictly monochromatic — no other colours ever):
---ink: #0a0a0a  --graphite: #2a2a2a  --ash: #6b6b6b  --silver: #b8b8b8  --bone: #ededed  --paper: #f8f6f2  --pearl: #ffffff
+CSS variables (use these names throughout):
+--ink:#0a0a0a  --graphite:#2a2a2a  --ash:#6b6b6b  --silver:#b8b8b8  --bone:#ededed  --paper:#f8f6f2  --pearl:#ffffff
+STRICTLY monochromatic — never use any other colour, never use green/red/blue for anything, including deltas.
 
-LAYOUT: max-width 1200px centred, generous whitespace, editorial magazine feel, 1px hairline rules. Tables must be full-width within the content area — never let columns squish; use adequate column widths so numbers and names are fully legible.
+Layout: max-width 1100px centred, padding 48px 40px, background var(--paper).
+All section headings: Inter 11px uppercase letter-spacing 0.18em var(--ash), with a 1px var(--bone) hairline below.
+Numbers: font-variant-numeric tabular-nums.
+Deltas: ↑ positive, ↓ negative — plain text, var(--graphite), format "↑ 12.4% vs prior period".
 
-REQUIRED STRUCTURE:
-1. Header with Swanky logo: <img src="https://swankyagency.com/wp-content/uploads/2022/05/swanky-2020-black.png" style="height:32px;opacity:0.9;">
-2. Title block: account name in Cormorant Garamond 56px weight 300; date range in Inter 13px uppercase letter-spacing 0.15em colour var(--ash)
-3. Executive Summary: 2–3 paragraphs of confident editorial prose (Financial Times weekend style). Numbers carry the story; prose interprets them.
-4. Headline Metrics grid (3–4 columns): large Cormorant Garamond numbers, Inter uppercase labels, comparison delta if available
-5. Campaigns table: name, sent, open rate, click rate, revenue — hairline horizontal rules only, tabular numerals, right-aligned numbers
-6. Flows table: flow name, recipients, conversions, revenue
-7. Insights & Recommendations: 3–5 numbered strategic observations
-8. Footer with Swanky logo and date generated
+━━━ REQUIRED SECTIONS (in this order) ━━━
 
-COMPARISON DELTAS: use ↑ for positive, ↓ for negative — monochrome only, never green or red. Format: "↑ 12.4% vs previous period"
+**1. HEADER**
+- Top bar: Swanky logo left (<img src="https://swankyagency.com/wp-content/uploads/2022/05/swanky-2020-black.png" style="height:28px">), "Print / Save PDF" button right (Inter 10px uppercase, border 1px solid var(--ink), padding 6px 14px, onclick="window.print()", background transparent on screen, cursor pointer).
+- Below: Inter 10px uppercase tracked "EMAIL MARKETING REPORT"
+- Title: Cormorant Garamond italic weight 300, font-size clamp(36px,5vw,56px), line-height 1.1. Text: "Klaviyo ${reportType} Performance Report"
+- Account name: Inter 13px var(--ash)
+- Hairline rule
+- Two-column row: "Generated [today's date]" left | "[start] to [end]" right — both Inter 11px var(--ash)
 
-Output ONLY a complete HTML document (<!DOCTYPE html>…</html>) with all CSS embedded. No markdown fences, no commentary, no JavaScript.`;
+**2. PERIOD SNAPSHOT**
+Four metric cards in a 4-column grid. Each card: background var(--pearl), border 1px solid var(--bone), padding 20px 24px.
+Card label: Inter 9px uppercase letter-spacing 0.2em var(--ash).
+Card value: Cormorant Garamond 40px weight 300 var(--ink).
+Delta below value: Inter 11px var(--graphite).
+Cards (calculate totals from the data):
+- TOTAL REVENUE: sum of conversion_value across all flows + campaigns. Format £X,XXX.XX
+- CAMPAIGNS SENT: count of campaigns in period (show "No sends this period" as sub-label if zero)
+- NEW SUBSCRIBERS: total from aggregates.subscribers data (sum the counts). If unavailable show "—"
+- TOTAL ORDERS: total count from aggregates.orders data. If unavailable show "—"
+Show comparison delta on each card if comparison data exists.
+
+**3. LIST GROWTH** (only if aggregates.subscribers data is available)
+Section heading "List Growth".
+Sub-label "NEW SUBSCRIBERS PER DAY" in Inter 9px uppercase var(--ash).
+SVG bar chart (width 100%, height 120px): one bar per day, bars in var(--ink), gap 2px between bars, x-axis date labels (Inter 9px var(--ash)) for first/middle/last dates only. Scale bars to the max daily value.
+Below chart, three stat boxes in a row (background var(--pearl) border var(--bone)):
+- NEW SUBSCRIBERS: total
+- UNSUBSCRIBES: total from aggregates.unsubscribes (or "—")
+- NET GROWTH: subscribers minus unsubscribes (prefix + or −)
+
+**4. ORDER VOLUME** (only if aggregates.orders data is available)
+Section heading "Order Volume".
+Sub-label "ORDERS PER DAY".
+SVG area chart (width 100%, height 100px): smooth polyline in var(--ink) strokeWidth 1.5, filled area below in var(--ink) opacity 0.06, x-axis date labels for first/middle/last. Scale to max daily value with 10% top padding.
+
+**5. CAMPAIGN PERFORMANCE**
+Section heading "Campaign Performance".
+If no campaigns: centred italic Cormorant Garamond 18px var(--ash) "No campaigns sent in this period. The most recent send was [most recent campaign name and date if available]."
+If campaigns exist: full-width table, columns: CAMPAIGN | SENT | DELIVERED | OPEN RATE | CLICK RATE | CTOR | REVENUE — hairline rows only (1px var(--bone)), no vertical rules, header row Inter 9px uppercase var(--ash), data rows Inter 13px. Numbers right-aligned. CTOR = click_rate / open_rate (if open_rate > 0, else "—"). Revenue: £X,XXX.XX. Totals/weighted averages row at bottom, bold.
+
+**6. FLOW PERFORMANCE**
+Section heading "Flow Performance".
+Full-width table, columns: FLOW | RECIPIENTS | DELIVERED | OPEN | CLICK | CTOR | CVR | REVENUE | RPR
+- CTOR = click_rate / open_rate (percentage, 1dp)
+- CVR = conversion_rate (percentage, 1dp)
+- RPR = conversion_value / recipients (£X.XX, or "—" if zero recipients)
+- Revenue: £X,XXX.XX
+Same table styling as campaigns. Include a totals/weighted averages row.
+Below each flow name show the flow trigger/tag in Inter 10px var(--ash) if it can be inferred.
+
+**7. KEY INSIGHTS**
+Section heading "Key Insights".
+A full-width block: background var(--ink), color var(--pearl), padding 36px 40px.
+4–5 short editorial paragraphs. Each is 2–4 sentences of confident, specific, data-led prose (Financial Times weekend style). Lead with the single most important number. Bold the most critical figure or phrase in each paragraph using <strong>.
+No bullet points — flowing paragraphs only.
+
+**8. NEXT STEPS FOR GROWTH**
+Section heading "Next Steps for Growth".
+5 numbered recommendations. Each item:
+- Number: Cormorant Garamond 32px weight 300 var(--silver), floated/grid left
+- Priority tag: Inter 8px uppercase letter-spacing 0.18em, background var(--bone), padding 2px 8px — text: "HIGH PRIORITY · [CATEGORY]" / "MEDIUM PRIORITY · [CATEGORY]" / "LOW PRIORITY · [CATEGORY]"
+- Title: Inter 14px weight 600 var(--ink)
+- Body: Inter 13px weight 300 var(--ash), line-height 1.6, 2–3 sentences
+- Data tags: small pill tags (background var(--bone), border-radius 2px, Inter 10px var(--ash), padding 3px 8px) showing the key metrics that support this recommendation (e.g. "42.1% open rate", "6 weeks dark")
+
+**9. FOOTER**
+1px var(--bone) hairline, then two-column: "Prepared by Swanky Agency for ${accountName}" left | "Swanky · [date]" right. Inter 11px var(--ash).
+
+━━━ OUTPUT RULES ━━━
+- Output ONLY a complete <!DOCTYPE html>…</html> document. All CSS in <style> tags in <head>. No JavaScript except the print button onclick.
+- No markdown, no code fences, no commentary before or after.
+- Every number from the data must appear verbatim — do not round aggressively or omit data.
+- If a data point is genuinely missing, show "—" rather than inventing a number.`;
   };
 
   const clearTimers = () => {
