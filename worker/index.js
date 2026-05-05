@@ -208,11 +208,7 @@ export default {
           }),
         ]);
         comparison = {
-<<<<<<< HEAD
-          campaigns: campaignReport, // raw for Claude to sum
-=======
           campaigns: campaignReport,
->>>>>>> 9a94834 (fix: guard aggregateFlowRows against non-array flowReport.data)
           flows: aggregateFlowRows(compFlows),
         };
       }
