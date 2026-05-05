@@ -116,6 +116,7 @@ export default function KlaviyoReportBuilder({ onOpenSettings }) {
     const comparison = computeComparisonRange(range.start, range.end);
 
     return `You are generating a Klaviyo email marketing performance report for "${accountName}".
+IMPORTANT: Read ALL data carefully before writing any HTML. Every number you output must come from the data.
 
 Reporting period: ${range.start} to ${range.end} (${reportType})
 ${comparison ? `Comparison period: ${comparison.start} to ${comparison.end} (${comparisonMode})` : "No comparison period."}
@@ -123,132 +124,132 @@ ${comparison ? `Comparison period: ${comparison.start} to ${comparison.end} (${c
 RAW KLAVIYO DATA:
 ${JSON.stringify(klaviyoData, null, 2)}
 
-Produce a complete, polished HTML report matching the Swanky design system exactly. Follow every instruction below.
+Produce a complete, self-contained HTML report. Follow every instruction below exactly.
 
-━━━ DESIGN SYSTEM ━━━
-Fonts (load both via Google Fonts):
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500;1,600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+━━━ FONTS ━━━
+Load via Google Fonts:
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+Headings (h2), card values, step titles: Cormorant Garamond. All other text: Inter.
 
-CSS variables — define these in :root and use exclusively:
---ink:#0a0a0a  --graphite:#2a2a2a  --ash:#6b6b6b  --silver:#b8b8b8  --bone:#ededed  --paper:#f8f6f2  --pearl:#ffffff
+━━━ COLOURS (use these exact hex values) ━━━
+Page bg: #fff. Primary: #0a0a0a. Body text: #1a1a1a. Muted: #555. Label: #999. Very muted: #aaa.
+Card bg: #f7f6f3. Divider: #e0e0da. Row divider: #f0f0ec. Section rule: #e8e8e4.
+Delta positive: #2a7a4f (inline text only). Delta negative: #a33 (inline text only). Delta neutral: #999.
 
-STRICTLY monochromatic — no green, red, blue, or any colour not in the palette above, including for deltas or priority tags.
-Numbers: font-variant-numeric: tabular-nums on all numeric cells.
-Deltas: "↑ 12.4% vs prior 14 days" — var(--graphite), no colour.
-Section headings: Inter 11px uppercase letter-spacing 0.18em var(--ash), followed by 1px var(--bone) hairline, margin-bottom 24px.
-Page: background var(--paper), max-width 1100px, margin 0 auto, padding 48px 40px.
+━━━ PAGE ━━━
+body { margin:0; padding:40px 48px; background:#fff; font-family:'Inter',sans-serif; color:#1a1a1a; font-size:13px; }
+font-variant-numeric:tabular-nums on all numeric table cells.
 
-━━━ SECTIONS (produce all 9 in this order) ━━━
+━━━ SECTION HEADINGS ━━━
+h2 { font-family:'Cormorant Garamond',serif; font-size:22px; font-weight:400; color:#0a0a0a; margin:36px 0 16px; border-bottom:1px solid #e8e8e4; padding-bottom:8px; }
+
+━━━ SECTIONS (all 10, in this order) ━━━
 
 **1. HEADER**
-Top bar (display:flex justify-content:space-between align-items:center margin-bottom:32px):
-  Left: <img src="https://swankyagency.com/wp-content/uploads/2022/05/swanky-2020-black.png" style="height:28px;display:block">
-  Right: <button onclick="window.print()" style="background:var(--ink);color:var(--pearl);border:none;padding:8px 16px;font-family:'Inter',sans-serif;font-size:10px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;cursor:pointer">Print / Save PDF</button>
-
-Below top bar:
-  "EMAIL MARKETING REPORT" — Inter 10px uppercase letter-spacing 0.2em var(--ash), margin-bottom 12px
-  Title "Klaviyo ${reportType} Performance Report" — Cormorant Garamond italic weight 300, font-size 52px, line-height 1.05, var(--ink), margin-bottom 8px
-  Account name "${accountName}" — Inter 13px var(--ash), margin-bottom 24px
-  1px var(--bone) hairline
-  Two-col row (flex justify-content:space-between): "Generated [format today as D MMM YYYY]" left | "[start date formatted D MMM YYYY] to [end date D MMM YYYY]" right — both Inter 11px var(--ash), margin-top 12px
+White bg, border-bottom:2px solid #0a0a0a, padding-bottom:32px, margin-bottom:36px.
+Top row flex space-between:
+  Left: <img src="https://swankyagency.com/wp-content/uploads/2022/05/swanky-2020-black.png" style="height:40px;display:block">
+  Right: <button onclick="window.print()" style="position:fixed;top:16px;right:16px;background:#0a0a0a;color:#fff;border:none;padding:8px 18px;font-family:Inter,sans-serif;font-size:10px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;cursor:pointer;z-index:100">Print / Save PDF</button>
+Then: "Email Marketing Report" — Inter 10px weight 500 letter-spacing:0.14em uppercase #888 margin-bottom:10px
+Title: Cormorant Garamond 40px weight 300 #0a0a0a line-height:1.15 margin-bottom:6px — "Klaviyo ${reportType}<br>Performance Report"
+Client: Inter 12px weight 300 #888 margin-bottom:20px — "${accountName}"
+Meta bar: border-top:0.5px solid #e0e0da padding-top:10px flex space-between —
+  Left: "Generated [D MMM YYYY]" Inter 11px #aaa
+  Right: "[start D MMM YYYY] to [end D MMM YYYY]" Inter 12px #555
 
 **2. PERIOD SNAPSHOT**
-Heading "Period Snapshot".
-4-column grid (gap:1px background:var(--bone) — so grid gaps appear as hairlines). Each card: background var(--pearl), padding 24px 28px.
-  Card label: Inter 9px uppercase letter-spacing 0.2em var(--ash) margin-bottom 10px
-  Card value: Cormorant Garamond 44px weight 300 var(--ink) line-height 1
-  Sub-text / delta: Inter 11px var(--graphite) margin-top 6px
-
+<h2>Period Snapshot</h2>
+4-col grid gap:12px margin-bottom:32px. Each card: background:#f7f6f3; border-radius:3px; padding:16px 18px; border-left:2px solid #0a0a0a.
+  Label: Inter 10px weight 500 letter-spacing:0.08em uppercase #999 margin-bottom:8px
+  Value: Cormorant Garamond 26px weight 400 #0a0a0a line-height:1
+  Delta: Inter 11px margin-top:4px — #2a7a4f if positive, #a33 if negative, #999 neutral
+  Sub-text: Inter 11px #aaa margin-top:2px
 Cards:
-  TOTAL REVENUE — sum conversion_value across all flow rows + all campaign rows. Format £X,XXX.XX. Delta vs comparison if available.
-  CAMPAIGNS SENT — count of campaign rows in period.data.campaigns.data. If zero, sub-text "No sends this period".
-  NEW SUBSCRIBERS — sum counts from aggregates.subscribers (the "data" array contains objects with "measurements" arrays; sum all count values). Show "—" if unavailable.
-  TOTAL ORDERS — sum counts from aggregates.orders similarly. Show "—" if unavailable.
+  TOTAL REVENUE — sum period.flows[].conversion_value + campaign conversion values. £X,XXX.XX. Delta vs comparison if available.
+  CAMPAIGNS SENT — count rows in period.campaigns data array. Sub "No sends this period" if zero.
+  NEW SUBSCRIBERS — sum(aggregates.subscribers.counts) or "—"
+  TOTAL ORDERS — sum(aggregates.orders.counts) or "—"
 
-**3. LIST GROWTH** (skip entire section if aggregates.subscribers is null)
-Heading "List Growth".
-Sub-label "NEW SUBSCRIBERS PER DAY" — Inter 9px uppercase var(--ash) margin-bottom 8px.
+**3. LIST GROWTH** (skip if aggregates.subscribers is null)
+<h2>List Growth</h2>
+Sub-label "New Subscribers Per Day" Inter 10px weight 500 uppercase #999 margin-bottom:8px.
+Load Chart.js: <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+Container div: position:relative; height:180px; margin-bottom:16px. <canvas id="subChart"></canvas>
+In DOMContentLoaded script, create bar chart:
+  labels: aggregates.subscribers.dates formatted as "D MMM" (e.g. "21 Apr")
+  dataset: { data: aggregates.subscribers.counts, backgroundColor:'#0a0a0a', borderRadius:2, barPercentage:0.7 }
+  options: responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+    scales: x:{grid:{display:false}, ticks:{color:'#aaa',font:{size:10}}},
+             y:{beginAtZero:true, grid:{color:'rgba(0,0,0,0.06)'}, ticks:{color:'#aaa',font:{size:10}}}
+3-col grid gap:12px. Each stat: background:#f7f6f3; border-radius:3px; padding:16px 18px; border-left:2px solid #0a0a0a.
+  NEW SUBSCRIBERS: sum(aggregates.subscribers.counts)
+  UNSUBSCRIBES: sum(aggregates.unsubscribes.counts) or "—"
+  NET GROWTH: subs − unsubs, prefix "+" if positive
 
-Render this section using an inline <script> that runs on DOMContentLoaded.
-The script reads the subscriber and unsubscribe data embedded as JSON in a <script type="application/json"> tag, then:
-  a) Draws a BAR CHART into a <canvas id="subChart"> (width:100% height:160px, devicePixelRatio-aware).
-     Chart area: left 40px (y-axis), bottom 28px (x-axis), right 8px, top 8px.
-     Background: var(--pearl). Draw 4–5 light horizontal grid lines (1px #ededed) with y-axis labels (Inter 11px #6b6b6b).
-     Bars: var(--ink) (#0a0a0a), 1px gap between bars, no rounding. Scale to max value.
-     X-axis: show date labels (e.g. "21 Apr", "28 Apr", "4 May") at first, ~midpoint, last — Inter 10px #6b6b6b.
-  b) Draws an UNSUBSCRIBES line chart overlaid in #b8b8b8 (silver) if unsubscribe data available.
-
-Below canvas, 3 stat boxes (display:grid grid-template-columns:repeat(3,1fr) gap:1px background:var(--bone)):
-  Each box: background var(--pearl) padding 20px 24px.
-  Label: Inter 9px uppercase var(--ash). Value: Cormorant Garamond 36px weight 300 var(--ink).
-  NEW SUBSCRIBERS | UNSUBSCRIBES | NET GROWTH (prefix "+" if positive, "−" if negative)
-
-**4. ORDER VOLUME** (skip entire section if aggregates.orders is null)
-Heading "Order Volume".
-Sub-label "ORDERS PER DAY".
-
-Same pattern: embed data as JSON, render via <script> into <canvas id="orderChart"> (width:100% height:130px).
-  Chart area: left 40px, bottom 28px, right 8px, top 8px.
-  Background: var(--pearl). Grid lines + y-axis labels same as above.
-  Draw a SMOOTH AREA CHART: compute a cubic bezier or catmull-rom smooth polyline. Stroke: var(--ink) (#0a0a0a) strokeWidth 1.5. Fill area below line: #0a0a0a at opacity 0.07.
-  X-axis date labels at first, mid, last.
+**4. ORDER VOLUME** (skip if aggregates.orders is null)
+<h2>Order Volume</h2>
+Sub-label "Orders Per Day". Container height:180px. <canvas id="orderChart"></canvas>
+Line chart: { data: aggregates.orders.counts, borderColor:'#555', backgroundColor:'rgba(80,80,80,0.08)', fill:true, tension:0.4, pointRadius:3, pointBackgroundColor:'#555', pointBorderColor:'#fff', pointBorderWidth:1.5 }
+Same scale options as bar chart.
 
 **5. CAMPAIGN PERFORMANCE**
-Heading "Campaign Performance".
-If no campaigns (empty data array): show centred paragraph — Cormorant Garamond italic 18px var(--ash): "No campaigns sent in this period.[If you can infer the most recent send from the data, add: The most recent send was the [name] on [date].]"
-If campaigns exist: full-width table.
-  Columns: CAMPAIGN | SENT | DELIVERED | OPEN RATE | CLICK RATE | CTOR | REVENUE
-  CTOR = click_rate / open_rate × 100 (1dp, show "—" if open_rate is 0)
-  Revenue: £X,XXX.XX
-  Table style: border-collapse collapse, width 100%. Header: Inter 9px uppercase var(--ash) padding 0 0 10px, border-bottom 1px var(--bone). Rows: Inter 13px, border-bottom 1px var(--bone), padding 12px 0. Number columns right-aligned. First column left-aligned, max-width 280px.
-  Last row: "Totals / Weighted Avg" — font-weight 500.
+<h2>Campaign Performance</h2>
+period.campaigns is the raw Klaviyo campaign-values-report — iterate its .data array (each item's statistics are in .attributes.statistics or top-level attributes).
+If empty: dashed placeholder div (border:0.5px dashed #e0e0da; border-radius:3px; padding:20px; text-align:center; color:#999; font-size:13px; font-style:italic) — "No campaigns sent in this period."
+If rows exist: table (CSS below). Columns: CAMPAIGN | SENT | DELIVERED | OPEN RATE | CLICK RATE | CTOR | CVR | REVENUE
+  CTOR = click_rate/open_rate×100 formatted X.X% (or "—")
+  CVR = conversion_rate×100 formatted X.X%
+  Revenue: £X,XXX.XX (or "—" if zero)
+  tfoot "Totals / Weighted Avg" — weighted averages
 
 **6. FLOW PERFORMANCE**
-Heading "Flow Performance".
-Same table style as campaigns.
-Columns: FLOW | RECIPIENTS | DELIVERED | OPEN | CLICK | CTOR | CVR | REVENUE | RPR
-  CTOR = click_rate / open_rate × 100 (1dp)
-  CVR = conversion_rate × 100 (1dp)
-  RPR = conversion_value / recipients formatted £X.XX (show "—" if recipients=0 or conversion_value=0)
-  Revenue: £X,XXX.XX
-  Flow name cell: flow name in Inter 13px var(--ink); below it in Inter 10px var(--ash) show the trigger type if inferable (e.g. "Added to List", "Metric", "Date").
-  Totals/Weighted Avg row at bottom.
+<h2>Flow Performance</h2>
+period.flows is pre-aggregated per flow: [{name, trigger, recipients, delivered, open_rate, click_rate, ctor, conversion_rate, conversion_value, rpr}]
+Table (same CSS). Columns: FLOW | RECIPIENTS | DELIVERED | OPEN | CLICK | CTOR | CVR | REVENUE | RPR
+  open_rate×100 = X.X%, click_rate×100 = X.X%, ctor×100 = X.X%, conversion_rate×100 = X.X%
+  Revenue: £X,XXX.XX (or "—" if zero). RPR (rpr field): £X.XX (or "—" if zero).
+  Flow name: Inter 13px #0a0a0a weight 500; below it trigger in #999 11px.
+  tfoot "Totals / Weighted Avg" — recalculate from raw fields.
+
+TABLE CSS (apply to both tables):
+table{width:100%;border-collapse:collapse;margin-bottom:24px;font-size:12px}
+thead th{font-size:10px;font-weight:500;letter-spacing:0.08em;text-transform:uppercase;color:#999;padding:8px 10px;text-align:right;border-bottom:1px solid #e0e0da}
+thead th:first-child{text-align:left}
+tbody td{padding:10px;border-bottom:0.5px solid #f0f0ec;color:#1a1a1a;text-align:right}
+tbody td:first-child{text-align:left}
+tfoot td{padding:10px;font-size:11px;font-weight:600;background:#f7f6f3;border-top:1px solid #e0e0da;color:#0a0a0a;text-align:right}
+tfoot td:first-child{text-align:left}
+Revenue cells: font-family:'Cormorant Garamond',serif;font-size:14px;font-weight:600
 
 **7. KEY INSIGHTS**
-Heading "Key Insights".
-Full-width box: background var(--ink), color var(--pearl), padding 40px 44px, margin-top 8px.
-4–5 paragraphs. Inter 13px weight 300, line-height 1.8, color var(--pearl). Margin between paragraphs: 16px.
-Each paragraph: 2–4 sentences of confident, specific, data-led analysis (Financial Times weekend style). Cite actual numbers. Use <strong style="color:var(--pearl);font-weight:600"> to bold the single most important figure or phrase per paragraph.
-No bullet points — prose only.
+<h2>Key Insights</h2>
+Full-width div: background:#0a0a0a;color:#fff;border-radius:3px;padding:20px 22px;font-size:13px;line-height:1.8;font-weight:300;margin-bottom:24px
+4–5 paragraphs of confident, direct, data-led prose. Each 2–4 sentences. Cite actual numbers. <strong style="font-weight:500"> for key figures.
+NO bullets. NO icon boxes. NO emojis.
 
-**8. NEXT STEPS FOR GROWTH**
-Heading "Next Steps for Growth".
-5 items. Each item uses a 2-column grid: left col 48px (number), right col auto (content). Border-bottom 1px var(--bone), padding 28px 0.
+**8. COMPARISON ANALYSIS** (omit if no comparison data)
+<h2>Comparison Analysis</h2>
+Same black-box style. 4–5 sentences. What changed, why, what to watch.
 
-  Number: Cormorant Garamond 36px weight 300 var(--silver), line-height 1.
-  Priority tag: inline-block, background var(--bone), Inter 8px uppercase letter-spacing 0.18em var(--ash), padding 3px 10px, margin-bottom 8px. Format: "[HIGH|MEDIUM|LOW] PRIORITY · [CAMPAIGNS|FLOWS|ACQUISITION|REPORTING|etc]"
-  Title: Inter 14px weight 600 var(--ink), margin-bottom 6px, display block.
-  Body: Inter 13px weight 300 var(--ash), line-height 1.65, margin-bottom 12px.
-  Data pills: flex-wrap gap:6px. Each pill: background var(--bone), Inter 10px var(--ash), padding 3px 10px, border-radius 2px. Show 2–4 pills with the specific metric values that motivate this recommendation.
+**9. NEXT STEPS FOR GROWTH**
+<h2>Next Steps for Growth</h2>
+4–6 .step items: display:flex;gap:14px;padding:16px 0;border-bottom:0.5px solid #f0f0ec. Last: no border.
+  .num: width:28px;height:28px;border-radius:50%;background:#0a0a0a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex-shrink:0;margin-top:2px
+  .pri: font-size:9px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#888;margin-bottom:4px
+  .stitle: font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:400;color:#0a0a0a;margin-bottom:4px
+  .sdesc: font-size:12px;color:#606060;line-height:1.6;font-weight:300;margin-bottom:8px
+  .tag: display:inline-block;font-size:10px;color:#555;background:#f7f6f3;border:1px solid #e0e0da;border-radius:3px;padding:2px 8px;margin:2px 4px 2px 0
+  Priority format: "High priority — [Area]" / "Medium priority — [Area]" / "Low priority — [Area]"
+  Each step: 2–4 .tag pills with specific supporting metrics.
 
-**9. FOOTER**
-1px var(--bone) hairline, margin-top 48px.
-Flex row justify-content:space-between, margin-top 20px.
-Left: "Prepared by Swanky Agency for ${accountName}" — Inter 11px var(--ash).
-Right: "Swanky · [today's date D MMM YYYY]" — Inter 11px var(--ash).
-
-━━━ CHART DATA EMBEDDING PATTERN ━━━
-For sections 3 and 4, embed data like this (replace with actual values from the aggregates):
-<script type="application/json" id="subData">{"dates":["2024-04-21",...], "counts":[3,5,...], "unsubCounts":[0,1,...]}</script>
-<script type="application/json" id="orderData">{"dates":["2024-04-21",...], "counts":[8,12,...]}</script>
-
-The Klaviyo aggregate response has a "data" object with "attributes" containing a "dates" array and a "data" object. The "data" object has keys matching the measurements requested (e.g. "count"). Extract dates and counts from there. If the structure differs, adapt accordingly.
+**10. FOOTER**
+background:#0a0a0a;color:#555;padding:18px 48px;display:flex;justify-content:space-between;font-size:11px;margin:48px -48px -40px
+Left: "Prepared by Swanky Agency for ${accountName}"
+Right: "[start D MMM YYYY] to [end D MMM YYYY]"
 
 ━━━ OUTPUT RULES ━━━
-Output ONLY a complete <!DOCTYPE html>…</html> document. All CSS in <style> in <head>. JavaScript (for charts and print button only) in <script> tags.
-No markdown fences, no commentary before or after the HTML.
-Every metric value must come verbatim from the data — never invent or heavily round numbers.
-Show "—" for any genuinely missing value.`;
+Output ONLY a complete <!DOCTYPE html>…</html>. CSS in <style> in <head>. Chart.js CDN + init script in <body>.
+No markdown fences. No commentary before or after. Show "—" for missing values. Never invent numbers.`;
   };
 
   const clearTimers = () => {
