@@ -84,7 +84,7 @@ function processAggregate(agg, measurement = 'count') {
 
 // Roll up per-message flow rows into per-flow aggregates.
 function aggregateFlowRows(flowReport) {
-  const rows = flowReport?.data ?? [];
+  const rows = Array.isArray(flowReport?.data) ? flowReport.data : [];
   const byFlow = {};
 
   for (const row of rows) {
@@ -208,7 +208,11 @@ export default {
           }),
         ]);
         comparison = {
+<<<<<<< HEAD
           campaigns: campaignReport, // raw for Claude to sum
+=======
+          campaigns: campaignReport,
+>>>>>>> 9a94834 (fix: guard aggregateFlowRows against non-array flowReport.data)
           flows: aggregateFlowRows(compFlows),
         };
       }
