@@ -58,7 +58,7 @@ function aggregateBody(metricId, startDate, endDate, measurements) {
         metric_id: metricId,
         interval: 'day',
         measurements,
-        filter: `greater-or-equal(datetime,${startDate}T00:00:00+00:00),less-or-equal(datetime,${endDate}T23:59:59+00:00)`,
+        filter: `greater-or-equal(datetime,${startDate}T00:00:00+00:00),less-than(datetime,${endDate}T23:59:59+00:00)`,
         timezone: 'UTC',
         page_size: 500,
       },
@@ -80,7 +80,7 @@ async function getFlowNames(klaviyoKey) {
   const names = {};
   let errMsg = null;
   try {
-    let url = '/flows/?page[size]=100';
+    let url = '/flows/?page[size]=50';
     while (url) {
       const res = await kFetch(url, klaviyoKey);
       for (const f of (res.data ?? [])) {
@@ -101,8 +101,7 @@ async function getCampaignNames(klaviyoKey) {
   let errMsg = null;
   try {
     // Use URLSearchParams to safely encode filter with quotes
-    const qs = new URLSearchParams({ 'page[size]': '100' }).toString();
-    let url = `/campaigns/?${qs}`;
+    let url = '/campaigns/';
     while (url) {
       const res = await kFetch(url, klaviyoKey);
       for (const c of (res.data ?? [])) {
