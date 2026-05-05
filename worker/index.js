@@ -18,11 +18,16 @@ function cors(origin) {
   };
 }
 
-async function kFetch(path, apiKey, init = {}) {
+async function kFetch(path, apiKey, init = {}, retries = 4) {
   const res = await fetch(`${KLAVIYO_BASE}${path}`, {
     ...init,
     headers: klaviyoHeaders(apiKey),
   });
+  if (res.status === 429 && retries > 0) {
+    const retryAfter = parseInt(res.headers.get('Retry-After') || '1', 10);
+    await new Promise(r => setTimeout(r, retryAfter * 1000));
+    return kFetch(path, apiKey, init, retries - 1);
+  }
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`Klaviyo ${res.status} on ${path}: ${body.slice(0, 400)}`);
