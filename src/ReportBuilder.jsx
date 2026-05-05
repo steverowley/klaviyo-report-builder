@@ -277,6 +277,12 @@ Begin pulling data now, then output the final HTML document.`;
               authorization_token: klaviyoKey,
             },
           ],
+          tools: [
+            {
+              type: "mcp_toolset",
+              server_name: "klaviyo",
+            },
+          ],
         }),
         signal: abortControllerRef.current.signal,
       });
