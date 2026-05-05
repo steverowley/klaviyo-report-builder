@@ -1,0 +1,10 @@
+{
+  "name": "klaviyo-proxy",
+  "private": true,
+  "devDependencies": {
+    "wrangler": "3.78.12"
+  },
+  "scripts": {
+    "deploy": "wrangler deploy"
+  }
+}

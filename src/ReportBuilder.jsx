@@ -166,7 +166,7 @@ Meta bar: border-top:0.5px solid #e0e0da padding-top:10px flex space-between —
   Sub-text: Inter 11px #aaa margin-top:2px
 Cards:
   TOTAL REVENUE — sum period.flows[].conversion_value + campaign conversion values. £X,XXX.XX. Delta vs comparison if available.
-  CAMPAIGNS SENT — count rows in period.campaigns data array. Sub "No sends this period" if zero.
+  CAMPAIGNS SENT — period.campaigns.length. Sub "No sends this period" if zero.
   NEW SUBSCRIBERS — sum(aggregates.subscribers.counts) or "—"
   TOTAL ORDERS — sum(aggregates.orders.counts) or "—"
 
@@ -194,7 +194,7 @@ Same scale options as bar chart.
 
 **5. CAMPAIGN PERFORMANCE**
 <h2>Campaign Performance</h2>
-period.campaigns is the raw Klaviyo campaign-values-report — iterate its .data array (each item's statistics are in .attributes.statistics or top-level attributes).
+period.campaigns is a pre-normalised flat array: [{campaign_name, send_channel, recipients, delivered, open_rate, click_rate, conversions, conversion_rate, conversion_value}]. Empty array = no campaigns.
 If empty: dashed placeholder div (border:0.5px dashed #e0e0da; border-radius:3px; padding:20px; text-align:center; color:#999; font-size:13px; font-style:italic) — "No campaigns sent in this period."
 If rows exist: table (CSS below). Columns: CAMPAIGN | SENT | DELIVERED | OPEN RATE | CLICK RATE | CTOR | CVR | REVENUE
   CTOR = click_rate/open_rate×100 formatted X.X% (or "—")
