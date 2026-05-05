@@ -11,7 +11,7 @@
 - Frontend-only static site, hosted on GitHub Pages. **No backend, no server, no proxy.**
 - API keys live exclusively in the user's browser `localStorage`. They are pasted in via the Settings screen on first launch.
 - localStorage key names: `swanky_anthropic_key`, `swanky_klaviyo_key`. Never rename without a migration path.
-- `handleGenerate` POSTs directly from the browser to `https://api.anthropic.com/v1/messages` with `anthropic-dangerous-direct-browser-access: true` and `anthropic-beta: mcp-client-2025-04-04`. The Klaviyo MCP server is passed in `mcp_servers` and resolved server-side by Anthropic — the browser never talks to `mcp.klaviyo.com` directly, so CORS is not a concern there.
+- `handleGenerate` POSTs directly from the browser to `https://api.anthropic.com/v1/messages` with `anthropic-dangerous-direct-browser-access: true` and `anthropic-beta: mcp-client-2025-11-20`. The Klaviyo MCP server is passed in `mcp_servers` and resolved server-side by Anthropic — the browser never talks to `mcp.klaviyo.com` directly, so CORS is not a concern there.
 - Vite `base` is `/klaviyo-report-builder/` to match the GitHub Pages path. Do not change this without also updating the repo name.
 
 ## Security rules (non-negotiable)
