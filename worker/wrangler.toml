@@ -1,3 +1,4 @@
 name = "klaviyo-report-proxy"
 main = "index.js"
 compatibility_date = "2024-10-15"
+account_id = "77880cca6d7b7876167d1dbbf0494d26"
