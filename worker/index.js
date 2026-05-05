@@ -101,7 +101,7 @@ async function getCampaignNames(klaviyoKey) {
   let errMsg = null;
   try {
     // Use URLSearchParams to safely encode filter with quotes
-    let url = '/campaigns/';
+    let url = "/campaigns/?filter=equals(messages.channel,'email')";
     while (url) {
       const res = await kFetch(url, klaviyoKey);
       for (const c of (res.data ?? [])) {
