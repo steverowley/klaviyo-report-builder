@@ -7,7 +7,8 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(() => {
     const ak = localStorage.getItem("swanky_anthropic_key");
     const kk = localStorage.getItem("swanky_klaviyo_key");
-    return !ak || !kk;
+    const wu = localStorage.getItem("swanky_worker_url");
+    return !ak || !kk || !wu;
   });
 
   return showSettings ? (

@@ -2,32 +2,41 @@ import React, { useState, useEffect } from "react";
 
 const ANTHROPIC_KEY = "swanky_anthropic_key";
 const KLAVIYO_KEY = "swanky_klaviyo_key";
+const WORKER_URL = "swanky_worker_url";
 
 export default function Settings({ onSave }) {
   const [anthropicKey, setAnthropicKey] = useState("");
   const [klaviyoKey, setKlaviyoKey] = useState("");
+  const [workerUrl, setWorkerUrl] = useState("");
   const [showAnthropicKey, setShowAnthropicKey] = useState(false);
   const [showKlaviyoKey, setShowKlaviyoKey] = useState(false);
   const [saved, setSaved] = useState(false);
   const [cleared, setCleared] = useState(false);
 
-  // Whether keys already existed when this screen opened (determines Cancel button visibility)
   const [hadKeysOnOpen] = useState(() =>
-    Boolean(localStorage.getItem(ANTHROPIC_KEY) && localStorage.getItem(KLAVIYO_KEY))
+    Boolean(
+      localStorage.getItem(ANTHROPIC_KEY) &&
+      localStorage.getItem(KLAVIYO_KEY) &&
+      localStorage.getItem(WORKER_URL)
+    )
   );
 
   useEffect(() => {
     setAnthropicKey(localStorage.getItem(ANTHROPIC_KEY) || "");
     setKlaviyoKey(localStorage.getItem(KLAVIYO_KEY) || "");
+    setWorkerUrl(localStorage.getItem(WORKER_URL) || "");
   }, []);
 
-  const canSave = anthropicKey.trim().length > 0 && klaviyoKey.trim().length > 0;
+  const canSave =
+    anthropicKey.trim().length > 0 &&
+    klaviyoKey.trim().length > 0 &&
+    workerUrl.trim().startsWith("http");
 
   const handleSave = () => {
     if (!canSave) return;
-    // Write to localStorage — never log key values
     localStorage.setItem(ANTHROPIC_KEY, anthropicKey.trim());
     localStorage.setItem(KLAVIYO_KEY, klaviyoKey.trim());
+    localStorage.setItem(WORKER_URL, workerUrl.trim());
     setSaved(true);
     setTimeout(() => onSave(), 700);
   };
@@ -35,8 +44,10 @@ export default function Settings({ onSave }) {
   const handleClear = () => {
     localStorage.removeItem(ANTHROPIC_KEY);
     localStorage.removeItem(KLAVIYO_KEY);
+    localStorage.removeItem(WORKER_URL);
     setAnthropicKey("");
     setKlaviyoKey("");
+    setWorkerUrl("");
     setCleared(true);
     setTimeout(() => setCleared(false), 2500);
   };
@@ -56,6 +67,9 @@ export default function Settings({ onSave }) {
         color: "#0a0a0a",
         alignItems: "center",
         justifyContent: "center",
+        overflowY: "auto",
+        padding: "40px 20px",
+        boxSizing: "border-box",
       }}
     >
       <link
@@ -72,12 +86,11 @@ export default function Settings({ onSave }) {
           border: "1px solid #ededed",
         }}
       >
-        {/* Header */}
         <div style={{ textAlign: "center", marginBottom: "40px" }}>
           <img
             src="https://swankyagency.com/wp-content/uploads/2022/05/swanky-2020-black.png"
             alt="Swanky"
-            style={{ height: "22px", opacity: 0.9, marginBottom: "28px", display: "block", margin: "0 auto 28px" }}
+            style={{ height: "22px", opacity: 0.9, display: "block", margin: "0 auto 28px" }}
           />
           <div
             style={{
@@ -91,165 +104,54 @@ export default function Settings({ onSave }) {
           >
             {hadKeysOnOpen ? "Settings" : "Welcome"}
           </div>
-          <div
-            style={{
-              fontSize: "10px",
-              textTransform: "uppercase",
-              letterSpacing: "0.2em",
-              color: "#6b6b6b",
-            }}
-          >
+          <div style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.2em", color: "#6b6b6b" }}>
             {hadKeysOnOpen ? "Manage your API keys" : "Paste your API keys to begin"}
           </div>
         </div>
 
         <div style={{ height: "1px", background: "#ededed", marginBottom: "32px" }} />
 
-        {/* Anthropic key field */}
-        <div style={{ marginBottom: "20px" }}>
-          <div
-            style={{
-              fontSize: "10px",
-              textTransform: "uppercase",
-              letterSpacing: "0.16em",
-              color: "#6b6b6b",
-              marginBottom: "8px",
-              fontWeight: 500,
-            }}
-          >
-            Anthropic API key
-          </div>
-          <div style={{ position: "relative" }}>
-            <input
-              type={showAnthropicKey ? "text" : "password"}
-              value={anthropicKey}
-              onChange={(e) => setAnthropicKey(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="sk-ant-..."
-              autoComplete="off"
-              spellCheck={false}
-              style={{
-                width: "100%",
-                padding: "10px 48px 10px 12px",
-                border: "1px solid #b8b8b8",
-                background: "#ffffff",
-                fontSize: "13px",
-                fontFamily: "'Inter', sans-serif",
-                color: "#0a0a0a",
-                outline: "none",
-                boxSizing: "border-box",
-                borderRadius: 0,
-              }}
-            />
-            <button
-              onClick={() => setShowAnthropicKey((v) => !v)}
-              tabIndex={-1}
-              style={{
-                position: "absolute",
-                right: "10px",
-                top: "50%",
-                transform: "translateY(-50%)",
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-                color: "#6b6b6b",
-                fontSize: "10px",
-                textTransform: "uppercase",
-                letterSpacing: "0.1em",
-                fontFamily: "'Inter', sans-serif",
-                padding: "2px 4px",
-              }}
-            >
-              {showAnthropicKey ? "hide" : "show"}
-            </button>
-          </div>
-          <div
-            style={{
-              marginTop: "6px",
-              fontSize: "11px",
-              color: "#6b6b6b",
-              fontFamily: "'Cormorant Garamond', serif",
-              fontStyle: "italic",
-              lineHeight: 1.4,
-            }}
-          >
-            Get yours at console.anthropic.com → API Keys. You'll need a funded account (a few dollars of credits is enough to test).
-          </div>
-        </div>
+        <KeyField
+          label="Anthropic API key"
+          value={anthropicKey}
+          onChange={setAnthropicKey}
+          onKeyDown={handleKeyDown}
+          show={showAnthropicKey}
+          onToggleShow={() => setShowAnthropicKey(v => !v)}
+          placeholder="sk-ant-..."
+          hint="Get yours at console.anthropic.com → API Keys."
+          isPassword
+        />
 
-        {/* Klaviyo key field */}
+        <KeyField
+          label="Klaviyo private API key"
+          value={klaviyoKey}
+          onChange={setKlaviyoKey}
+          onKeyDown={handleKeyDown}
+          show={showKlaviyoKey}
+          onToggleShow={() => setShowKlaviyoKey(v => !v)}
+          placeholder="pk_..."
+          hint="Klaviyo → Account → Settings → API Keys → Create Private API Key. Scopes needed: Campaigns, Flows, Metrics (all read)."
+          isPassword
+        />
+
         <div style={{ marginBottom: "28px" }}>
-          <div
-            style={{
-              fontSize: "10px",
-              textTransform: "uppercase",
-              letterSpacing: "0.16em",
-              color: "#6b6b6b",
-              marginBottom: "8px",
-              fontWeight: 500,
-            }}
-          >
-            Klaviyo private API key
-          </div>
-          <div style={{ position: "relative" }}>
-            <input
-              type={showKlaviyoKey ? "text" : "password"}
-              value={klaviyoKey}
-              onChange={(e) => setKlaviyoKey(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="pk_..."
-              autoComplete="off"
-              spellCheck={false}
-              style={{
-                width: "100%",
-                padding: "10px 48px 10px 12px",
-                border: "1px solid #b8b8b8",
-                background: "#ffffff",
-                fontSize: "13px",
-                fontFamily: "'Inter', sans-serif",
-                color: "#0a0a0a",
-                outline: "none",
-                boxSizing: "border-box",
-                borderRadius: 0,
-              }}
-            />
-            <button
-              onClick={() => setShowKlaviyoKey((v) => !v)}
-              tabIndex={-1}
-              style={{
-                position: "absolute",
-                right: "10px",
-                top: "50%",
-                transform: "translateY(-50%)",
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-                color: "#6b6b6b",
-                fontSize: "10px",
-                textTransform: "uppercase",
-                letterSpacing: "0.1em",
-                fontFamily: "'Inter', sans-serif",
-                padding: "2px 4px",
-              }}
-            >
-              {showKlaviyoKey ? "hide" : "show"}
-            </button>
-          </div>
-          <div
-            style={{
-              marginTop: "6px",
-              fontSize: "11px",
-              color: "#6b6b6b",
-              fontFamily: "'Cormorant Garamond', serif",
-              fontStyle: "italic",
-              lineHeight: 1.4,
-            }}
-          >
-            In Klaviyo: Account → Settings → API Keys → Create Private API Key. Scopes needed: Campaigns (read), Flows (read), Metrics (read).
+          <div style={labelStyle}>Klaviyo proxy worker URL</div>
+          <input
+            type="url"
+            value={workerUrl}
+            onChange={e => setWorkerUrl(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="https://your-worker.workers.dev"
+            autoComplete="off"
+            spellCheck={false}
+            style={inputStyle}
+          />
+          <div style={hintStyle}>
+            Deploy <code style={{ fontFamily: "monospace", fontSize: "10px" }}>worker/index.js</code> to Cloudflare Workers (free), then paste the URL here. The worker fetches your Klaviyo data using your private key.
           </div>
         </div>
 
-        {/* Privacy notice */}
         <div
           style={{
             padding: "14px 16px",
@@ -263,10 +165,9 @@ export default function Settings({ onSave }) {
             fontStyle: "italic",
           }}
         >
-          Keys are stored only in this browser's localStorage. They are never sent to Swanky, never committed to code, and never leave your machine except as authorisation headers sent directly to the Anthropic and Klaviyo APIs.
+          Keys are stored only in this browser's localStorage. They are never sent to Swanky, never committed to code, and leave your machine only as authorisation headers to the Anthropic API and your own Cloudflare Worker.
         </div>
 
-        {/* Save button */}
         <button
           onClick={handleSave}
           disabled={!canSave || saved}
@@ -289,7 +190,6 @@ export default function Settings({ onSave }) {
           {saved ? "Saved  ✓" : "Save keys"}
         </button>
 
-        {/* Cancel (only when keys already existed) */}
         {hadKeysOnOpen && (
           <button
             onClick={onSave}
@@ -306,14 +206,12 @@ export default function Settings({ onSave }) {
               textTransform: "uppercase",
               cursor: "pointer",
               marginBottom: "10px",
-              transition: "border-color 0.15s ease",
             }}
           >
             Cancel
           </button>
         )}
 
-        {/* Clear keys */}
         <button
           onClick={handleClear}
           style={{
@@ -330,8 +228,8 @@ export default function Settings({ onSave }) {
             cursor: "pointer",
             transition: "color 0.15s ease",
           }}
-          onMouseEnter={(e) => { if (!cleared) e.currentTarget.style.color = "#6b6b6b"; }}
-          onMouseLeave={(e) => { if (!cleared) e.currentTarget.style.color = "#b8b8b8"; }}
+          onMouseEnter={e => { if (!cleared) e.currentTarget.style.color = "#6b6b6b"; }}
+          onMouseLeave={e => { if (!cleared) e.currentTarget.style.color = "#b8b8b8"; }}
         >
           {cleared ? "Keys cleared from this browser" : "Clear all keys from this browser"}
         </button>
@@ -339,3 +237,76 @@ export default function Settings({ onSave }) {
     </div>
   );
 }
+
+function KeyField({ label, value, onChange, onKeyDown, show, onToggleShow, placeholder, hint, isPassword }) {
+  return (
+    <div style={{ marginBottom: "20px" }}>
+      <div style={labelStyle}>{label}</div>
+      <div style={{ position: "relative" }}>
+        <input
+          type={isPassword && !show ? "password" : "text"}
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          onKeyDown={onKeyDown}
+          placeholder={placeholder}
+          autoComplete="off"
+          spellCheck={false}
+          style={{ ...inputStyle, paddingRight: "48px" }}
+        />
+        <button
+          onClick={onToggleShow}
+          tabIndex={-1}
+          style={{
+            position: "absolute",
+            right: "10px",
+            top: "50%",
+            transform: "translateY(-50%)",
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+            color: "#6b6b6b",
+            fontSize: "10px",
+            textTransform: "uppercase",
+            letterSpacing: "0.1em",
+            fontFamily: "'Inter', sans-serif",
+            padding: "2px 4px",
+          }}
+        >
+          {show ? "hide" : "show"}
+        </button>
+      </div>
+      {hint && <div style={hintStyle}>{hint}</div>}
+    </div>
+  );
+}
+
+const labelStyle = {
+  fontSize: "10px",
+  textTransform: "uppercase",
+  letterSpacing: "0.16em",
+  color: "#6b6b6b",
+  marginBottom: "8px",
+  fontWeight: 500,
+};
+
+const inputStyle = {
+  width: "100%",
+  padding: "10px 12px",
+  border: "1px solid #b8b8b8",
+  background: "#ffffff",
+  fontSize: "13px",
+  fontFamily: "'Inter', sans-serif",
+  color: "#0a0a0a",
+  outline: "none",
+  boxSizing: "border-box",
+  borderRadius: 0,
+};
+
+const hintStyle = {
+  marginTop: "6px",
+  fontSize: "11px",
+  color: "#6b6b6b",
+  fontFamily: "'Cormorant Garamond', serif",
+  fontStyle: "italic",
+  lineHeight: 1.4,
+};
