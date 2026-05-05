@@ -83,7 +83,7 @@ export default {
       // Account info + metrics list in parallel (metrics needed for conversion_metric_id)
       const [accounts, metrics] = await Promise.all([
         kFetch('/accounts/', klaviyoKey),
-        kFetch('/metrics/?page[size]=100', klaviyoKey),
+        kFetch('/metrics/', klaviyoKey),
       ]);
 
       const conversionMetric = (metrics.data ?? []).find(m =>
