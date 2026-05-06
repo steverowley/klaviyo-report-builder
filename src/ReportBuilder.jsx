@@ -2,6 +2,32 @@ import React, { useState, useRef, useEffect } from "react";
 
 const ANTHROPIC_KEY = "swanky_anthropic_key";
 const WORKER_URL = "swanky_worker_url";
+const REPORT_CACHE_KEY = "swanky_report_cache";
+const MAX_CACHE = 20;
+
+function cacheKey(clientId, start, end, comparisonMode) {
+  return `${clientId}|${start}|${end}|${comparisonMode}`;
+}
+function readCache(key) {
+  try { return JSON.parse(localStorage.getItem(REPORT_CACHE_KEY) || "{}")[key] || null; }
+  catch { return null; }
+}
+function writeCache(key, html, meta) {
+  try {
+    const store = JSON.parse(localStorage.getItem(REPORT_CACHE_KEY) || "{}");
+    store[key] = { html, generatedAt: new Date().toISOString(), ...meta };
+    const entries = Object.entries(store).sort((a, b) => new Date(b[1].generatedAt) - new Date(a[1].generatedAt));
+    localStorage.setItem(REPORT_CACHE_KEY, JSON.stringify(Object.fromEntries(entries.slice(0, MAX_CACHE))));
+  } catch {}
+}
+function relativeTime(iso) {
+  const m = Math.floor((Date.now() - new Date(iso)) / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
 
 export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion }) {
   const [clients, setClients] = useState([]);
@@ -11,6 +37,7 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion }
   const [comparisonMode, setComparisonMode] = useState("Previous Period");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
+  const [cachedInfo, setCachedInfo] = useState(null); // {generatedAt, key} when showing cached
   const [isGenerating, setIsGenerating] = useState(false);
   const [reportHtml, setReportHtml] = useState("");
   const [error, setError] = useState("");
@@ -476,6 +503,9 @@ No markdown fences. No commentary before or after. Show "—" for missing values
       clearTimers();
       setProgress(100);
       setLoadingLine("Ready");
+      const key = cacheKey(selectedClientId, range.start, range.end, comparisonMode);
+      writeCache(key, textBlock.text, { clientId: selectedClientId, reportType });
+      setCachedInfo(null);
       setReportHtml(textBlock.text);
       setJustFinished(true);
 
@@ -565,6 +595,22 @@ No markdown fences. No commentary before or after. Show "—" for missing values
       })
       .catch(() => setClientsError("Could not load clients from worker."));
   }, [settingsVersion]);
+
+  // Auto-load from cache when params change
+  useEffect(() => {
+    if (!selectedClientId || isGenerating) return;
+    if (reportType === "Custom" && (!customStart || !customEnd)) return;
+    const range = computeDateRange();
+    const key = cacheKey(selectedClientId, range.start, range.end, comparisonMode);
+    const cached = readCache(key);
+    if (cached) {
+      setReportHtml(cached.html);
+      setCachedInfo({ generatedAt: cached.generatedAt, key });
+    } else {
+      setReportHtml("");
+      setCachedInfo(null);
+    }
+  }, [selectedClientId, reportType, comparisonMode, customStart, customEnd]);
 
   const handleCancel = () => {
     requestIdRef.current += 1;
@@ -917,6 +963,49 @@ No markdown fences. No commentary before or after. Show "—" for missing values
           flexDirection: "column",
         }}
       >
+        {cachedInfo && !isGenerating && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "8px 14px",
+              marginBottom: "8px",
+              background: "#ffffff",
+              border: "1px solid #ededed",
+              fontSize: "11px",
+              color: "#6b6b6b",
+              fontFamily: "'Inter', sans-serif",
+              flexShrink: 0,
+            }}
+          >
+            <span>
+              <span style={{ textTransform: "uppercase", letterSpacing: "0.12em", fontWeight: 500, fontSize: "10px" }}>
+                Cached
+              </span>
+              {" · Generated "}
+              {relativeTime(cachedInfo.generatedAt)}
+            </span>
+            <button
+              onClick={handleGenerate}
+              style={{
+                background: "none",
+                border: "1px solid #b8b8b8",
+                padding: "4px 12px",
+                fontFamily: "'Inter', sans-serif",
+                fontSize: "10px",
+                fontWeight: 500,
+                letterSpacing: "0.14em",
+                textTransform: "uppercase",
+                color: "#2a2a2a",
+                cursor: "pointer",
+              }}
+            >
+              Regenerate fresh
+            </button>
+          </div>
+        )}
+
         <div
           style={{
             flex: 1,
