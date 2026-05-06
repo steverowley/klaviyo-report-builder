@@ -242,62 +242,75 @@ Same: plain <p> tags only. 4–5 sentences. What changed, why, what to watch.
 **10. NEXT STEPS FOR GROWTH**
 <h2>Next Steps for Growth</h2>
 Wrap all steps in <div id="stepsContainer">.
-Each step is a <div class="step-wrapper" style="position:relative"> containing the flex row:
+Each step is a <div class="step-wrapper" style="position:relative;cursor:grab"> containing the flex row:
   display:flex;gap:14px;padding:16px 0;border-bottom:0.5px solid #f0f0ec (last step: no border)
   .num: width:28px;height:28px;border-radius:50%;background:#0a0a0a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex-shrink:0;margin-top:2px
-  .pri: font-size:9px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#888;margin-bottom:4px
+  .pri: font-size:9px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:4px — contains TWO spans:
+    <span class="pri-level" style="cursor:pointer;color:#0a0a0a">High priority</span><span class="pri-area" style="color:#888"> — [Area]</span>
+    (pri-level colour: #0a0a0a=High, #555=Medium, #999=Low)
   .stitle: font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:400;color:#0a0a0a;margin-bottom:4px
   .sdesc: font-size:12px;color:#606060;line-height:1.6;font-weight:300;margin-bottom:8px
   .tag: display:inline-block;font-size:10px;color:#555;background:#f7f6f3;border:1px solid #e0e0da;border-radius:3px;padding:2px 8px;margin:2px 4px 2px 0
-  Priority format: "High priority — [Area]" / "Medium priority — [Area]" / "Low priority — [Area]"
   Each step: 2–4 .tag pills with specific supporting metrics.
-  Controls div (position:absolute;top:14px;right:0;display:flex;gap:8px): three buttons styled as (background:none;border:none;cursor:pointer;font-size:13px;color:#b8b8b8;padding:2px 4px) with :hover color #0a0a0a:
+  Controls div (position:absolute;top:14px;right:0;display:flex;gap:8px): three buttons (background:none;border:none;cursor:pointer;font-size:13px;color:#b8b8b8;padding:2px 4px):
     <button class="btn-edit" title="Edit">✎</button>
     <button class="btn-regen" title="Regenerate">↺</button>
     <button class="btn-del" title="Delete">×</button>
 
-After stepsContainer, render:
+After stepsContainer:
 <button id="addStep" style="margin-top:16px;background:none;border:1px solid #e0e0da;padding:8px 16px;font-family:'Inter',sans-serif;font-size:11px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#6b6b6b;cursor:pointer">+ Add recommendation</button>
 
-In the DOMContentLoaded script, after chart init, add this JS verbatim:
-function renum(){document.querySelectorAll('#stepsContainer .step-wrapper').forEach((w,i)=>w.querySelector('.num').textContent=i+1);}
-function bindStep(w,i){
+In the DOMContentLoaded script, after chart init, include this JS verbatim:
+var dragSrc=null;
+var LEVELS=['High priority','Medium priority','Low priority'];
+var LEVEL_COLORS={'High priority':'#0a0a0a','Medium priority':'#555','Low priority':'#999'};
+function renum(){document.querySelectorAll('#stepsContainer .step-wrapper').forEach(function(w,i){w.querySelector('.num').textContent=i+1;});}
+function selAll(el){el.addEventListener('focus',function(){try{var r=document.createRange();r.selectNodeContents(this);var s=window.getSelection();s.removeAllRanges();s.addRange(r);}catch(e){}});}
+function makeDraggable(w){
+  w.setAttribute('draggable','true');
+  w.addEventListener('dragstart',function(e){dragSrc=w;e.dataTransfer.effectAllowed='move';setTimeout(function(){w.style.opacity='0.4';},0);});
+  w.addEventListener('dragend',function(){w.style.opacity='';document.querySelectorAll('#stepsContainer .step-wrapper').forEach(function(el){el.style.borderTop='';});});
+  w.addEventListener('dragover',function(e){e.preventDefault();document.querySelectorAll('#stepsContainer .step-wrapper').forEach(function(el){el.style.borderTop='';});if(dragSrc!==w)w.style.borderTop='2px solid #0a0a0a';return false;});
+  w.addEventListener('drop',function(e){e.stopPropagation();if(dragSrc&&dragSrc!==w){document.getElementById('stepsContainer').insertBefore(dragSrc,w);renum();}document.querySelectorAll('#stepsContainer .step-wrapper').forEach(function(el){el.style.borderTop='';});return false;});
+}
+function bindStep(w){
+  var pl=w.querySelector('.pri-level');
+  if(pl){pl.onclick=function(){var i=LEVELS.indexOf(pl.textContent.trim());pl.textContent=LEVELS[(i+1)%3];pl.style.color=LEVEL_COLORS[pl.textContent]||'#888';};}
   w.querySelector('.btn-edit').onclick=function(){
-    var t=w.querySelector('.stitle'),d=w.querySelector('.sdesc'),editing=t.isContentEditable;
-    t.contentEditable=d.contentEditable=editing?'false':'true';
-    if(!editing){t.style.outline=d.style.outline='1px dashed #ccc';t.focus();}
-    else{t.style.outline=d.style.outline='';}
+    var t=w.querySelector('.stitle'),d=w.querySelector('.sdesc'),pa=w.querySelector('.pri-area'),editing=t.isContentEditable==='true';
+    [t,d,pa].forEach(function(el){if(el){el.contentEditable=editing?'false':'true';el.style.outline=editing?'':'1px dashed #ccc';}});
+    if(!editing)t.focus();
     this.textContent=editing?'✎':'✓';
   };
   w.querySelector('.btn-regen').onclick=function(){
     var idx=Array.from(document.querySelectorAll('#stepsContainer .step-wrapper')).indexOf(w);
-    this.textContent='…';this.disabled=true;
-    window.parent.postMessage({type:'regenerate-step',index:idx,title:w.querySelector('.stitle').textContent.trim(),desc:w.querySelector('.sdesc').textContent.trim()},'*');
+    this.textContent='↺';this.disabled=true;this.classList.add('spinning');
+    w.querySelector('.stitle').style.opacity='0.35';w.querySelector('.sdesc').style.opacity='0.35';
+    var allSteps=Array.from(document.querySelectorAll('#stepsContainer .step-wrapper')).map(function(s){return s.querySelector('.stitle').textContent.trim()+': '+s.querySelector('.sdesc').textContent.trim();});
+    window.parent.postMessage({type:'regenerate-step',index:idx,title:w.querySelector('.stitle').textContent.trim(),desc:w.querySelector('.sdesc').textContent.trim(),allSteps:allSteps},'*');
   };
   w.querySelector('.btn-del').onclick=function(){w.remove();renum();};
+  selAll(w.querySelector('.stitle'));selAll(w.querySelector('.sdesc'));
+  if(w.querySelector('.pri-area'))selAll(w.querySelector('.pri-area'));
+  makeDraggable(w);
 }
 document.querySelectorAll('#stepsContainer .step-wrapper').forEach(bindStep);
 window.addEventListener('message',function(e){
-  if(e.data&&e.data.type==='step-regenerated'){
-    var ws=document.querySelectorAll('#stepsContainer .step-wrapper');
-    var w=ws[e.data.index];if(!w)return;
-    w.querySelector('.stitle').textContent=e.data.title;
-    w.querySelector('.sdesc').textContent=e.data.desc;
-    var rb=w.querySelector('.btn-regen');rb.textContent='↺';rb.disabled=false;
-  }
+  if(e.data&&e.data.type==='step-regenerated'){var ws=document.querySelectorAll('#stepsContainer .step-wrapper');var w=ws[e.data.index];if(!w)return;w.querySelector('.stitle').textContent=e.data.title;w.querySelector('.sdesc').textContent=e.data.desc;w.querySelector('.stitle').style.opacity='';w.querySelector('.sdesc').style.opacity='';var rb=w.querySelector('.btn-regen');rb.textContent='↺';rb.disabled=false;rb.classList.remove('spinning');}
 });
 document.getElementById('addStep').onclick=function(){
   var idx=document.querySelectorAll('#stepsContainer .step-wrapper').length;
-  var w=document.createElement('div');w.className='step-wrapper';w.style.position='relative';
-  w.innerHTML='<div style="display:flex;gap:14px;padding:16px 0;border-bottom:0.5px solid #f0f0ec"><div class="num" style="width:28px;height:28px;border-radius:50%;background:#0a0a0a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex-shrink:0;margin-top:2px">'+(idx+1)+'</div><div style="flex:1"><div class="pri" style="font-size:9px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#888;margin-bottom:4px">Medium priority — New</div><div class="stitle" contenteditable="true" style="font-family:\'Cormorant Garamond\',serif;font-size:17px;font-weight:400;color:#0a0a0a;margin-bottom:4px;outline:1px dashed #ccc;min-width:40px">New recommendation</div><div class="sdesc" contenteditable="true" style="font-size:12px;color:#606060;line-height:1.6;font-weight:300;margin-bottom:8px;outline:1px dashed #ccc;min-width:40px">Describe this recommendation…</div></div><div style="position:absolute;top:14px;right:0;display:flex;gap:8px"><button class="btn-edit" style="background:none;border:none;cursor:pointer;font-size:13px;color:#b8b8b8;padding:2px 4px" title="Edit">✓</button><button class="btn-regen" style="background:none;border:none;cursor:pointer;font-size:13px;color:#b8b8b8;padding:2px 4px" title="Regenerate">↺</button><button class="btn-del" style="background:none;border:none;cursor:pointer;font-size:13px;color:#b8b8b8;padding:2px 4px" title="Delete">×</button></div></div>';
-  document.getElementById('stepsContainer').appendChild(w);
-  bindStep(w,idx);w.querySelector('.stitle').focus();
+  var w=document.createElement('div');w.className='step-wrapper';w.style.cssText='position:relative;cursor:grab';
+  w.innerHTML='<div style="display:flex;gap:14px;padding:16px 0;border-bottom:0.5px solid #f0f0ec"><div class="num" style="width:28px;height:28px;border-radius:50%;background:#0a0a0a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex-shrink:0;margin-top:2px">'+(idx+1)+'</div><div style="flex:1"><div class="pri" style="font-size:9px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:4px"><span class="pri-level" style="cursor:pointer;color:#555">Medium priority</span><span class="pri-area" contenteditable="true" style="color:#888;outline:1px dashed #ccc"> — New</span></div><div class="stitle" contenteditable="true" style="font-family:\'Cormorant Garamond\',serif;font-size:17px;font-weight:400;color:#0a0a0a;margin-bottom:4px;outline:1px dashed #ccc">New recommendation</div><div class="sdesc" contenteditable="true" style="font-size:12px;color:#606060;line-height:1.6;font-weight:300;margin-bottom:8px;outline:1px dashed #ccc">Describe this recommendation…</div></div><div style="position:absolute;top:14px;right:0;display:flex;gap:8px"><button class="btn-edit" style="background:none;border:none;cursor:pointer;font-size:13px;color:#b8b8b8;padding:2px 4px" title="Edit">✓</button><button class="btn-regen" style="background:none;border:none;cursor:pointer;font-size:13px;color:#b8b8b8;padding:2px 4px" title="Regenerate">↺</button><button class="btn-del" style="background:none;border:none;cursor:pointer;font-size:13px;color:#b8b8b8;padding:2px 4px" title="Delete">×</button></div></div>';
+  document.getElementById('stepsContainer').appendChild(w);bindStep(w);w.querySelector('.stitle').focus();
 };
 
 **11. FOOTER**
 background:#0a0a0a;color:#555;padding:18px 48px;display:flex;justify-content:space-between;font-size:11px;margin:48px -48px -40px
 Left: "Prepared by Swanky Agency for ${accountName}"
 Right: "[start D MMM YYYY] to [end D MMM YYYY]"
+
+Add to <style>: @keyframes spin{to{transform:rotate(360deg)}} .spinning{display:inline-block;animation:spin 0.8s linear infinite;}
 
 ━━━ OUTPUT RULES ━━━
 Output ONLY a complete <!DOCTYPE html>…</html>. CSS in <style> in <head>. Chart.js CDN + init script in <body>.
@@ -510,7 +523,7 @@ No markdown fences. No commentary before or after. Show "—" for missing values
             max_tokens: 300,
             messages: [{
               role: 'user',
-              content: `You are rewriting an email marketing recommendation. Current title: "${title}". Current description: "${desc}". Write an improved version that is more specific and actionable. Reply with ONLY valid JSON: {"title":"...","desc":"..."}`,
+              content: `You are improving a set of email marketing growth recommendations. Here are all the current recommendations:\n${event.data.allSteps?.map((s,i)=>`${i+1}. ${s}`).join('\n')}\n\nRecommendation #${index+1} is being replaced. Generate the single best NEW recommendation that would be most impactful for this account AND does not duplicate any of the others. Be specific and actionable. Reply with ONLY valid JSON: {"title":"...","desc":"..."}`,
             }],
           }),
         });
