@@ -133,13 +133,21 @@ function processAggregate(agg, measurement = 'count') {
       return { dates: dates.map(d => d.slice(0, 10)), counts };
     }
 
-    // Format B: flat dates + data object or 2-D array
+    // Format B: flat dates + data field (3 known shapes)
     const dates = attrs.dates;
-    let raw = attrs.data?.[measurement];
-    // Klaviyo sometimes returns data as [[count_vals], [sum_vals], ...] instead of {count:[...]}
-    if (raw === undefined && Array.isArray(attrs.data)) {
-      const idx = ['count', 'sum_value', 'unique'].indexOf(measurement);
-      raw = attrs.data[idx >= 0 ? idx : 0];
+    let raw;
+    if (Array.isArray(attrs.data)) {
+      if (attrs.data[0]?.measurements) {
+        // Shape: [{dimensions:[], measurements:{count:[...], sum_value:[...]}}]
+        raw = attrs.data[0].measurements[measurement];
+      } else {
+        // Shape: [[count_vals], [sum_vals], ...]
+        const idx = ['count', 'sum_value', 'unique'].indexOf(measurement);
+        raw = attrs.data[idx >= 0 ? idx : 0];
+      }
+    } else {
+      // Shape: {count:[...], sum_value:[...]}
+      raw = attrs.data?.[measurement];
     }
     if (!dates?.length || !raw?.length) return null;
     const counts = raw.map(v => Array.isArray(v) ? Number(v[0] ?? 0) : Number(v ?? 0));
@@ -336,17 +344,6 @@ export default {
           orderAggError:      orderAgg?._error ?? null,
           subscriberAggError: subscriberAgg?._error ?? null,
           unsubAggError:      unsubAgg?._error ?? null,
-          // Temporary debug — remove once structure confirmed
-          flowNameSample:     Object.entries(flowNames).slice(0, 6),
-          orderAggDataType:   orderAgg && !orderAgg._error
-            ? (Array.isArray(orderAgg?.data?.attributes?.data) ? 'array' : typeof orderAgg?.data?.attributes?.data)
-            : null,
-          orderAggDataKeys:   orderAgg && !orderAgg._error && !Array.isArray(orderAgg?.data?.attributes?.data)
-            ? Object.keys(orderAgg?.data?.attributes?.data ?? {})
-            : null,
-          orderAggDataSample: orderAgg && !orderAgg._error
-            ? JSON.stringify(orderAgg?.data?.attributes?.data).slice(0, 300)
-            : null,
         },
       }), {
         headers: { 'Content-Type': 'application/json', ...cors(origin) },
