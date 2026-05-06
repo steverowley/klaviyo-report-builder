@@ -1782,9 +1782,51 @@ function LoadingState({ progress, line, elapsed, justFinished, onDismissCompleti
   const pct = Math.round(progress);
   const formatTime = (s) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`);
   const showPatience = elapsed >= 90 && !justFinished;
+  const containerRef = useRef(null);
+  const barRefs = useRef([]);
+  const [ripples, setRipples] = useState([]);
+
+  // Mouse move → bars swell toward cursor (direct DOM, no re-render)
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const onMove = (e) => {
+      const rect = el.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      barRefs.current.forEach((bar, i) => {
+        if (!bar) return;
+        const br = bar.getBoundingClientRect();
+        const bx = br.left + br.width / 2 - rect.left;
+        const dist = Math.abs(mx - bx);
+        const boost = 1 + 1.6 * Math.exp(-(dist * dist) / (2 * 90 * 90));
+        bar.style.setProperty('--bar-max', `${Math.round(BAR_HEIGHTS[i] * boost)}px`);
+      });
+    };
+    const onLeave = () => {
+      barRefs.current.forEach((bar, i) => {
+        if (bar) bar.style.setProperty('--bar-max', `${BAR_HEIGHTS[i]}px`);
+      });
+    };
+    el.addEventListener('mousemove', onMove);
+    el.addEventListener('mouseleave', onLeave);
+    return () => { el.removeEventListener('mousemove', onMove); el.removeEventListener('mouseleave', onLeave); };
+  }, []);
+
+  // Click → spawn ink ripple
+  const handleClick = (e) => {
+    if (justFinished) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const id = Date.now() + Math.random();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    setRipples(r => [...r, { id, x, y }]);
+    setTimeout(() => setRipples(r => r.filter(rip => rip.id !== id)), 1600);
+  };
 
   return (
     <div
+      ref={containerRef}
+      onClick={handleClick}
       style={{
         height: "100%",
         display: "flex",
@@ -1801,7 +1843,21 @@ function LoadingState({ progress, line, elapsed, justFinished, onDismissCompleti
     >
       <FloatingNumerals />
 
-      {/* Equalizer bars — continuously looping, travel-wave stagger */}
+      {/* Ink ripples — SVG layer, pointer-events none */}
+      <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 4, overflow: "visible" }}>
+        {ripples.map(r => (
+          <g key={r.id} transform={`translate(${r.x},${r.y})`}>
+            <circle cx="0" cy="0" r="1" fill="none" stroke="#0a0a0a" strokeWidth="0.6"
+              style={{ animation: "rippleOut 1.6s cubic-bezier(0.2,0.6,0.4,1) forwards" }} />
+            <circle cx="0" cy="0" r="1" fill="none" stroke="#0a0a0a" strokeWidth="0.4"
+              style={{ animation: "rippleOut 1.6s cubic-bezier(0.2,0.6,0.4,1) 0.18s forwards", opacity: 0 }} />
+            <circle cx="0" cy="0" r="1" fill="none" stroke="#0a0a0a" strokeWidth="0.3"
+              style={{ animation: "rippleOut 1.6s cubic-bezier(0.2,0.6,0.4,1) 0.36s forwards", opacity: 0 }} />
+          </g>
+        ))}
+      </svg>
+
+      {/* Equalizer bars — mouse-reactive + continuously looping */}
       <div style={{
         display: "flex",
         alignItems: "flex-end",
@@ -1814,6 +1870,7 @@ function LoadingState({ progress, line, elapsed, justFinished, onDismissCompleti
         {BAR_HEIGHTS.map((maxH, i) => (
           <div
             key={i}
+            ref={el => barRefs.current[i] = el}
             style={{
               width: "2px",
               background: "#0a0a0a",
@@ -1930,17 +1987,21 @@ function LoadingState({ progress, line, elapsed, justFinished, onDismissCompleti
           from { height: 3px; opacity: 0.2; }
           to { height: var(--bar-max); opacity: 0.85; }
         }
+        @keyframes rippleOut {
+          0%   { transform: scale(0);   opacity: 0.3; }
+          100% { transform: scale(200); opacity: 0; }
+        }
         @keyframes shimmer {
-          0% { transform: translateX(-100%); }
+          0%   { transform: translateX(-100%); }
           100% { transform: translateX(200%); }
         }
         @keyframes fadeLine {
           from { opacity: 0; transform: translateY(2px); }
-          to { opacity: 1; transform: translateY(0); }
+          to   { opacity: 1; transform: translateY(0); }
         }
         @keyframes loadIn {
           from { opacity: 0; transform: translateY(8px); }
-          to { opacity: 1; transform: translateY(0); }
+          to   { opacity: 1; transform: translateY(0); }
         }
       `}</style>
 
