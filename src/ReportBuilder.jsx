@@ -260,12 +260,14 @@ Each step is a <div class="step-wrapper" style="position:relative;cursor:grab"> 
 After stepsContainer:
 <button id="addStep" style="margin-top:16px;background:none;border:1px solid #e0e0da;padding:8px 16px;font-family:'Inter',sans-serif;font-size:11px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#6b6b6b;cursor:pointer">+ Add recommendation</button>
 
+Each .step-wrapper must have a unique data-sid attribute: data-sid="s0", "s1", etc. (assigned at render time, incrementing from 0).
+
 In the DOMContentLoaded script, after chart init, include this JS verbatim:
-var dragSrc=null;
+var dragSrc=null,sidSeq=document.querySelectorAll('#stepsContainer .step-wrapper').length;
 var LEVELS=['High priority','Medium priority','Low priority'];
 var LEVEL_COLORS={'High priority':'#0a0a0a','Medium priority':'#555','Low priority':'#999'};
 function renum(){document.querySelectorAll('#stepsContainer .step-wrapper').forEach(function(w,i){w.querySelector('.num').textContent=i+1;});}
-function selAll(el){el.addEventListener('focus',function(){try{var r=document.createRange();r.selectNodeContents(this);var s=window.getSelection();s.removeAllRanges();s.addRange(r);}catch(e){}});}
+function selAll(el){if(!el)return;el.addEventListener('focus',function(){try{var r=document.createRange();r.selectNodeContents(this);var s=window.getSelection();s.removeAllRanges();s.addRange(r);}catch(e){}});}
 function makeDraggable(w){
   w.setAttribute('draggable','true');
   w.addEventListener('dragstart',function(e){dragSrc=w;e.dataTransfer.effectAllowed='move';setTimeout(function(){w.style.opacity='0.4';},0);});
@@ -283,24 +285,30 @@ function bindStep(w){
     this.textContent=editing?'✎':'✓';
   };
   w.querySelector('.btn-regen').onclick=function(){
-    var idx=Array.from(document.querySelectorAll('#stepsContainer .step-wrapper')).indexOf(w);
+    var sid=w.dataset.sid;
     this.textContent='↺';this.disabled=true;this.classList.add('spinning');
     w.querySelector('.stitle').style.opacity='0.35';w.querySelector('.sdesc').style.opacity='0.35';
     var allSteps=Array.from(document.querySelectorAll('#stepsContainer .step-wrapper')).map(function(s){return s.querySelector('.stitle').textContent.trim()+': '+s.querySelector('.sdesc').textContent.trim();});
-    window.parent.postMessage({type:'regenerate-step',index:idx,title:w.querySelector('.stitle').textContent.trim(),desc:w.querySelector('.sdesc').textContent.trim(),allSteps:allSteps},'*');
+    window.parent.postMessage({type:'regenerate-step',sid:sid,title:w.querySelector('.stitle').textContent.trim(),desc:w.querySelector('.sdesc').textContent.trim(),allSteps:allSteps},'*');
   };
   w.querySelector('.btn-del').onclick=function(){w.remove();renum();};
-  selAll(w.querySelector('.stitle'));selAll(w.querySelector('.sdesc'));
-  if(w.querySelector('.pri-area'))selAll(w.querySelector('.pri-area'));
+  selAll(w.querySelector('.stitle'));selAll(w.querySelector('.sdesc'));selAll(w.querySelector('.pri-area'));
   makeDraggable(w);
 }
 document.querySelectorAll('#stepsContainer .step-wrapper').forEach(bindStep);
 window.addEventListener('message',function(e){
-  if(e.data&&e.data.type==='step-regenerated'){var ws=document.querySelectorAll('#stepsContainer .step-wrapper');var w=ws[e.data.index];if(!w)return;w.querySelector('.stitle').textContent=e.data.title;w.querySelector('.sdesc').textContent=e.data.desc;w.querySelector('.stitle').style.opacity='';w.querySelector('.sdesc').style.opacity='';var rb=w.querySelector('.btn-regen');rb.textContent='↺';rb.disabled=false;rb.classList.remove('spinning');}
+  if(e.data&&e.data.type==='step-regenerated'){
+    var w=document.querySelector('#stepsContainer .step-wrapper[data-sid="'+e.data.sid+'"]');
+    if(!w)return;
+    w.querySelector('.stitle').textContent=e.data.title;w.querySelector('.sdesc').textContent=e.data.desc;
+    w.querySelector('.stitle').style.opacity='';w.querySelector('.sdesc').style.opacity='';
+    var rb=w.querySelector('.btn-regen');rb.textContent='↺';rb.disabled=false;rb.classList.remove('spinning');
+  }
 });
 document.getElementById('addStep').onclick=function(){
   var idx=document.querySelectorAll('#stepsContainer .step-wrapper').length;
-  var w=document.createElement('div');w.className='step-wrapper';w.style.cssText='position:relative;cursor:grab';
+  var sid='s'+(sidSeq++);
+  var w=document.createElement('div');w.className='step-wrapper';w.style.cssText='position:relative;cursor:grab';w.dataset.sid=sid;
   w.innerHTML='<div style="display:flex;gap:14px;padding:16px 0;border-bottom:0.5px solid #f0f0ec"><div class="num" style="width:28px;height:28px;border-radius:50%;background:#0a0a0a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex-shrink:0;margin-top:2px">'+(idx+1)+'</div><div style="flex:1"><div class="pri" style="font-size:9px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:4px"><span class="pri-level" style="cursor:pointer;color:#555">Medium priority</span><span class="pri-area" contenteditable="true" style="color:#888;outline:1px dashed #ccc"> — New</span></div><div class="stitle" contenteditable="true" style="font-family:\'Cormorant Garamond\',serif;font-size:17px;font-weight:400;color:#0a0a0a;margin-bottom:4px;outline:1px dashed #ccc">New recommendation</div><div class="sdesc" contenteditable="true" style="font-size:12px;color:#606060;line-height:1.6;font-weight:300;margin-bottom:8px;outline:1px dashed #ccc">Describe this recommendation…</div></div><div style="position:absolute;top:14px;right:0;display:flex;gap:8px"><button class="btn-edit" style="background:none;border:none;cursor:pointer;font-size:13px;color:#b8b8b8;padding:2px 4px" title="Edit">✓</button><button class="btn-regen" style="background:none;border:none;cursor:pointer;font-size:13px;color:#b8b8b8;padding:2px 4px" title="Regenerate">↺</button><button class="btn-del" style="background:none;border:none;cursor:pointer;font-size:13px;color:#b8b8b8;padding:2px 4px" title="Delete">×</button></div></div>';
   document.getElementById('stepsContainer').appendChild(w);bindStep(w);w.querySelector('.stitle').focus();
 };
@@ -506,7 +514,7 @@ No markdown fences. No commentary before or after. Show "—" for missing values
   useEffect(() => {
     const handler = async (event) => {
       if (event.data?.type !== 'regenerate-step') return;
-      const { index, title, desc } = event.data;
+      const { sid, title, desc } = event.data;
       const anthropicKey = localStorage.getItem(ANTHROPIC_KEY);
       if (!anthropicKey || !iframeRef.current) return;
       try {
@@ -531,7 +539,7 @@ No markdown fences. No commentary before or after. Show "—" for missing values
         const parsed = JSON.parse(data.content?.[0]?.text ?? '{}');
         if (parsed.title && parsed.desc) {
           iframeRef.current.contentWindow?.postMessage(
-            { type: 'step-regenerated', index, title: parsed.title, desc: parsed.desc },
+            { type: 'step-regenerated', sid, title: parsed.title, desc: parsed.desc },
             '*'
           );
         }
