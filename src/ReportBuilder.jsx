@@ -143,7 +143,7 @@ font-variant-numeric:tabular-nums on all numeric table cells.
 ━━━ SECTION HEADINGS ━━━
 h2 { font-family:'Cormorant Garamond',serif; font-size:22px; font-weight:400; color:#0a0a0a; margin:36px 0 16px; border-bottom:1px solid #e8e8e4; padding-bottom:8px; }
 
-━━━ SECTIONS (all 10, in this order) ━━━
+━━━ SECTIONS (all 11, in this order) ━━━
 
 **1. HEADER**
 White bg, border-bottom:2px solid #0a0a0a, padding-bottom:32px, margin-bottom:36px.
@@ -157,7 +157,10 @@ Meta bar: border-top:0.5px solid #e0e0da padding-top:10px flex space-between —
   Left: "Generated [D MMM YYYY]" Inter 11px #aaa
   Right: "[start D MMM YYYY] to [end D MMM YYYY]" Inter 12px #555
 
-**2. PERIOD SNAPSHOT**
+**2. EXECUTIVE SUMMARY**
+3–4 sentences of top-line narrative a time-pressed reader can absorb in 20 seconds. Lead with the single most important number or finding, then the key opportunity or risk, then one forward-looking sentence. Plain <p> tags: font-size:15px;line-height:1.8;color:#2a2a2a;font-weight:300;margin:0 0 36px;max-width:720px. Bold key figures with <strong style="font-weight:500">. No heading, no label, no border — just the paragraph directly below the header.
+
+**3. PERIOD SNAPSHOT**
 <h2>Period Snapshot</h2>
 4-col grid gap:12px margin-bottom:32px. Each card: background:#f7f6f3; border-radius:3px; padding:16px 18px; border-left:2px solid #0a0a0a.
   Label: Inter 10px weight 500 letter-spacing:0.08em uppercase #999 margin-bottom:8px
