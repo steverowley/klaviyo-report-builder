@@ -5,6 +5,102 @@ const WORKER_URL = "swanky_worker_url";
 const REPORT_CACHE_KEY = "swanky_report_cache";
 const MAX_CACHE = 20;
 
+// ── Ecommerce event calendar ─────────────────────────────────────────────────
+
+function easterDate(year) {
+  const a = year % 19, b = Math.floor(year / 100), c = year % 100;
+  const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(year, month - 1, day);
+}
+
+function nthWeekday(year, month, weekday, n) {
+  const d = new Date(year, month, 1);
+  const diff = (weekday - d.getDay() + 7) % 7;
+  d.setDate(1 + diff + (n - 1) * 7);
+  return d;
+}
+
+function lastWorkingDay(year, month) {
+  const d = new Date(year, month + 1, 0);
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1);
+  return d;
+}
+
+function fmtEventDate(d) {
+  return d.toISOString().split('T')[0];
+}
+
+function fmtChartLabel(d) {
+  const day = d.getDate();
+  const month = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
+  return `${day} ${month}`;
+}
+
+function getEcommerceEvents(startDate, endDate) {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const events = [];
+  const MS = 86400000;
+
+  const add = (d, name, type) => {
+    if (d >= start && d <= end) events.push({ date: fmtEventDate(d), chartLabel: fmtChartLabel(d), name, type });
+  };
+
+  for (let y = start.getFullYear(); y <= end.getFullYear(); y++) {
+    add(new Date(y, 0, 1),   "New Year's Day",          "holiday");
+    add(new Date(y, 1, 14),  "Valentine's Day",          "ecommerce");
+    add(new Date(y, 2, 8),   "International Women's Day","ecommerce");
+
+    const easter = easterDate(y);
+    add(new Date(easter.getTime() - 2 * MS), "Good Friday",          "holiday");
+    add(easter,                               "Easter Sunday",        "holiday");
+    // UK Mothering Sunday = 3 Sundays before Easter
+    add(new Date(easter.getTime() - 21 * MS), "UK Mother's Day",      "ecommerce");
+
+    add(nthWeekday(y, 5, 0, 3), "Father's Day",          "ecommerce"); // 3rd Sunday June
+    add(new Date(y, 6, 15),  "Amazon Prime Day (approx)","ecommerce");
+    add(new Date(y, 7, 28),  "Bank Holiday (approx)",    "holiday");
+    add(new Date(y, 8, 1),   "Back to School",           "ecommerce");
+    add(new Date(y, 9, 31),  "Halloween",                "ecommerce");
+    add(new Date(y, 10, 11), "Singles' Day",             "ecommerce");
+
+    // Black Friday = day after 4th Thursday of November
+    const blackFriday = new Date(nthWeekday(y, 10, 4, 4).getTime() + MS);
+    add(blackFriday,                                "Black Friday",     "ecommerce");
+    add(new Date(blackFriday.getTime() + MS),       "Black Friday Weekend","ecommerce");
+    add(new Date(blackFriday.getTime() + 2 * MS),   "Black Friday Weekend","ecommerce");
+    add(new Date(blackFriday.getTime() + 3 * MS),   "Cyber Monday",     "ecommerce");
+
+    add(new Date(y, 11, 24), "Christmas Eve",     "holiday");
+    add(new Date(y, 11, 25), "Christmas Day",     "holiday");
+    add(new Date(y, 11, 26), "Boxing Day",        "ecommerce");
+    add(new Date(y, 11, 27), "Post-Christmas sale","ecommerce");
+    add(new Date(y, 11, 31), "New Year's Eve",    "holiday");
+
+    // End-of-month payday (last working day each month)
+    for (let m = 0; m < 12; m++) {
+      const pd = lastWorkingDay(y, m);
+      if (pd >= start && pd <= end) {
+        const mname = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m];
+        events.push({ date: fmtEventDate(pd), chartLabel: fmtChartLabel(pd), name: `${mname} payday`, type: "payday" });
+      }
+    }
+  }
+
+  return events
+    .filter((e, i, arr) => arr.findIndex(x => x.date === e.date && x.name === e.name) === i)
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 function writeSlidesCache(key, slidesPrompt) {
   try {
     const store = JSON.parse(localStorage.getItem(REPORT_CACHE_KEY) || "{}");
@@ -241,6 +337,31 @@ Sub-label "Orders Per Day". Container height:180px. <canvas id="orderChart"></ca
 Line chart: { data: aggregates.orders.counts, borderColor:'#555', backgroundColor:'rgba(80,80,80,0.08)', fill:true, tension:0.4, pointRadius:3, pointBackgroundColor:'#555', pointBorderColor:'#fff', pointBorderWidth:1.5 }
 Same scale options as bar chart.
 
+━━━ CHART EVENT ANNOTATIONS ━━━
+For BOTH the List Growth chart (subChart) and Order Volume chart (orderChart), add an inline Chart.js plugin that draws vertical markers for any ecommerce events whose "chart label" (e.g. "14 Feb") matches an entry in the chart's labels array. Register this plugin ONCE before both chart creations:
+const eventMarkerPlugin = {
+  id: 'eventMarkers',
+  afterDraw(chart, args, opts) {
+    if (!opts || !opts.events || !opts.events.length) return;
+    const ctx = chart.ctx; const xScale = chart.scales.x; const yScale = chart.scales.y;
+    opts.events.forEach(function(ev) {
+      const idx = chart.data.labels.indexOf(ev.label);
+      if (idx === -1) return;
+      const x = xScale.getPixelForValue(idx);
+      ctx.save();
+      ctx.setLineDash([3, 3]); ctx.strokeStyle = 'rgba(10,10,10,0.22)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x, yScale.top); ctx.lineTo(x, yScale.bottom); ctx.stroke();
+      ctx.setLineDash([]); ctx.fillStyle = '#888'; ctx.font = '8px DM Sans,sans-serif';
+      ctx.save(); ctx.translate(x + 3, yScale.top + 8); ctx.rotate(-Math.PI / 2);
+      ctx.fillText(ev.name, 0, 0); ctx.restore(); ctx.restore();
+    });
+  }
+};
+Chart.register(eventMarkerPlugin);
+Pass each chart a plugins.eventMarkers.events array containing only the events whose chartLabel exists in that chart's labels. Example: plugins:{ legend:{display:false}, eventMarkers:{ events: matchedEvents } }
+matchedEvents is computed by filtering the full events list: const matchedEvents = EVENTS.filter(e => chartLabels.includes(e.label));
+Define EVENTS as a JS const at the top of the DOMContentLoaded script using the event data provided in the user message (each entry: {label:"14 Feb", name:"Valentine's Day"}).
+
 **6. CAMPAIGN PERFORMANCE**
 <h2>Campaign Performance</h2>
 period.campaigns is a pre-normalised flat array: [{campaign_name, send_channel, recipients, delivered, open_rate, click_rate, conversions, conversion_rate, conversion_value}]. Empty array = no campaigns.
@@ -273,10 +394,12 @@ Revenue cells: font-family:'Ovo',serif;font-size:14px;font-weight:600
 **8. KEY INSIGHTS**
 <h2>Key Insights</h2>
 4–5 paragraphs as plain <p> tags (font-size:13px;line-height:1.9;color:#1a1a1a;margin:0 0 14px). No wrapper div, no background, no inline colours. Bold key figures with <strong style="font-weight:600">. NO bullets, NO icons, NO emojis.
+Where ecommerce events are provided, actively look for correlations in the data: revenue or order spikes near payday windows, subscriber lifts around gifting holidays, open-rate changes around sale events. Name the event and the observed metric movement explicitly (e.g. "Order volume lifted <strong>34%</strong> in the 3 days surrounding Valentine's Day…"). If the data shows no notable correlation, note that too briefly.
 
 **9. COMPARISON ANALYSIS** (omit if no comparison data)
 <h2>Comparison Analysis</h2>
 Same: plain <p> tags only. 4–5 sentences. What changed, why, what to watch.
+Reference ecommerce events where they explain year-on-year or period-on-period differences (e.g. "The prior period included Black Friday; the current period did not, which partly explains the revenue decline").
 
 **10. NEXT STEPS FOR GROWTH**
 <h2>Next Steps for Growth</h2>
@@ -366,11 +489,15 @@ No markdown fences. No commentary before or after. Show "—" for missing values
   const buildUserMessage = (klaviyoData) => {
     const range = computeDateRange();
     const comparison = computeComparisonRange(range.start, range.end);
+    const events = getEcommerceEvents(range.start, range.end);
+    const eventsBlock = events.length > 0
+      ? `\nECOMMERCE EVENTS IN THIS PERIOD (use these for chart annotations and insight correlation):\n${events.map(e => `• ${e.date} (chart label: "${e.chartLabel}") — ${e.name} [${e.type}]`).join('\n')}\n`
+      : "\nNo major ecommerce events fall within this period.\n";
     return `IMPORTANT: Read ALL data carefully before writing any HTML. Every number you output must come from the data.
 
 Reporting period: ${range.start} to ${range.end} (${reportType})
 ${comparison ? `Comparison period: ${comparison.start} to ${comparison.end} (${comparisonMode})` : "No comparison period."}
-
+${eventsBlock}
 RAW KLAVIYO DATA:
 ${JSON.stringify(klaviyoData)}`;
   };
