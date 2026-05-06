@@ -226,13 +226,11 @@ Revenue cells: font-family:'Cormorant Garamond',serif;font-size:14px;font-weight
 
 **7. KEY INSIGHTS**
 <h2>Key Insights</h2>
-Full-width div: border-top:1px solid #e8e8e4;border-bottom:1px solid #e8e8e4;padding:24px 0;font-size:13px;line-height:1.9;font-weight:300;color:#1a1a1a;margin-bottom:24px
-4–5 paragraphs of confident, direct, data-led prose. Each 2–4 sentences. Cite actual numbers. <strong style="font-weight:500"> for key figures.
-NO bullets. NO icon boxes. NO emojis.
+4–5 paragraphs as plain <p> tags (font-size:13px;line-height:1.9;color:#1a1a1a;margin:0 0 14px). No wrapper div, no background, no inline colours. Bold key figures with <strong style="font-weight:600">. NO bullets, NO icons, NO emojis.
 
 **8. COMPARISON ANALYSIS** (omit if no comparison data)
 <h2>Comparison Analysis</h2>
-Same hairline style (border-top/bottom, no background). 4–5 sentences. What changed, why, what to watch.
+Same: plain <p> tags only. 4–5 sentences. What changed, why, what to watch.
 
 **9. NEXT STEPS FOR GROWTH**
 <h2>Next Steps for Growth</h2>
