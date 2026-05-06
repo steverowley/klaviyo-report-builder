@@ -1544,109 +1544,10 @@ function EmptyState() {
   );
 }
 
-function MiniChart({ index }) {
-  const variant = index % 5;
-
-  if (variant === 0) {
-    const bars = [8, 12, 10, 18, 16, 24];
-    const barW = 7;
-    const gap = 2;
-    return (
-      <g>
-        <line x1="0" y1="30" x2="60" y2="30" stroke="#0a0a0a" strokeWidth="0.6" />
-        {bars.map((h, i) => (
-          <rect key={i} x={i * (barW + gap)} y={30 - h} width={barW} height="0" fill="#0a0a0a">
-            <animate attributeName="height" from="0" to={h} dur="0.4s" begin={`${0.1 + i * 0.08}s`} fill="freeze" />
-            <animate attributeName="y" from="30" to={30 - h} dur="0.4s" begin={`${0.1 + i * 0.08}s`} fill="freeze" />
-          </rect>
-        ))}
-      </g>
-    );
-  }
-
-  if (variant === 1) {
-    const path = "M 0 22 L 12 18 L 24 20 L 36 12 L 48 8 L 60 4";
-    return (
-      <g>
-        <line x1="0" y1="30" x2="60" y2="30" stroke="#0a0a0a" strokeWidth="0.6" />
-        <path d={path} stroke="#0a0a0a" strokeWidth="1.2" fill="none" strokeDasharray="80" strokeDashoffset="80">
-          <animate attributeName="stroke-dashoffset" from="80" to="0" dur="1.2s" begin="0.1s" fill="freeze" />
-        </path>
-        <circle cx="60" cy="4" r="0" fill="#0a0a0a">
-          <animate attributeName="r" from="0" to="2" dur="0.3s" begin="1.3s" fill="freeze" />
-        </circle>
-      </g>
-    );
-  }
-
-  if (variant === 2) {
-    const cx = 30, cy = 15, r = 12;
-    const circumference = 2 * Math.PI * r;
-    const filled = circumference * 0.68;
-    return (
-      <g>
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#ededed" strokeWidth="3" />
-        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#0a0a0a" strokeWidth="3" strokeDasharray={`0 ${circumference}`} transform={`rotate(-90 ${cx} ${cy})`}>
-          <animate attributeName="stroke-dasharray" from={`0 ${circumference}`} to={`${filled} ${circumference}`} dur="1.1s" begin="0.2s" fill="freeze" />
-        </circle>
-        <text x={cx} y={cy + 3} textAnchor="middle" fontFamily="'Ovo', serif" fontSize="9" fontWeight="400" fill="#0a0a0a" opacity="0">
-          <animate attributeName="opacity" from="0" to="1" dur="0.3s" begin="1.3s" fill="freeze" />
-          68%
-        </text>
-      </g>
-    );
-  }
-
-  if (variant === 3) {
-    const points = [22, 18, 24, 14, 20, 10, 12, 6];
-    const stepX = 60 / (points.length - 1);
-    const linePath = "M " + points.map((y, i) => `${i * stepX} ${y}`).join(" L ");
-    const areaPath = linePath + ` L 60 30 L 0 30 Z`;
-    return (
-      <g>
-        <line x1="0" y1="30" x2="60" y2="30" stroke="#0a0a0a" strokeWidth="0.6" />
-        <path d={areaPath} fill="#0a0a0a" opacity="0">
-          <animate attributeName="opacity" from="0" to="0.12" dur="0.6s" begin="0.8s" fill="freeze" />
-        </path>
-        <path d={linePath} stroke="#0a0a0a" strokeWidth="1.2" fill="none" strokeDasharray="100" strokeDashoffset="100">
-          <animate attributeName="stroke-dashoffset" from="100" to="0" dur="1.1s" begin="0.1s" fill="freeze" />
-        </path>
-      </g>
-    );
-  }
-
-  const pairs = [[10, 14], [16, 12], [12, 20], [18, 22]];
-  const pairW = 14, innerBarW = 5, innerGap = 1;
-  return (
-    <g>
-      <line x1="0" y1="30" x2="60" y2="30" stroke="#0a0a0a" strokeWidth="0.6" />
-      {pairs.map(([a, b], i) => (
-        <g key={i} transform={`translate(${i * pairW + 1}, 0)`}>
-          <rect x="0" y={30 - a} width={innerBarW} height="0" fill="#b8b8b8">
-            <animate attributeName="height" from="0" to={a} dur="0.4s" begin={`${0.1 + i * 0.1}s`} fill="freeze" />
-            <animate attributeName="y" from="30" to={30 - a} dur="0.4s" begin={`${0.1 + i * 0.1}s`} fill="freeze" />
-          </rect>
-          <rect x={innerBarW + innerGap} y={30 - b} width={innerBarW} height="0" fill="#0a0a0a">
-            <animate attributeName="height" from="0" to={b} dur="0.4s" begin={`${0.2 + i * 0.1}s`} fill="freeze" />
-            <animate attributeName="y" from="30" to={30 - b} dur="0.4s" begin={`${0.2 + i * 0.1}s`} fill="freeze" />
-          </rect>
-        </g>
-      ))}
-    </g>
-  );
-}
-
 function LoadingState({ progress, line, elapsed, justFinished, onDismissCompletion, onNewReport, lastUsage }) {
   const pct = Math.round(progress);
   const formatTime = (s) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`);
   const showPatience = elapsed >= 90 && !justFinished;
-
-  const [chartIndex, setChartIndex] = useState(() => Math.floor(Math.random() * 5));
-
-  useEffect(() => {
-    const id = setInterval(() => setChartIndex((i) => (i + 1) % 5), 12000);
-    return () => clearInterval(id);
-  }, []);
 
   return (
     <div
@@ -1657,133 +1558,135 @@ function LoadingState({ progress, line, elapsed, justFinished, onDismissCompleti
         alignItems: "center",
         justifyContent: "center",
         textAlign: "center",
-        padding: "40px",
+        padding: "48px 40px",
         position: "relative",
         overflow: "hidden",
+        background: "#ffffff",
+        animation: "loadIn 0.6s ease-out",
       }}
     >
       <FloatingNumerals />
 
-      <div style={{ position: "relative", width: "120px", height: "150px", marginBottom: "36px", zIndex: 2 }}>
-        <svg width="120" height="150" viewBox="0 0 120 150" xmlns="http://www.w3.org/2000/svg" style={{ display: "block" }}>
-          <rect x="10" y="6" width="100" height="138" fill="#ffffff" stroke="#0a0a0a" strokeWidth="1" />
-          <line x1="14" y1="10" x2="14" y2="140" stroke="#ededed" strokeWidth="1" />
-          <line x1="22" y1="22" x2="98" y2="22" stroke="#0a0a0a" strokeWidth="0.6" />
-
-          <rect x="22" y="32" width="0" height="2" fill="#0a0a0a">
-            <animate attributeName="width" values="0;0;56;56;56;0;0" keyTimes="0;0.02;0.08;0.83;0.92;0.95;1" dur="12s" repeatCount="indefinite" />
-          </rect>
-          <rect x="22" y="42" width="0" height="2" fill="#0a0a0a">
-            <animate attributeName="width" values="0;0;0;68;68;68;0;0" keyTimes="0;0.08;0.10;0.18;0.83;0.92;0.95;1" dur="12s" repeatCount="indefinite" />
-          </rect>
-          <rect x="22" y="52" width="0" height="2" fill="#0a0a0a">
-            <animate attributeName="width" values="0;0;0;48;48;48;0;0" keyTimes="0;0.18;0.20;0.27;0.83;0.92;0.95;1" dur="12s" repeatCount="indefinite" />
-          </rect>
-
-          <g transform="translate(30, 62)" opacity="0">
-            <animate attributeName="opacity" values="0;0;0;1;1;1;0;0" keyTimes="0;0.27;0.30;0.36;0.83;0.92;0.95;1" dur="12s" repeatCount="indefinite" />
-            <MiniChart key={chartIndex} index={chartIndex} />
-          </g>
-
-          <rect x="22" y="98" width="0" height="1.5" fill="#0a0a0a">
-            <animate attributeName="width" values="0;0;0;76;76;76;0;0" keyTimes="0;0.36;0.38;0.46;0.83;0.92;0.95;1" dur="12s" repeatCount="indefinite" />
-          </rect>
-          <rect x="22" y="106" width="0" height="1.5" fill="#0a0a0a">
-            <animate attributeName="width" values="0;0;0;62;62;62;0;0" keyTimes="0;0.46;0.48;0.55;0.83;0.92;0.95;1" dur="12s" repeatCount="indefinite" />
-          </rect>
-          <rect x="22" y="114" width="0" height="1.5" fill="#0a0a0a">
-            <animate attributeName="width" values="0;0;0;70;70;70;0;0" keyTimes="0;0.55;0.57;0.65;0.83;0.92;0.95;1" dur="12s" repeatCount="indefinite" />
-          </rect>
-          <rect x="22" y="122" width="0" height="1.5" fill="#0a0a0a">
-            <animate attributeName="width" values="0;0;0;44;44;44;0;0" keyTimes="0;0.65;0.67;0.72;0.83;0.92;0.95;1" dur="12s" repeatCount="indefinite" />
-          </rect>
-
-          <rect x="22" y="32" width="2" height="9" fill="#0a0a0a">
-            <animate attributeName="x" values="22;78;22;90;22;70;22;98;22;84;22;92;22;66;22;22" keyTimes="0;0.08;0.10;0.18;0.20;0.27;0.36;0.46;0.48;0.55;0.57;0.65;0.67;0.72;0.95;1" dur="12s" repeatCount="indefinite" />
-            <animate attributeName="y" values="32;32;42;42;52;52;98;98;106;106;114;114;122;122;32;32" keyTimes="0;0.08;0.10;0.18;0.20;0.27;0.36;0.46;0.48;0.55;0.57;0.65;0.67;0.72;0.95;1" dur="12s" repeatCount="indefinite" />
-            <animate attributeName="opacity" values="1;0;1;0;1;0;1;0" keyTimes="0;0.07;0.14;0.21;0.28;0.35;0.42;1" dur="0.9s" repeatCount="indefinite" />
-          </rect>
+      {/* Animated document mark */}
+      <div style={{ position: "relative", marginBottom: "48px", zIndex: 2 }}>
+        <svg width="72" height="90" viewBox="0 0 72 90" fill="none" xmlns="http://www.w3.org/2000/svg">
+          {/* Page outline */}
+          <rect x="1" y="1" width="70" height="88" stroke="#0a0a0a" strokeWidth="1" fill="#fafaf8" />
+          {/* Left binding rule */}
+          <line x1="10" y1="1" x2="10" y2="89" stroke="#ededed" strokeWidth="1" />
+          {/* Heading rule — draws in */}
+          <line x1="17" y1="14" x2="17" y2="14" stroke="#0a0a0a" strokeWidth="0.75">
+            <animate attributeName="x2" from="17" to="58" dur="0.7s" begin="0.2s" fill="freeze" calcMode="spline" keySplines="0.4 0 0.2 1" />
+          </line>
+          {/* Text lines — staggered draw */}
+          {[22, 29, 36, 43].map((y, i) => (
+            <line key={y} x1="17" y1={y} x2="17" y2={y} stroke="#b8b8b8" strokeWidth="0.75">
+              <animate attributeName="x2" from="17" to={i % 2 === 0 ? 55 : 48} dur="0.5s" begin={`${0.6 + i * 0.12}s`} fill="freeze" calcMode="spline" keySplines="0.4 0 0.2 1" />
+            </line>
+          ))}
+          {/* Mini bar chart */}
+          {[14, 20, 11, 18, 24, 16].map((h, i) => (
+            <rect key={i} x={17 + i * 8} y={76 - h} width="5" height="0" fill="#0a0a0a" opacity="0.7">
+              <animate attributeName="height" from="0" to={h} dur="0.4s" begin={`${1.3 + i * 0.06}s`} fill="freeze" calcMode="spline" keySplines="0.4 0 0.2 1" />
+              <animate attributeName="y" from="76" to={76 - h} dur="0.4s" begin={`${1.3 + i * 0.06}s`} fill="freeze" calcMode="spline" keySplines="0.4 0 0.2 1" />
+            </rect>
+          ))}
+          {/* Baseline for chart */}
+          <line x1="17" y1="76" x2="65" y2="76" stroke="#e8e8e4" strokeWidth="0.5" />
         </svg>
       </div>
 
-      <div style={{ fontFamily: "'Ovo', serif", fontSize: "32px", fontWeight: 300, color: "#0a0a0a", fontStyle: "italic", marginBottom: "8px", zIndex: 2 }}>
+      {/* Title */}
+      <div style={{
+        fontFamily: "'Ovo', serif",
+        fontSize: "36px",
+        fontWeight: 400,
+        color: "#0a0a0a",
+        fontStyle: "italic",
+        lineHeight: 1.15,
+        marginBottom: "6px",
+        zIndex: 2,
+        animation: "loadIn 0.7s ease-out 0.1s both",
+      }}>
         Composing your report
       </div>
 
+      {/* Rotating loading line */}
       <div
         key={line}
         style={{
-          fontSize: "11px",
+          fontSize: "10px",
           textTransform: "uppercase",
-          letterSpacing: "0.22em",
-          color: "#6b6b6b",
-          marginBottom: "40px",
-          minHeight: "14px",
-          animation: "fadeLine 0.5s ease-out",
+          letterSpacing: "0.24em",
+          color: "#aaa",
+          marginBottom: "48px",
+          minHeight: "13px",
+          fontFamily: "'DM Sans', sans-serif",
+          animation: "fadeLine 0.6s ease-out",
           zIndex: 2,
         }}
       >
         {line}
       </div>
 
-      <div style={{ width: "min(440px, 70%)", display: "flex", flexDirection: "column", gap: "10px", zIndex: 2 }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "baseline",
+      {/* Progress section */}
+      <div style={{ width: "min(380px, 65%)", zIndex: 2, animation: "loadIn 0.7s ease-out 0.2s both" }}>
+        {/* % and elapsed */}
+        <div style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "baseline",
+          marginBottom: "10px",
+        }}>
+          <span style={{
             fontFamily: "'DM Sans', sans-serif",
             fontSize: "10px",
             textTransform: "uppercase",
             letterSpacing: "0.18em",
-            color: "#6b6b6b",
-          }}
-        >
-          <span>Progress · {formatTime(elapsed)} elapsed</span>
-          <span style={{ fontFamily: "'Ovo', serif", fontSize: "22px", fontWeight: 300, color: "#0a0a0a", letterSpacing: "0", fontVariantNumeric: "tabular-nums" }}>
-            {pct}<span style={{ fontSize: "12px", color: "#6b6b6b", marginLeft: "2px" }}>%</span>
+            color: "#b8b8b8",
+          }}>
+            {formatTime(elapsed)} elapsed
+          </span>
+          <span style={{
+            fontFamily: "'Ovo', serif",
+            fontSize: "28px",
+            fontWeight: 400,
+            color: "#0a0a0a",
+            fontVariantNumeric: "tabular-nums",
+            lineHeight: 1,
+          }}>
+            {pct}<span style={{ fontSize: "13px", color: "#aaa", marginLeft: "3px" }}>%</span>
           </span>
         </div>
 
-        <div style={{ width: "100%", height: "2px", background: "#ededed", position: "relative", overflow: "hidden" }}>
-          <div
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              height: "100%",
-              width: `${progress}%`,
-              background: "#0a0a0a",
-              transition: "width 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
-            }}
-          />
-          <div
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              height: "100%",
-              width: `${progress}%`,
-              background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.6) 50%, transparent 100%)",
-              animation: "shimmer 1.8s ease-in-out infinite",
-              transition: "width 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
-            }}
-          />
+        {/* Progress bar */}
+        <div style={{ width: "100%", height: "1px", background: "#ededed", position: "relative", overflow: "hidden" }}>
+          <div style={{
+            position: "absolute", top: 0, left: 0, height: "100%",
+            width: `${progress}%`,
+            background: "#0a0a0a",
+            transition: "width 0.5s cubic-bezier(0.4, 0, 0.2, 1)",
+          }} />
+          <div style={{
+            position: "absolute", top: 0, left: 0, height: "100%",
+            width: `${progress}%`,
+            background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.7) 50%, transparent 100%)",
+            animation: "shimmer 2.2s ease-in-out infinite",
+            transition: "width 0.5s cubic-bezier(0.4, 0, 0.2, 1)",
+          }} />
         </div>
 
         {showPatience && (
-          <div
-            style={{
-              marginTop: "20px",
-              fontSize: "12px",
-              color: "#6b6b6b",
-              fontStyle: "italic",
-              fontFamily: "'Ovo', serif",
-              lineHeight: 1.5,
-              animation: "fadeLine 0.6s ease-out",
-            }}
-          >
-            Still working. Long date ranges and many campaigns can take a couple of minutes.
+          <div style={{
+            marginTop: "28px",
+            fontSize: "13px",
+            color: "#aaa",
+            fontStyle: "italic",
+            fontFamily: "'Ovo', serif",
+            lineHeight: 1.6,
+            animation: "fadeLine 0.8s ease-out",
+          }}>
+            Still composing. Long periods with many flows can take a moment.
           </div>
         )}
       </div>
@@ -1791,10 +1694,14 @@ function LoadingState({ progress, line, elapsed, justFinished, onDismissCompleti
       <style>{`
         @keyframes shimmer {
           0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
+          100% { transform: translateX(200%); }
         }
         @keyframes fadeLine {
-          from { opacity: 0; transform: translateY(4px); }
+          from { opacity: 0; transform: translateY(3px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes loadIn {
+          from { opacity: 0; transform: translateY(8px); }
           to { opacity: 1; transform: translateY(0); }
         }
       `}</style>
@@ -1980,14 +1887,14 @@ function CompletionOverlay({ onDismiss, onNewReport, lastUsage }) {
 
 function FloatingNumerals() {
   const numerals = [
-    { text: "12.4%", left: "8%", delay: 0, duration: 11, size: 22 },
-    { text: "£48,290", left: "18%", delay: 3, duration: 13, size: 18 },
-    { text: "0.84", left: "82%", delay: 1.5, duration: 12, size: 24 },
-    { text: "↑ 6.2%", left: "88%", delay: 5, duration: 10, size: 16 },
-    { text: "1,247", left: "5%", delay: 7, duration: 14, size: 20 },
-    { text: "31.7%", left: "92%", delay: 8.5, duration: 11, size: 18 },
-    { text: "£12.40", left: "12%", delay: 4.5, duration: 12, size: 16 },
-    { text: "0.421", left: "78%", delay: 2.5, duration: 13, size: 22 },
+    { text: "12.4%", left: "8%", delay: 0, duration: 18, size: 22 },
+    { text: "£48,290", left: "18%", delay: 5, duration: 22, size: 18 },
+    { text: "0.84", left: "82%", delay: 2.5, duration: 20, size: 24 },
+    { text: "↑ 6.2%", left: "88%", delay: 9, duration: 17, size: 16 },
+    { text: "1,247", left: "5%", delay: 13, duration: 21, size: 20 },
+    { text: "31.7%", left: "92%", delay: 7, duration: 19, size: 18 },
+    { text: "£12.40", left: "12%", delay: 16, duration: 22, size: 16 },
+    { text: "0.421", left: "78%", delay: 4, duration: 20, size: 22 },
   ];
 
   return (
@@ -2001,7 +1908,7 @@ function FloatingNumerals() {
             bottom: "-40px",
             fontFamily: "'Ovo', serif",
             fontSize: `${n.size}px`,
-            fontWeight: 300,
+            fontWeight: 400,
             color: "#0a0a0a",
             opacity: 0,
             fontVariantNumeric: "tabular-nums",
@@ -2015,8 +1922,8 @@ function FloatingNumerals() {
       <style>{`
         @keyframes floatUp {
           0% { transform: translateY(0); opacity: 0; }
-          15% { opacity: 0.12; }
-          85% { opacity: 0.12; }
+          15% { opacity: 0.05; }
+          85% { opacity: 0.05; }
           100% { transform: translateY(-100vh); opacity: 0; }
         }
       `}</style>
