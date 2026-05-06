@@ -227,6 +227,27 @@ export default {
       return new Response(null, { status: 204, headers: cors(origin) });
     }
 
+    // GET /?debug — diagnostic check (no key values exposed)
+    if (request.method === 'GET' && new URL(request.url).searchParams.has('debug')) {
+      let clients = [];
+      let clientsJsonRaw = env.CLIENTS_JSON || null;
+      let clientsJsonError = null;
+      try { clients = JSON.parse(clientsJsonRaw || '[]'); } catch (e) { clientsJsonError = e.message; }
+      const keyStatus = clients.map(c => ({
+        id: c.id,
+        name: c.name,
+        secretName: `KLAVIYO_KEY_${c.id}`,
+        keyFound: !!env[`KLAVIYO_KEY_${c.id}`],
+      }));
+      return new Response(JSON.stringify({
+        CLIENTS_JSON_set: !!clientsJsonRaw,
+        CLIENTS_JSON_parse_error: clientsJsonError,
+        clients: keyStatus,
+      }, null, 2), {
+        headers: { 'Content-Type': 'application/json', ...cors(origin) },
+      });
+    }
+
     // GET / — return client list (names + ids only, no keys)
     if (request.method === 'GET') {
       let clients = [];
