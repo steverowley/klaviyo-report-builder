@@ -54,7 +54,7 @@ export default function Settings({ onSave }) {
         height: "100vh",
         width: "100%",
         display: "flex",
-        fontFamily: "'Inter', -apple-system, sans-serif",
+        fontFamily: "'DM Sans', -apple-system, sans-serif",
         background: "#f8f6f2",
         color: "#0a0a0a",
         alignItems: "center",
@@ -65,7 +65,7 @@ export default function Settings({ onSave }) {
       }}
     >
       <link
-        href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500;1,600&family=Inter:wght@300;400;500;600&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Ovo&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300;1,9..40,400&display=swap"
         rel="stylesheet"
       />
 
@@ -86,9 +86,9 @@ export default function Settings({ onSave }) {
           />
           <div
             style={{
-              fontFamily: "'Cormorant Garamond', serif",
+              fontFamily: "'Ovo', serif",
               fontSize: "34px",
-              fontWeight: 300,
+              fontWeight: 400,
               lineHeight: 1.1,
               marginBottom: "8px",
               letterSpacing: "-0.01em",
@@ -141,7 +141,7 @@ export default function Settings({ onSave }) {
             fontSize: "11px",
             lineHeight: 1.65,
             color: "#6b6b6b",
-            fontFamily: "'Cormorant Garamond', serif",
+            fontFamily: "'Ovo', serif",
             fontStyle: "italic",
           }}
         >
@@ -157,7 +157,7 @@ export default function Settings({ onSave }) {
             background: saved ? "#6b6b6b" : canSave ? "#0a0a0a" : "#b8b8b8",
             color: "#ffffff",
             border: "none",
-            fontFamily: "'Inter', sans-serif",
+            fontFamily: "'DM Sans', sans-serif",
             fontSize: "12px",
             fontWeight: 500,
             letterSpacing: "0.18em",
@@ -179,7 +179,7 @@ export default function Settings({ onSave }) {
               background: "transparent",
               color: "#2a2a2a",
               border: "1px solid #ededed",
-              fontFamily: "'Inter', sans-serif",
+              fontFamily: "'DM Sans', sans-serif",
               fontSize: "11px",
               fontWeight: 500,
               letterSpacing: "0.16em",
@@ -200,7 +200,7 @@ export default function Settings({ onSave }) {
             background: "transparent",
             color: cleared ? "#6b6b6b" : "#b8b8b8",
             border: "1px solid transparent",
-            fontFamily: "'Inter', sans-serif",
+            fontFamily: "'DM Sans', sans-serif",
             fontSize: "10px",
             fontWeight: 400,
             letterSpacing: "0.14em",
@@ -248,7 +248,7 @@ function KeyField({ label, value, onChange, onKeyDown, show, onToggleShow, place
             fontSize: "10px",
             textTransform: "uppercase",
             letterSpacing: "0.1em",
-            fontFamily: "'Inter', sans-serif",
+            fontFamily: "'DM Sans', sans-serif",
             padding: "2px 4px",
           }}
         >
@@ -275,7 +275,7 @@ const inputStyle = {
   border: "1px solid #b8b8b8",
   background: "#ffffff",
   fontSize: "13px",
-  fontFamily: "'Inter', sans-serif",
+  fontFamily: "'DM Sans', sans-serif",
   color: "#0a0a0a",
   outline: "none",
   boxSizing: "border-box",
@@ -286,7 +286,7 @@ const hintStyle = {
   marginTop: "6px",
   fontSize: "11px",
   color: "#6b6b6b",
-  fontFamily: "'Cormorant Garamond', serif",
+  fontFamily: "'Ovo', serif",
   fontStyle: "italic",
   lineHeight: 1.4,
 };
