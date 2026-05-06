@@ -1069,26 +1069,7 @@ ${reportHtml}`,
                 marginTop: "6px",
               }}
             >
-              {isCreatingSlides ? "Building slides…" : "Create slides prompt"}
-            </button>
-            {isCreatingSlides && (
-              <div style={{ marginTop: "8px" }}>
-                <div style={{ width: "100%", height: "1px", background: "#ededed", position: "relative", overflow: "hidden" }}>
-                  <div style={{
-                    position: "absolute", top: 0, left: 0, height: "100%",
-                    width: `${slidesProgress}%`,
-                    background: "#0a0a0a",
-                    transition: "width 0.3s cubic-bezier(0.4,0,0.2,1)",
-                  }} />
-                </div>
-                <div style={{
-                  marginTop: "6px", fontSize: "10px", color: "#6b6b6b",
-                  fontStyle: "italic", fontFamily: "'Ovo', serif",
-                }}>
-                  Structuring slides…
-                </div>
-              </div>
-            )}
+              {isCreatingSlides ? "Generating…" : "Speedy Slides prompt"}
           </>
         )}
 
@@ -1224,30 +1205,11 @@ ${reportHtml}`,
           </div>
         )}
 
-        {regenSid && (
-          <div style={{
-            padding: "8px 14px",
-            marginBottom: "8px",
-            background: "#ffffff",
-            border: "1px solid #ededed",
-            fontSize: "11px",
-            color: "#6b6b6b",
-            fontFamily: "'DM Sans', sans-serif",
-            flexShrink: 0,
-          }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-              <span style={{ fontStyle: "italic", fontFamily: "'Ovo', serif" }}>Regenerating recommendation…</span>
-              <span style={{ fontVariantNumeric: "tabular-nums", fontSize: "10px" }}>{Math.round(regenProgress)}%</span>
-            </div>
-            <div style={{ width: "100%", height: "1px", background: "#ededed", position: "relative", overflow: "hidden" }}>
-              <div style={{
-                position: "absolute", top: 0, left: 0, height: "100%",
-                width: `${regenProgress}%`,
-                background: "#0a0a0a",
-                transition: "width 0.25s cubic-bezier(0.4,0,0.2,1)",
-              }} />
-            </div>
-          </div>
+        {(regenSid || isCreatingSlides) && (
+          <ActivityBanner
+            label={isCreatingSlides ? "Generating Speedy Slides prompt…" : "Regenerating recommendation…"}
+            progress={isCreatingSlides ? slidesProgress : regenProgress}
+          />
         )}
 
         <div
@@ -1317,10 +1279,10 @@ ${reportHtml}`,
             }}>
               <div>
                 <div style={{ fontFamily: "'Ovo', serif", fontSize: "22px", fontWeight: 400, color: "#0a0a0a" }}>
-                  Slides Prompt
+                  Speedy Slides Prompt
                 </div>
                 <div style={{ fontSize: "11px", color: "#999", marginTop: "2px", letterSpacing: "0.06em" }}>
-                  Paste this into your slide generation tool
+                  Paste this into Speedy Slides
                 </div>
               </div>
               <div style={{ display: "flex", gap: "8px" }}>
@@ -1387,6 +1349,48 @@ ${reportHtml}`,
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function ActivityBanner({ label, progress }) {
+  return (
+    <div style={{
+      padding: "10px 14px",
+      marginBottom: "8px",
+      background: "#ffffff",
+      border: "1px solid #ededed",
+      flexShrink: 0,
+    }}>
+      <div style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: "8px",
+        fontFamily: "'DM Sans', sans-serif",
+        fontSize: "11px",
+        color: "#6b6b6b",
+      }}>
+        <span style={{ fontStyle: "italic", fontFamily: "'Ovo', serif" }}>{label}</span>
+        <span style={{ fontVariantNumeric: "tabular-nums", fontSize: "10px", letterSpacing: "0.06em" }}>
+          {Math.round(progress)}%
+        </span>
+      </div>
+      <div style={{ width: "100%", height: "2px", background: "#ededed", position: "relative", overflow: "hidden" }}>
+        <div style={{
+          position: "absolute", top: 0, left: 0, height: "100%",
+          width: `${progress}%`,
+          background: "#0a0a0a",
+          transition: "width 0.25s cubic-bezier(0.4,0,0.2,1)",
+        }} />
+        <div style={{
+          position: "absolute", top: 0, left: 0, height: "100%",
+          width: `${progress}%`,
+          background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.5) 50%, transparent 100%)",
+          animation: "shimmer 1.8s ease-in-out infinite",
+          transition: "width 0.25s cubic-bezier(0.4,0,0.2,1)",
+        }} />
+      </div>
     </div>
   );
 }
