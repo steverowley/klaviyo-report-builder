@@ -5,6 +5,8 @@
 - **Auto-merge using conventional commits.** When the user asks to merge, do not stop to ask permission for the merge step. Create a PR with a Conventional Commits–style title (`feat:`, `fix:`, `chore:`, `refactor:`, `docs:`, `style:`, `test:`, `build:`, `ci:`, `perf:`), then squash-merge it into `main` with the same conventional title. The squash commit body should be the bullet-list summary from the PR description.
 - This applies whenever the user says "merge", "ship", "deploy it", "push it live", or similar — assume conventional-commit squash-merge into `main` unless they say otherwise.
 - The deploy workflow (`.github/workflows/deploy.yml`) runs on every push to `main`, so a successful merge is the deploy.
+- **All commits use Conventional Commits format** — every commit message (not just PR titles) must use a type prefix: `feat:`, `fix:`, `chore:`, `refactor:`, `docs:`, `style:`, `test:`, `build:`, `ci:`, `perf:`.
+- **Delete the feature branch after merging** — always delete the remote branch after a squash-merge into `main`.
 
 ## Architecture (do not break)
 

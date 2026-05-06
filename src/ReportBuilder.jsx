@@ -140,19 +140,7 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion }
 
   const accountName = clients.find(c => c.id === selectedClientId)?.name ?? "";
 
-  const buildPrompt = (klaviyoData) => {
-    const range = computeDateRange();
-    const comparison = computeComparisonRange(range.start, range.end);
-
-    return `You are generating a Klaviyo email marketing performance report for "${accountName}".
-IMPORTANT: Read ALL data carefully before writing any HTML. Every number you output must come from the data.
-
-Reporting period: ${range.start} to ${range.end} (${reportType})
-${comparison ? `Comparison period: ${comparison.start} to ${comparison.end} (${comparisonMode})` : "No comparison period."}
-
-RAW KLAVIYO DATA:
-${JSON.stringify(klaviyoData, null, 2)}
-
+  const buildSystemPrompt = () => `You are generating a Klaviyo email marketing performance report for "${accountName}".
 Produce a complete, self-contained HTML report. Follow every instruction below exactly.
 
 ━━━ FONTS ━━━
@@ -351,6 +339,17 @@ Add to <style>: @keyframes spin{to{transform:rotate(-360deg)}} .spinning{display
 ━━━ OUTPUT RULES ━━━
 Output ONLY a complete <!DOCTYPE html>…</html>. CSS in <style> in <head>. Chart.js CDN + init script in <body>.
 No markdown fences. No commentary before or after. Show "—" for missing values. Never invent numbers.`;
+
+  const buildUserMessage = (klaviyoData) => {
+    const range = computeDateRange();
+    const comparison = computeComparisonRange(range.start, range.end);
+    return `IMPORTANT: Read ALL data carefully before writing any HTML. Every number you output must come from the data.
+
+Reporting period: ${range.start} to ${range.end} (${reportType})
+${comparison ? `Comparison period: ${comparison.start} to ${comparison.end} (${comparisonMode})` : "No comparison period."}
+
+RAW KLAVIYO DATA:
+${JSON.stringify(klaviyoData)}`;
   };
 
   const clearTimers = () => {
@@ -470,13 +469,21 @@ No markdown fences. No commentary before or after. Show "—" for missing values
         headers: {
           "x-api-key": anthropicKey,
           "anthropic-version": "2023-06-01",
+          "anthropic-beta": "prompt-caching-2024-07-31",
           "anthropic-dangerous-direct-browser-access": "true",
           "content-type": "application/json",
         },
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
-          max_tokens: 32000,
-          messages: [{ role: "user", content: buildPrompt(klaviyoData) }],
+          max_tokens: 16000,
+          system: [
+            {
+              type: "text",
+              text: buildSystemPrompt(),
+              cache_control: { type: "ephemeral" },
+            },
+          ],
+          messages: [{ role: "user", content: buildUserMessage(klaviyoData) }],
         }),
         signal,
       });
