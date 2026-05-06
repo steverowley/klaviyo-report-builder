@@ -509,6 +509,11 @@ ${JSON.stringify(klaviyoData)}`;
         throw new Error("The model returned no report content. The prompt may have exceeded the context limit — try a shorter date range.");
       }
 
+      let rawHtml = textBlock.text.trim();
+      if (rawHtml.startsWith("```")) {
+        rawHtml = rawHtml.replace(/^```[^\n]*\n?/, "").replace(/\n?```\s*$/, "");
+      }
+
       const u = data.usage || {};
       const costUsd =
         (u.input_tokens || 0) * 3 / 1_000_000 +
@@ -527,9 +532,9 @@ ${JSON.stringify(klaviyoData)}`;
       setProgress(100);
       setLoadingLine("Ready");
       const key = cacheKey(selectedClientId, range.start, range.end, comparisonMode);
-      writeCache(key, textBlock.text, { clientId: selectedClientId, reportType });
+      writeCache(key, rawHtml, { clientId: selectedClientId, reportType });
       setCachedInfo(null);
-      setReportHtml(textBlock.text);
+      setReportHtml(rawHtml);
       setJustFinished(true);
 
     } catch (e) {
