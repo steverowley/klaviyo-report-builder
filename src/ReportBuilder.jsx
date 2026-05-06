@@ -1064,7 +1064,7 @@ ${reportHtml}`,
               Download HTML
             </button>
             <button
-              onClick={handleCreateSlidesPrompt}
+              onClick={slidesPrompt && !isCreatingSlides ? () => setShowSlidesModal(true) : handleCreateSlidesPrompt}
               disabled={isCreatingSlides}
               style={{
                 width: "100%",
@@ -1081,7 +1081,7 @@ ${reportHtml}`,
                 marginTop: "6px",
               }}
             >
-              {isCreatingSlides ? "Generating…" : "Speedy Slides prompt"}
+              {isCreatingSlides ? "Generating…" : slidesPrompt ? "View Speedy Slides prompt" : "Speedy Slides prompt"}
             </button>
             {isCreatingSlides && (
               <div style={{ marginTop: "8px" }}>
@@ -1314,6 +1314,23 @@ ${reportHtml}`,
                 </div>
               </div>
               <div style={{ display: "flex", gap: "8px" }}>
+                <button
+                  onClick={() => { setShowSlidesModal(false); handleCreateSlidesPrompt(); }}
+                  style={{
+                    padding: "8px 14px",
+                    background: "transparent",
+                    color: "#6b6b6b",
+                    border: "1px solid #e0e0da",
+                    fontFamily: "'DM Sans', sans-serif",
+                    fontSize: "10px",
+                    fontWeight: 500,
+                    letterSpacing: "0.16em",
+                    textTransform: "uppercase",
+                    cursor: "pointer",
+                  }}
+                >
+                  Regenerate
+                </button>
                 <button
                   onClick={() => {
                     navigator.clipboard.writeText(slidesPrompt).then(() => {
