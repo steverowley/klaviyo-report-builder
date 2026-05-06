@@ -220,12 +220,22 @@ function aggregateFlowRows(report, flowNames = {}) {
 }
 
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
     const origin = request.headers.get('Origin') || '*';
 
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: cors(origin) });
     }
+
+    // GET / — return client list (names + ids only, no keys)
+    if (request.method === 'GET') {
+      let clients = [];
+      try { clients = JSON.parse(env.CLIENTS_JSON || '[]'); } catch {}
+      return new Response(JSON.stringify(clients), {
+        headers: { 'Content-Type': 'application/json', ...cors(origin) },
+      });
+    }
+
     if (request.method !== 'POST') {
       return new Response(JSON.stringify({ error: 'POST only' }), {
         status: 405,
@@ -241,9 +251,16 @@ export default {
       });
     }
 
-    const { klaviyoKey, startDate, endDate, comparisonStart, comparisonEnd } = body;
-    if (!klaviyoKey || !startDate || !endDate) {
-      return new Response(JSON.stringify({ error: 'Required: klaviyoKey, startDate, endDate' }), {
+    const { clientId, startDate, endDate, comparisonStart, comparisonEnd } = body;
+    if (!clientId || !startDate || !endDate) {
+      return new Response(JSON.stringify({ error: 'Required: clientId, startDate, endDate' }), {
+        status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) },
+      });
+    }
+
+    const klaviyoKey = env[`KLAVIYO_KEY_${clientId}`];
+    if (!klaviyoKey) {
+      return new Response(JSON.stringify({ error: `No Klaviyo key configured for client: ${clientId}` }), {
         status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) },
       });
     }

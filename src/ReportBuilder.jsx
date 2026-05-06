@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect } from "react";
 
-// localStorage key names — never change these without migrating existing users
 const ANTHROPIC_KEY = "swanky_anthropic_key";
-const KLAVIYO_KEY = "swanky_klaviyo_key";
 const WORKER_URL = "swanky_worker_url";
 
-export default function KlaviyoReportBuilder({ onOpenSettings }) {
-  const [accountName, setAccountName] = useState("");
+export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion }) {
+  const [clients, setClients] = useState([]);
+  const [selectedClientId, setSelectedClientId] = useState("");
+  const [clientsError, setClientsError] = useState("");
   const [reportType, setReportType] = useState("Monthly");
   const [comparisonMode, setComparisonMode] = useState("Previous Period");
   const [customStart, setCustomStart] = useState("");
@@ -110,6 +110,8 @@ export default function KlaviyoReportBuilder({ onOpenSettings }) {
       end: compEnd.toISOString().split("T")[0],
     };
   };
+
+  const accountName = clients.find(c => c.id === selectedClientId)?.name ?? "";
 
   const buildPrompt = (klaviyoData) => {
     const range = computeDateRange();
@@ -269,8 +271,8 @@ No markdown fences. No commentary before or after. Show "—" for missing values
     setError("");
     setStatusMessage("");
 
-    if (!accountName.trim()) {
-      setError("Please enter an account name.");
+    if (!selectedClientId) {
+      setError("Please select a client.");
       return;
     }
 
@@ -279,12 +281,10 @@ No markdown fences. No commentary before or after. Show "—" for missing values
       return;
     }
 
-    // Read all three values from localStorage — never log these
     const anthropicKey = localStorage.getItem(ANTHROPIC_KEY);
-    const klaviyoKey = localStorage.getItem(KLAVIYO_KEY);
     const workerUrl = localStorage.getItem(WORKER_URL);
 
-    if (!anthropicKey || !klaviyoKey || !workerUrl) {
+    if (!anthropicKey || !workerUrl) {
       onOpenSettings();
       return;
     }
@@ -322,7 +322,7 @@ No markdown fences. No commentary before or after. Show "—" for missing values
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          klaviyoKey,
+          clientId: selectedClientId,
           startDate: range.start,
           endDate: range.end,
           ...(comparison ? { comparisonStart: comparison.start, comparisonEnd: comparison.end } : {}),
@@ -442,6 +442,23 @@ No markdown fences. No commentary before or after. Show "—" for missing values
   useEffect(() => {
     return () => clearTimers();
   }, []);
+
+  // Fetch client list from worker whenever settings change or on first load
+  useEffect(() => {
+    const workerUrl = localStorage.getItem(WORKER_URL);
+    if (!workerUrl) return;
+    setClientsError("");
+    fetch(workerUrl)
+      .then(r => r.json())
+      .then(data => {
+        setClients(Array.isArray(data) ? data : []);
+        // Auto-select if only one client
+        if (Array.isArray(data) && data.length === 1) {
+          setSelectedClientId(data[0].id);
+        }
+      })
+      .catch(() => setClientsError("Could not load clients from worker."));
+  }, [settingsVersion]);
 
   const handleCancel = () => {
     requestIdRef.current += 1;
@@ -570,14 +587,27 @@ No markdown fences. No commentary before or after. Show "—" for missing values
 
         <div style={{ height: "1px", background: "#ededed", margin: "0 0 24px" }} />
 
-        <Field label="Account name">
-          <input
-            type="text"
-            value={accountName}
-            onChange={(e) => setAccountName(e.target.value)}
-            placeholder="e.g. Acme Skincare"
-            style={inputStyle}
-          />
+        <Field label="Client">
+          {clientsError ? (
+            <div style={{ fontSize: "11px", color: "#6b6b6b", fontStyle: "italic", fontFamily: "'Cormorant Garamond', serif" }}>
+              {clientsError}
+            </div>
+          ) : clients.length === 0 ? (
+            <div style={{ fontSize: "11px", color: "#b8b8b8", fontStyle: "italic", fontFamily: "'Cormorant Garamond', serif" }}>
+              No clients configured in worker yet.
+            </div>
+          ) : (
+            <select
+              value={selectedClientId}
+              onChange={e => setSelectedClientId(e.target.value)}
+              style={{ ...inputStyle, appearance: "none", backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b6b6b'/%3E%3C/svg%3E")`, backgroundRepeat: "no-repeat", backgroundPosition: "right 12px center", paddingRight: "32px", cursor: "pointer" }}
+            >
+              {clients.length > 1 && <option value="">— select client —</option>}
+              {clients.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          )}
         </Field>
 
         <Field label="Report type">

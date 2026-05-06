@@ -1,41 +1,34 @@
 import React, { useState, useEffect } from "react";
 
 const ANTHROPIC_KEY = "swanky_anthropic_key";
-const KLAVIYO_KEY = "swanky_klaviyo_key";
 const WORKER_URL = "swanky_worker_url";
 
 export default function Settings({ onSave }) {
   const [anthropicKey, setAnthropicKey] = useState("");
-  const [klaviyoKey, setKlaviyoKey] = useState("");
   const [workerUrl, setWorkerUrl] = useState("");
   const [showAnthropicKey, setShowAnthropicKey] = useState(false);
-  const [showKlaviyoKey, setShowKlaviyoKey] = useState(false);
   const [saved, setSaved] = useState(false);
   const [cleared, setCleared] = useState(false);
 
   const [hadKeysOnOpen] = useState(() =>
     Boolean(
       localStorage.getItem(ANTHROPIC_KEY) &&
-      localStorage.getItem(KLAVIYO_KEY) &&
       localStorage.getItem(WORKER_URL)
     )
   );
 
   useEffect(() => {
     setAnthropicKey(localStorage.getItem(ANTHROPIC_KEY) || "");
-    setKlaviyoKey(localStorage.getItem(KLAVIYO_KEY) || "");
     setWorkerUrl(localStorage.getItem(WORKER_URL) || "");
   }, []);
 
   const canSave =
     anthropicKey.trim().length > 0 &&
-    klaviyoKey.trim().length > 0 &&
     workerUrl.trim().startsWith("http");
 
   const handleSave = () => {
     if (!canSave) return;
     localStorage.setItem(ANTHROPIC_KEY, anthropicKey.trim());
-    localStorage.setItem(KLAVIYO_KEY, klaviyoKey.trim());
     localStorage.setItem(WORKER_URL, workerUrl.trim());
     setSaved(true);
     setTimeout(() => onSave(), 700);
@@ -43,10 +36,9 @@ export default function Settings({ onSave }) {
 
   const handleClear = () => {
     localStorage.removeItem(ANTHROPIC_KEY);
-    localStorage.removeItem(KLAVIYO_KEY);
     localStorage.removeItem(WORKER_URL);
+    localStorage.removeItem("swanky_klaviyo_key"); // legacy cleanup
     setAnthropicKey("");
-    setKlaviyoKey("");
     setWorkerUrl("");
     setCleared(true);
     setTimeout(() => setCleared(false), 2500);
@@ -123,18 +115,6 @@ export default function Settings({ onSave }) {
           isPassword
         />
 
-        <KeyField
-          label="Klaviyo private API key"
-          value={klaviyoKey}
-          onChange={setKlaviyoKey}
-          onKeyDown={handleKeyDown}
-          show={showKlaviyoKey}
-          onToggleShow={() => setShowKlaviyoKey(v => !v)}
-          placeholder="pk_..."
-          hint="Klaviyo → Account → Settings → API Keys → Create Private API Key. Scopes needed: Campaigns, Flows, Metrics (all read)."
-          isPassword
-        />
-
         <div style={{ marginBottom: "28px" }}>
           <div style={labelStyle}>Klaviyo proxy worker URL</div>
           <input
@@ -148,7 +128,7 @@ export default function Settings({ onSave }) {
             style={inputStyle}
           />
           <div style={hintStyle}>
-            Deploy <code style={{ fontFamily: "monospace", fontSize: "10px" }}>worker/index.js</code> to Cloudflare Workers (free), then paste the URL here. The worker fetches your Klaviyo data using your private key.
+            Your Cloudflare Worker URL. Client Klaviyo keys are stored as Worker secrets — add clients via the Cloudflare dashboard, not here.
           </div>
         </div>
 

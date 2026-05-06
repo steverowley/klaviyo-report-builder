@@ -8,10 +8,13 @@
 
 ## Architecture (do not break)
 
-- Frontend-only static site, hosted on GitHub Pages. **No backend, no server, no proxy.**
-- API keys live exclusively in the user's browser `localStorage`. They are pasted in via the Settings screen on first launch.
-- localStorage key names: `swanky_anthropic_key`, `swanky_klaviyo_key`. Never rename without a migration path.
-- `handleGenerate` POSTs directly from the browser to `https://api.anthropic.com/v1/messages` with `anthropic-dangerous-direct-browser-access: true` and `anthropic-beta: mcp-client-2025-11-20`. The Klaviyo MCP server is passed in `mcp_servers` and resolved server-side by Anthropic — the browser never talks to `mcp.klaviyo.com` directly, so CORS is not a concern there.
+- Frontend-only static site, hosted on GitHub Pages. **No backend except the Cloudflare Worker proxy.**
+- **Anthropic key** lives in browser `localStorage` (`swanky_anthropic_key`) — entered via Settings.
+- **Klaviyo keys** are stored as Cloudflare Worker secrets (`KLAVIYO_KEY_<clientId>`), never in the browser. The browser sends a `clientId`; the worker resolves it to the correct key internally.
+- **Client list** is stored as a Worker secret `CLIENTS_JSON` — a JSON array of `{id, name}` objects. Update it via the Cloudflare dashboard; no redeploy needed.
+- localStorage keys in use: `swanky_anthropic_key`, `swanky_worker_url`. `swanky_klaviyo_key` is legacy — cleared on "Clear all keys" but no longer written.
+- The worker exposes `GET /` (client list) and `POST /` (fetch Klaviyo data). The frontend calls `GET workerUrl` on load to populate the client dropdown.
+- `handleGenerate` POSTs directly from the browser to `https://api.anthropic.com/v1/messages`. The Klaviyo data arrives pre-fetched from the worker and is embedded in the Claude prompt.
 - Vite `base` is `/klaviyo-report-builder/` to match the GitHub Pages path. Do not change this without also updating the repo name.
 
 ## Security rules (non-negotiable)
