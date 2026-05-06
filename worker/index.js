@@ -307,7 +307,7 @@ export default {
 
       let comparison = null;
       if (comparisonStart && comparisonEnd) {
-        const [compCampaigns, compFlows, compSubAgg, compUnsubAgg] = await Promise.all([
+        const [compCampaigns, compFlows, compSubAgg, compUnsubAgg, compOrderAgg] = await Promise.all([
           kFetch('/campaign-values-reports/', klaviyoKey, {
             method: 'POST', body: reportBody('campaign-values-report', comparisonStart, comparisonEnd, conversionMetricId),
           }),
@@ -316,11 +316,13 @@ export default {
           }),
           safeAgg(subscribedMetricId,   ['count'], comparisonStart, comparisonEnd),
           safeAgg(unsubscribedMetricId, ['count'], comparisonStart, comparisonEnd),
+          safeAgg(conversionMetricId,   ['count', 'sum_value'], comparisonStart, comparisonEnd),
         ]);
         comparison = {
           campaigns:  normaliseCampaigns(compCampaigns, campaignNames),
           flows:      aggregateFlowRows(compFlows, flowNames),
           aggregates: {
+            orders:       processAggregate(compOrderAgg, 'count'),
             subscribers:  processAggregate(compSubAgg,   'count'),
             unsubscribes: processAggregate(compUnsubAgg, 'count'),
           },

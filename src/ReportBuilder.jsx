@@ -168,7 +168,7 @@ Cards:
   TOTAL REVENUE — sum period.flows[].conversion_value + campaign conversion values. £X,XXX.XX. Delta vs comparison if available.
   CAMPAIGNS SENT — period.campaigns.length. Sub "No sends this period" if zero.
   NEW SUBSCRIBERS — sum(aggregates.subscribers.counts) or "—"
-  TOTAL ORDERS — sum(aggregates.orders.counts) or "—"
+  TOTAL ORDERS — sum(aggregates.orders.counts) or "—". Delta vs comparison: if comparison.aggregates?.orders non-null, show ↑/↓ Δ orders
 
 **3. LIST GROWTH** (skip if aggregates.subscribers is null)
 <h2>List Growth</h2>
