@@ -4,9 +4,7 @@ import Settings from "./Settings.jsx";
 
 function CursorDot() {
   const dotRef = useRef(null);
-  const ringRef = useRef(null);
   const pos = useRef({ x: -100, y: -100 });
-  const ring = useRef({ x: -100, y: -100 });
   const rafRef = useRef(null);
   const hovering = useRef(false);
 
@@ -14,25 +12,28 @@ function CursorDot() {
     const onMove = (e) => {
       pos.current = { x: e.clientX, y: e.clientY };
       const el = document.elementFromPoint(e.clientX, e.clientY);
-      hovering.current = el && (
+      hovering.current = !!(el && (
         el.tagName === 'BUTTON' || el.tagName === 'A' || el.tagName === 'INPUT' ||
         el.tagName === 'SELECT' || el.tagName === 'TEXTAREA' ||
         el.closest('button') || el.closest('a') || el.style?.cursor === 'pointer'
-      );
+      ));
+    };
+    const onIframeMove = (e) => {
+      pos.current = { x: e.detail.x, y: e.detail.y };
+      hovering.current = false;
     };
     document.addEventListener('mousemove', onMove);
+    window.addEventListener('iframe-cursor-move', onIframeMove);
 
     const tick = () => {
-      // Dot snaps instantly
       if (dotRef.current) {
-        dotRef.current.style.transform = `translate(${pos.current.x - 4}px, ${pos.current.y - 4}px)`;
-      }
-      // Ring lags slightly
-      ring.current.x += (pos.current.x - ring.current.x) * 0.18;
-      ring.current.y += (pos.current.y - ring.current.y) * 0.18;
-      if (ringRef.current) {
-        const scale = hovering.current ? 1.8 : 1;
-        ringRef.current.style.transform = `translate(${ring.current.x - 18}px, ${ring.current.y - 18}px) scale(${scale})`;
+        const size = hovering.current ? 10 : 5;
+        const offset = size / 2;
+        dotRef.current.style.transform = `translate(${pos.current.x - offset}px, ${pos.current.y - offset}px)`;
+        dotRef.current.style.width = `${size}px`;
+        dotRef.current.style.height = `${size}px`;
+        dotRef.current.style.opacity = hovering.current ? "0.5" : "1";
+        dotRef.current.style.borderRadius = "50%";
       }
       rafRef.current = requestAnimationFrame(tick);
     };
@@ -40,27 +41,19 @@ function CursorDot() {
 
     return () => {
       document.removeEventListener('mousemove', onMove);
+      window.removeEventListener('iframe-cursor-move', onIframeMove);
       cancelAnimationFrame(rafRef.current);
     };
   }, []);
 
   return (
     <>
-      {/* Solid dot */}
       <div ref={dotRef} style={{
-        position: "fixed", top: 0, left: 0, width: 8, height: 8,
+        position: "fixed", top: 0, left: 0, width: 5, height: 5,
         borderRadius: "50%", background: "#0a0a0a",
         pointerEvents: "none", zIndex: 9999,
-        willChange: "transform",
-      }} />
-      {/* Lagging ring */}
-      <div ref={ringRef} style={{
-        position: "fixed", top: 0, left: 0, width: 36, height: 36,
-        borderRadius: "50%", border: "1px solid #0a0a0a",
-        opacity: 0.35,
-        pointerEvents: "none", zIndex: 9998,
-        willChange: "transform",
-        transition: "transform 0.08s linear, opacity 0.15s",
+        willChange: "transform, width, height",
+        transition: "width 0.15s ease, height 0.15s ease, opacity 0.15s ease",
       }} />
       <style>{`* { cursor: none !important; }`}</style>
     </>

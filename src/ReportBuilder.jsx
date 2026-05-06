@@ -775,9 +775,35 @@ ${reportHtml}`,
   };
 
   useEffect(() => {
-    if (iframeRef.current && reportHtml) {
-      iframeRef.current.srcdoc = reportHtml;
-    }
+    if (!iframeRef.current || !reportHtml) return;
+    // Inject cursor:none so the browser cursor doesn't reappear inside the iframe
+    const injected = reportHtml.replace(
+      /<\/head>/i,
+      `<style>*{cursor:none!important}</style></head>`
+    );
+    iframeRef.current.srcdoc = injected;
+  }, [reportHtml]);
+
+  // Relay mousemove from inside the iframe so the custom cursor tracks correctly
+  useEffect(() => {
+    const iframe = iframeRef.current;
+    if (!iframe || !reportHtml) return;
+    const relay = () => {
+      try {
+        const doc = iframe.contentDocument;
+        if (!doc) return;
+        const onMove = (e) => {
+          const rect = iframe.getBoundingClientRect();
+          window.dispatchEvent(new CustomEvent("iframe-cursor-move", {
+            detail: { x: rect.left + e.clientX, y: rect.top + e.clientY },
+          }));
+        };
+        doc.addEventListener("mousemove", onMove);
+        return () => doc.removeEventListener("mousemove", onMove);
+      } catch (_) {}
+    };
+    iframe.addEventListener("load", relay);
+    return () => iframe.removeEventListener("load", relay);
   }, [reportHtml]);
 
   const handleDownload = () => {
@@ -1036,7 +1062,7 @@ ${reportHtml}`,
                   fontStyle: "italic",
                 }}
               >
-                This is taking longer than expected. The request may have stalled — consider cancelling and trying again. If it keeps happening, check your Worker URL in Settings or verify the client's Klaviyo key is configured correctly in your Cloudflare Worker.
+                This is taking longer than expected. The request may have stalled — consider cancelling and trying again. If it keeps happening, ask Rowley to check the Cloudflare Worker and verify the client's Klaviyo key is configured correctly.
               </div>
             )}
           </div>
