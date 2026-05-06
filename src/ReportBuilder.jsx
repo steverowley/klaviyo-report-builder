@@ -273,7 +273,7 @@ Each step is a <div class="step-wrapper" style="position:relative;cursor:grab"> 
   display:flex;gap:14px;padding:16px 0;border-bottom:0.5px solid #f0f0ec (last step: no border)
   .num: width:28px;height:28px;border-radius:50%;background:#0a0a0a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex-shrink:0;margin-top:2px
   .pri: font-size:9px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:4px — contains TWO spans:
-    <span class="pri-level" style="cursor:pointer;color:#0a0a0a">High priority</span><span class="pri-area" style="color:#888"> — [Area]</span>
+    <span class="pri-level" style="cursor:pointer;color:#0a0a0a">High priority</span><span style="color:#888"> — </span><span class="pri-area" style="color:#888">[Area]</span>
     (pri-level colour: #0a0a0a=High, #555=Medium, #999=Low)
   .stitle: font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:400;color:#0a0a0a;margin-bottom:4px
   .sdesc: font-size:12px;color:#606060;line-height:1.6;font-weight:300;margin-bottom:8px
@@ -336,7 +336,7 @@ document.getElementById('addStep').onclick=function(){
   var idx=document.querySelectorAll('#stepsContainer .step-wrapper').length;
   var sid='s'+(sidSeq++);
   var w=document.createElement('div');w.className='step-wrapper';w.style.cssText='position:relative;cursor:grab';w.dataset.sid=sid;
-  w.innerHTML='<div style="display:flex;gap:14px;padding:16px 0;border-bottom:0.5px solid #f0f0ec"><div class="num" style="width:28px;height:28px;border-radius:50%;background:#0a0a0a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex-shrink:0;margin-top:2px">'+(idx+1)+'</div><div style="flex:1"><div class="pri" style="font-size:9px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:4px"><span class="pri-level" style="cursor:pointer;color:#555">Medium priority</span><span class="pri-area" contenteditable="true" style="color:#888;outline:1px dashed #ccc"> — New</span></div><div class="stitle" contenteditable="true" style="font-family:\'Cormorant Garamond\',serif;font-size:17px;font-weight:400;color:#0a0a0a;margin-bottom:4px;outline:1px dashed #ccc">New recommendation</div><div class="sdesc" contenteditable="true" style="font-size:12px;color:#606060;line-height:1.6;font-weight:300;margin-bottom:8px;outline:1px dashed #ccc">Describe this recommendation…</div></div><div style="position:absolute;top:14px;right:0;display:flex;gap:8px"><button class="btn-edit" style="background:none;border:none;cursor:pointer;font-size:13px;color:#b8b8b8;padding:2px 4px" title="Edit">✓</button><button class="btn-regen" style="background:none;border:none;cursor:pointer;font-size:13px;color:#b8b8b8;padding:2px 4px" title="Regenerate">↺</button><button class="btn-del" style="background:none;border:none;cursor:pointer;font-size:13px;color:#b8b8b8;padding:2px 4px" title="Delete">×</button></div></div>';
+  w.innerHTML='<div style="display:flex;gap:14px;padding:16px 0;border-bottom:0.5px solid #f0f0ec"><div class="num" style="width:28px;height:28px;border-radius:50%;background:#0a0a0a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex-shrink:0;margin-top:2px">'+(idx+1)+'</div><div style="flex:1"><div class="pri" style="font-size:9px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:4px"><span class="pri-level" style="cursor:pointer;color:#555">Medium priority</span><span style="color:#888"> — </span><span class="pri-area" contenteditable="true" style="color:#888;outline:1px dashed #ccc">New</span></div><div class="stitle" contenteditable="true" style="font-family:\'Cormorant Garamond\',serif;font-size:17px;font-weight:400;color:#0a0a0a;margin-bottom:4px;outline:1px dashed #ccc">New recommendation</div><div class="sdesc" contenteditable="true" style="font-size:12px;color:#606060;line-height:1.6;font-weight:300;margin-bottom:8px;outline:1px dashed #ccc">Describe this recommendation…</div></div><div style="position:absolute;top:14px;right:0;display:flex;gap:8px"><button class="btn-edit" style="background:none;border:none;cursor:pointer;font-size:13px;color:#b8b8b8;padding:2px 4px" title="Edit">✓</button><button class="btn-regen" style="background:none;border:none;cursor:pointer;font-size:13px;color:#b8b8b8;padding:2px 4px" title="Regenerate">↺</button><button class="btn-del" style="background:none;border:none;cursor:pointer;font-size:13px;color:#b8b8b8;padding:2px 4px" title="Delete">×</button></div></div>';
   document.getElementById('stepsContainer').appendChild(w);bindStep(w);w.querySelector('.stitle').focus();
 };
 
@@ -345,7 +345,7 @@ background:#0a0a0a;color:#555;padding:18px 48px;display:flex;justify-content:spa
 Left: "Prepared by Swanky Agency for ${accountName}"
 Right: "[start D MMM YYYY] to [end D MMM YYYY]"
 
-Add to <style>: @keyframes spin{to{transform:rotate(360deg)}} .spinning{display:inline-block;animation:spin 0.8s linear infinite;}
+Add to <style>: @keyframes spin{to{transform:rotate(-360deg)}} .spinning{display:inline-block;animation:spin 0.8s linear infinite;transform-origin:center center;line-height:1;vertical-align:middle;}
 
 ━━━ OUTPUT RULES ━━━
 Output ONLY a complete <!DOCTYPE html>…</html>. CSS in <style> in <head>. Chart.js CDN + init script in <body>.
