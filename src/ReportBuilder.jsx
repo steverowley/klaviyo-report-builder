@@ -160,7 +160,8 @@ Meta bar: border-top:0.5px solid #e0e0da padding-top:10px flex space-between —
   Right: "[start D MMM YYYY] to [end D MMM YYYY]" Inter 12px #555
 
 **2. EXECUTIVE SUMMARY**
-3–4 sentences of top-line narrative a time-pressed reader can absorb in 20 seconds. Lead with the single most important number or finding, then the key opportunity or risk, then one forward-looking sentence. Plain <p> tags: font-size:15px;line-height:1.8;color:#2a2a2a;font-weight:300;margin:0 0 36px;max-width:720px. Bold key figures with <strong style="font-weight:500">. No heading, no label, no border — just the paragraph directly below the header.
+<h2>Executive Summary</h2>
+3–4 sentences of top-line narrative a time-pressed reader can absorb in 20 seconds. Lead with the single most important number or finding, then the key opportunity or risk, then one forward-looking sentence. Plain <p> tags: font-size:15px;line-height:1.8;color:#2a2a2a;font-weight:300;margin:0 0 36px. Bold key figures with <strong style="font-weight:500">.
 
 **3. PERIOD SNAPSHOT**
 <h2>Period Snapshot</h2>
@@ -240,7 +241,9 @@ Same: plain <p> tags only. 4–5 sentences. What changed, why, what to watch.
 
 **10. NEXT STEPS FOR GROWTH**
 <h2>Next Steps for Growth</h2>
-4–6 .step items: display:flex;gap:14px;padding:16px 0;border-bottom:0.5px solid #f0f0ec. Last: no border.
+Wrap all steps in <div id="stepsContainer">.
+Each step is a <div class="step-wrapper" style="position:relative"> containing the flex row:
+  display:flex;gap:14px;padding:16px 0;border-bottom:0.5px solid #f0f0ec (last step: no border)
   .num: width:28px;height:28px;border-radius:50%;background:#0a0a0a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex-shrink:0;margin-top:2px
   .pri: font-size:9px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#888;margin-bottom:4px
   .stitle: font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:400;color:#0a0a0a;margin-bottom:4px
@@ -248,6 +251,48 @@ Same: plain <p> tags only. 4–5 sentences. What changed, why, what to watch.
   .tag: display:inline-block;font-size:10px;color:#555;background:#f7f6f3;border:1px solid #e0e0da;border-radius:3px;padding:2px 8px;margin:2px 4px 2px 0
   Priority format: "High priority — [Area]" / "Medium priority — [Area]" / "Low priority — [Area]"
   Each step: 2–4 .tag pills with specific supporting metrics.
+  Controls div (position:absolute;top:14px;right:0;display:flex;gap:8px): three buttons styled as (background:none;border:none;cursor:pointer;font-size:13px;color:#b8b8b8;padding:2px 4px) with :hover color #0a0a0a:
+    <button class="btn-edit" title="Edit">✎</button>
+    <button class="btn-regen" title="Regenerate">↺</button>
+    <button class="btn-del" title="Delete">×</button>
+
+After stepsContainer, render:
+<button id="addStep" style="margin-top:16px;background:none;border:1px solid #e0e0da;padding:8px 16px;font-family:'Inter',sans-serif;font-size:11px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#6b6b6b;cursor:pointer">+ Add recommendation</button>
+
+In the DOMContentLoaded script, after chart init, add this JS verbatim:
+function renum(){document.querySelectorAll('#stepsContainer .step-wrapper').forEach((w,i)=>w.querySelector('.num').textContent=i+1);}
+function bindStep(w,i){
+  w.querySelector('.btn-edit').onclick=function(){
+    var t=w.querySelector('.stitle'),d=w.querySelector('.sdesc'),editing=t.isContentEditable;
+    t.contentEditable=d.contentEditable=editing?'false':'true';
+    if(!editing){t.style.outline=d.style.outline='1px dashed #ccc';t.focus();}
+    else{t.style.outline=d.style.outline='';}
+    this.textContent=editing?'✎':'✓';
+  };
+  w.querySelector('.btn-regen').onclick=function(){
+    var idx=Array.from(document.querySelectorAll('#stepsContainer .step-wrapper')).indexOf(w);
+    this.textContent='…';this.disabled=true;
+    window.parent.postMessage({type:'regenerate-step',index:idx,title:w.querySelector('.stitle').textContent.trim(),desc:w.querySelector('.sdesc').textContent.trim()},'*');
+  };
+  w.querySelector('.btn-del').onclick=function(){w.remove();renum();};
+}
+document.querySelectorAll('#stepsContainer .step-wrapper').forEach(bindStep);
+window.addEventListener('message',function(e){
+  if(e.data&&e.data.type==='step-regenerated'){
+    var ws=document.querySelectorAll('#stepsContainer .step-wrapper');
+    var w=ws[e.data.index];if(!w)return;
+    w.querySelector('.stitle').textContent=e.data.title;
+    w.querySelector('.sdesc').textContent=e.data.desc;
+    var rb=w.querySelector('.btn-regen');rb.textContent='↺';rb.disabled=false;
+  }
+});
+document.getElementById('addStep').onclick=function(){
+  var idx=document.querySelectorAll('#stepsContainer .step-wrapper').length;
+  var w=document.createElement('div');w.className='step-wrapper';w.style.position='relative';
+  w.innerHTML='<div style="display:flex;gap:14px;padding:16px 0;border-bottom:0.5px solid #f0f0ec"><div class="num" style="width:28px;height:28px;border-radius:50%;background:#0a0a0a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex-shrink:0;margin-top:2px">'+(idx+1)+'</div><div style="flex:1"><div class="pri" style="font-size:9px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#888;margin-bottom:4px">Medium priority — New</div><div class="stitle" contenteditable="true" style="font-family:\'Cormorant Garamond\',serif;font-size:17px;font-weight:400;color:#0a0a0a;margin-bottom:4px;outline:1px dashed #ccc;min-width:40px">New recommendation</div><div class="sdesc" contenteditable="true" style="font-size:12px;color:#606060;line-height:1.6;font-weight:300;margin-bottom:8px;outline:1px dashed #ccc;min-width:40px">Describe this recommendation…</div></div><div style="position:absolute;top:14px;right:0;display:flex;gap:8px"><button class="btn-edit" style="background:none;border:none;cursor:pointer;font-size:13px;color:#b8b8b8;padding:2px 4px" title="Edit">✓</button><button class="btn-regen" style="background:none;border:none;cursor:pointer;font-size:13px;color:#b8b8b8;padding:2px 4px" title="Regenerate">↺</button><button class="btn-del" style="background:none;border:none;cursor:pointer;font-size:13px;color:#b8b8b8;padding:2px 4px" title="Delete">×</button></div></div>';
+  document.getElementById('stepsContainer').appendChild(w);
+  bindStep(w,idx);w.querySelector('.stitle').focus();
+};
 
 **11. FOOTER**
 background:#0a0a0a;color:#555;padding:18px 48px;display:flex;justify-content:space-between;font-size:11px;margin:48px -48px -40px
@@ -442,6 +487,45 @@ No markdown fences. No commentary before or after. Show "—" for missing values
 
   useEffect(() => {
     return () => clearTimers();
+  }, []);
+
+  // Listen for regenerate-step messages from the report iframe
+  useEffect(() => {
+    const handler = async (event) => {
+      if (event.data?.type !== 'regenerate-step') return;
+      const { index, title, desc } = event.data;
+      const anthropicKey = localStorage.getItem(ANTHROPIC_KEY);
+      if (!anthropicKey || !iframeRef.current) return;
+      try {
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'x-api-key': anthropicKey,
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true',
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: 300,
+            messages: [{
+              role: 'user',
+              content: `You are rewriting an email marketing recommendation. Current title: "${title}". Current description: "${desc}". Write an improved version that is more specific and actionable. Reply with ONLY valid JSON: {"title":"...","desc":"..."}`,
+            }],
+          }),
+        });
+        const data = await res.json();
+        const parsed = JSON.parse(data.content?.[0]?.text ?? '{}');
+        if (parsed.title && parsed.desc) {
+          iframeRef.current.contentWindow?.postMessage(
+            { type: 'step-regenerated', index, title: parsed.title, desc: parsed.desc },
+            '*'
+          );
+        }
+      } catch {}
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
   }, []);
 
   // Fetch client list from worker whenever settings change or on first load
