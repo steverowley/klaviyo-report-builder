@@ -11,9 +11,14 @@ export default function App() {
     return !ak || !kk || !wu;
   });
 
-  return showSettings ? (
-    <Settings onSave={() => setShowSettings(false)} />
-  ) : (
-    <ReportBuilder onOpenSettings={() => setShowSettings(true)} />
+  return (
+    <>
+      <ReportBuilder onOpenSettings={() => setShowSettings(true)} />
+      {showSettings && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 1000 }}>
+          <Settings onSave={() => setShowSettings(false)} />
+        </div>
+      )}
+    </>
   );
 }
