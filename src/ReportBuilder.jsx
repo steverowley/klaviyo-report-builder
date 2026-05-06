@@ -1070,6 +1070,7 @@ ${reportHtml}`,
               }}
             >
               {isCreatingSlides ? "Generating…" : "Speedy Slides prompt"}
+            </button>
           </>
         )}
 
