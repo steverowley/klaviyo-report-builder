@@ -55,7 +55,14 @@ function CursorDot() {
         willChange: "transform, width, height",
         transition: "width 0.15s ease, height 0.15s ease, opacity 0.15s ease",
       }} />
-      <style>{`* { cursor: none !important; }`}</style>
+      <style>{`
+        * { cursor: none !important; }
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #c8c6c0; border-radius: 0; }
+        ::-webkit-scrollbar-thumb:hover { background: #6b6b6b; }
+        * { scrollbar-width: thin; scrollbar-color: #c8c6c0 transparent; }
+      `}</style>
     </>
   );
 }
