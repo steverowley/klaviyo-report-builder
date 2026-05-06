@@ -587,6 +587,16 @@ ${JSON.stringify(klaviyoData)}`;
   // Listen for regenerate-step messages from the report iframe
   useEffect(() => {
     const handler = async (event) => {
+      if (event.data?.type === 'cursor-move') {
+        const iframe = iframeRef.current;
+        if (iframe) {
+          const rect = iframe.getBoundingClientRect();
+          window.dispatchEvent(new CustomEvent('iframe-cursor-move', {
+            detail: { x: rect.left + event.data.x, y: rect.top + event.data.y },
+          }));
+        }
+        return;
+      }
       if (event.data?.type !== 'regenerate-step') return;
       const { sid } = event.data;
       const anthropicKey = localStorage.getItem(ANTHROPIC_KEY);
@@ -776,34 +786,14 @@ ${reportHtml}`,
 
   useEffect(() => {
     if (!iframeRef.current || !reportHtml) return;
-    // Inject cursor:none so the browser cursor doesn't reappear inside the iframe
+    // Inject cursor:none and a postMessage relay so the custom cursor works
+    // inside the iframe (sandbox without allow-same-origin blocks contentDocument)
+    const relayScript = `<script>document.addEventListener('mousemove',function(e){window.parent.postMessage({type:'cursor-move',x:e.clientX,y:e.clientY},'*');});<\/script>`;
     const injected = reportHtml.replace(
       /<\/head>/i,
-      `<style>*{cursor:none!important}</style></head>`
+      `<style>*{cursor:none!important}</style>${relayScript}</head>`
     );
     iframeRef.current.srcdoc = injected;
-  }, [reportHtml]);
-
-  // Relay mousemove from inside the iframe so the custom cursor tracks correctly
-  useEffect(() => {
-    const iframe = iframeRef.current;
-    if (!iframe || !reportHtml) return;
-    const relay = () => {
-      try {
-        const doc = iframe.contentDocument;
-        if (!doc) return;
-        const onMove = (e) => {
-          const rect = iframe.getBoundingClientRect();
-          window.dispatchEvent(new CustomEvent("iframe-cursor-move", {
-            detail: { x: rect.left + e.clientX, y: rect.top + e.clientY },
-          }));
-        };
-        doc.addEventListener("mousemove", onMove);
-        return () => doc.removeEventListener("mousemove", onMove);
-      } catch (_) {}
-    };
-    iframe.addEventListener("load", relay);
-    return () => iframe.removeEventListener("load", relay);
   }, [reportHtml]);
 
   const handleDownload = () => {
