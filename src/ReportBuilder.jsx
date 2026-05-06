@@ -338,29 +338,32 @@ Line chart: { data: aggregates.orders.counts, borderColor:'#555', backgroundColo
 Same scale options as bar chart.
 
 ━━━ CHART EVENT ANNOTATIONS ━━━
-For BOTH the List Growth chart (subChart) and Order Volume chart (orderChart), add an inline Chart.js plugin that draws vertical markers for any ecommerce events whose "chart label" (e.g. "14 Feb") matches an entry in the chart's labels array. Register this plugin ONCE before both chart creations:
-const eventMarkerPlugin = {
-  id: 'eventMarkers',
-  afterDraw(chart, args, opts) {
-    if (!opts || !opts.events || !opts.events.length) return;
-    const ctx = chart.ctx; const xScale = chart.scales.x; const yScale = chart.scales.y;
-    opts.events.forEach(function(ev) {
-      const idx = chart.data.labels.indexOf(ev.label);
-      if (idx === -1) return;
-      const x = xScale.getPixelForValue(idx);
-      ctx.save();
-      ctx.setLineDash([3, 3]); ctx.strokeStyle = 'rgba(10,10,10,0.22)'; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(x, yScale.top); ctx.lineTo(x, yScale.bottom); ctx.stroke();
-      ctx.setLineDash([]); ctx.fillStyle = '#888'; ctx.font = '8px DM Sans,sans-serif';
-      ctx.save(); ctx.translate(x + 3, yScale.top + 8); ctx.rotate(-Math.PI / 2);
-      ctx.fillText(ev.name, 0, 0); ctx.restore(); ctx.restore();
-    });
+At the top of the DOMContentLoaded script, define an EVENTS array using the ecommerce event data from the user message:
+var EVENTS = [ {label:"14 Feb", name:"Valentine's Day"}, ... ]; // populate from the events list
+
+For BOTH the List Growth chart and Order Volume chart, add an afterDraw inline plugin object directly in the chart config (do NOT use Chart.register):
+plugins: {
+  legend: { display: false },
+  customEvents: {
+    afterDraw: function(chart) {
+      try {
+        var ctx = chart.ctx, xs = chart.scales.x, ys = chart.scales.y;
+        EVENTS.forEach(function(ev) {
+          var idx = chart.data.labels.indexOf(ev.label);
+          if (idx === -1) return;
+          var x = xs.getPixelForValue(idx);
+          ctx.save();
+          ctx.setLineDash([3,3]); ctx.strokeStyle='rgba(10,10,10,0.2)'; ctx.lineWidth=1;
+          ctx.beginPath(); ctx.moveTo(x, ys.top); ctx.lineTo(x, ys.bottom); ctx.stroke();
+          ctx.setLineDash([]); ctx.fillStyle='#999'; ctx.font='8px sans-serif';
+          ctx.save(); ctx.translate(x+3, ys.top+6); ctx.rotate(-Math.PI/2);
+          ctx.fillText(ev.name, 0, 0); ctx.restore(); ctx.restore();
+        });
+      } catch(e) {}
+    }
   }
-};
-Chart.register(eventMarkerPlugin);
-Pass each chart a plugins.eventMarkers.events array containing only the events whose chartLabel exists in that chart's labels. Example: plugins:{ legend:{display:false}, eventMarkers:{ events: matchedEvents } }
-matchedEvents is computed by filtering the full events list: const matchedEvents = EVENTS.filter(e => chartLabels.includes(e.label));
-Define EVENTS as a JS const at the top of the DOMContentLoaded script using the event data provided in the user message (each entry: {label:"14 Feb", name:"Valentine's Day"}).
+}
+Wrap all plugin drawing code in try/catch so any error never breaks the chart render.
 
 **6. CAMPAIGN PERFORMANCE**
 <h2>Campaign Performance</h2>
@@ -1773,6 +1776,8 @@ function EmptyState() {
   );
 }
 
+const BAR_HEIGHTS = [6,14,22,30,36,40,36,30,22,14,6,10,18,28,38,42,38,28,18,10,6,14];
+
 function LoadingState({ progress, line, elapsed, justFinished, onDismissCompletion, onNewReport, lastUsage }) {
   const pct = Math.round(progress);
   const formatTime = (s) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`);
@@ -1796,33 +1801,34 @@ function LoadingState({ progress, line, elapsed, justFinished, onDismissCompleti
     >
       <FloatingNumerals />
 
-      {/* Animated document mark */}
-      <div style={{ position: "relative", marginBottom: "48px", zIndex: 2 }}>
-        <svg width="72" height="90" viewBox="0 0 72 90" fill="none" xmlns="http://www.w3.org/2000/svg">
-          {/* Page outline */}
-          <rect x="1" y="1" width="70" height="88" stroke="#0a0a0a" strokeWidth="1" fill="#fafaf8" />
-          {/* Left binding rule */}
-          <line x1="10" y1="1" x2="10" y2="89" stroke="#ededed" strokeWidth="1" />
-          {/* Heading rule — draws in */}
-          <line x1="17" y1="14" x2="17" y2="14" stroke="#0a0a0a" strokeWidth="0.75">
-            <animate attributeName="x2" from="17" to="58" dur="0.7s" begin="0.2s" fill="freeze" calcMode="spline" keySplines="0.4 0 0.2 1" />
-          </line>
-          {/* Text lines — staggered draw */}
-          {[22, 29, 36, 43].map((y, i) => (
-            <line key={y} x1="17" y1={y} x2="17" y2={y} stroke="#b8b8b8" strokeWidth="0.75">
-              <animate attributeName="x2" from="17" to={i % 2 === 0 ? 55 : 48} dur="0.5s" begin={`${0.6 + i * 0.12}s`} fill="freeze" calcMode="spline" keySplines="0.4 0 0.2 1" />
-            </line>
-          ))}
-          {/* Mini bar chart */}
-          {[14, 20, 11, 18, 24, 16].map((h, i) => (
-            <rect key={i} x={17 + i * 8} y={76 - h} width="5" height="0" fill="#0a0a0a" opacity="0.7">
-              <animate attributeName="height" from="0" to={h} dur="0.4s" begin={`${1.3 + i * 0.06}s`} fill="freeze" calcMode="spline" keySplines="0.4 0 0.2 1" />
-              <animate attributeName="y" from="76" to={76 - h} dur="0.4s" begin={`${1.3 + i * 0.06}s`} fill="freeze" calcMode="spline" keySplines="0.4 0 0.2 1" />
-            </rect>
-          ))}
-          {/* Baseline for chart */}
-          <line x1="17" y1="76" x2="65" y2="76" stroke="#e8e8e4" strokeWidth="0.5" />
-        </svg>
+      {/* Equalizer bars — continuously looping, travel-wave stagger */}
+      <div style={{
+        display: "flex",
+        alignItems: "flex-end",
+        gap: "3px",
+        height: "48px",
+        marginBottom: "44px",
+        zIndex: 2,
+        animation: "loadIn 0.5s ease-out both",
+      }}>
+        {BAR_HEIGHTS.map((maxH, i) => (
+          <div
+            key={i}
+            style={{
+              width: "2px",
+              background: "#0a0a0a",
+              borderRadius: "1px",
+              height: "3px",
+              animationName: "barPulse",
+              animationDuration: `${1.1 + (i % 4) * 0.09}s`,
+              animationDelay: `${(i / BAR_HEIGHTS.length) * 1.1}s`,
+              animationTimingFunction: "ease-in-out",
+              animationIterationCount: "infinite",
+              animationDirection: "alternate",
+              "--bar-max": `${maxH}px`,
+            }}
+          />
+        ))}
       </div>
 
       {/* Title */}
@@ -1833,9 +1839,9 @@ function LoadingState({ progress, line, elapsed, justFinished, onDismissCompleti
         color: "#0a0a0a",
         fontStyle: "italic",
         lineHeight: 1.15,
-        marginBottom: "6px",
+        marginBottom: "8px",
         zIndex: 2,
-        animation: "loadIn 0.7s ease-out 0.1s both",
+        animation: "loadIn 0.7s ease-out 0.15s both",
       }}>
         Composing your report
       </div>
@@ -1847,11 +1853,11 @@ function LoadingState({ progress, line, elapsed, justFinished, onDismissCompleti
           fontSize: "10px",
           textTransform: "uppercase",
           letterSpacing: "0.24em",
-          color: "#aaa",
-          marginBottom: "48px",
-          minHeight: "13px",
+          color: "#b8b8b8",
+          marginBottom: "44px",
+          minHeight: "14px",
           fontFamily: "'DM Sans', sans-serif",
-          animation: "fadeLine 0.6s ease-out",
+          animation: "fadeLine 0.5s ease-out",
           zIndex: 2,
         }}
       >
@@ -1859,8 +1865,7 @@ function LoadingState({ progress, line, elapsed, justFinished, onDismissCompleti
       </div>
 
       {/* Progress section */}
-      <div style={{ width: "min(380px, 65%)", zIndex: 2, animation: "loadIn 0.7s ease-out 0.2s both" }}>
-        {/* % and elapsed */}
+      <div style={{ width: "min(360px, 60%)", zIndex: 2, animation: "loadIn 0.7s ease-out 0.25s both" }}>
         <div style={{
           display: "flex",
           justifyContent: "space-between",
@@ -1872,7 +1877,7 @@ function LoadingState({ progress, line, elapsed, justFinished, onDismissCompleti
             fontSize: "10px",
             textTransform: "uppercase",
             letterSpacing: "0.18em",
-            color: "#b8b8b8",
+            color: "#c8c6c0",
           }}>
             {formatTime(elapsed)} elapsed
           </span>
@@ -1884,24 +1889,24 @@ function LoadingState({ progress, line, elapsed, justFinished, onDismissCompleti
             fontVariantNumeric: "tabular-nums",
             lineHeight: 1,
           }}>
-            {pct}<span style={{ fontSize: "13px", color: "#aaa", marginLeft: "3px" }}>%</span>
+            {pct}<span style={{ fontSize: "13px", color: "#c8c6c0", marginLeft: "2px" }}>%</span>
           </span>
         </div>
 
-        {/* Progress bar */}
+        {/* Hairline progress bar */}
         <div style={{ width: "100%", height: "1px", background: "#ededed", position: "relative", overflow: "hidden" }}>
           <div style={{
             position: "absolute", top: 0, left: 0, height: "100%",
             width: `${progress}%`,
             background: "#0a0a0a",
-            transition: "width 0.5s cubic-bezier(0.4, 0, 0.2, 1)",
+            transition: "width 0.6s cubic-bezier(0.4, 0, 0.2, 1)",
           }} />
           <div style={{
             position: "absolute", top: 0, left: 0, height: "100%",
             width: `${progress}%`,
-            background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.7) 50%, transparent 100%)",
-            animation: "shimmer 2.2s ease-in-out infinite",
-            transition: "width 0.5s cubic-bezier(0.4, 0, 0.2, 1)",
+            background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.8) 50%, transparent 100%)",
+            animation: "shimmer 2.4s ease-in-out infinite",
+            transition: "width 0.6s cubic-bezier(0.4, 0, 0.2, 1)",
           }} />
         </div>
 
@@ -1921,12 +1926,16 @@ function LoadingState({ progress, line, elapsed, justFinished, onDismissCompleti
       </div>
 
       <style>{`
+        @keyframes barPulse {
+          from { height: 3px; opacity: 0.2; }
+          to { height: var(--bar-max); opacity: 0.85; }
+        }
         @keyframes shimmer {
           0% { transform: translateX(-100%); }
           100% { transform: translateX(200%); }
         }
         @keyframes fadeLine {
-          from { opacity: 0; transform: translateY(3px); }
+          from { opacity: 0; transform: translateY(2px); }
           to { opacity: 1; transform: translateY(0); }
         }
         @keyframes loadIn {
