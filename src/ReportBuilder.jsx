@@ -198,11 +198,12 @@ Meta bar: border-top:0.5px solid #e0e0da padding-top:10px flex space-between —
   Value: Cormorant Garamond 26px weight 400 #0a0a0a line-height:1
   Delta: Inter 11px margin-top:4px — #2a7a4f if positive, #a33 if negative, #999 neutral
   Sub-text: Inter 11px #aaa margin-top:2px
+Delta format for all cards: compute pct = ((current − prev) / prev × 100). Show "↑ +X.X% vs prev" (#2a7a4f) or "↓ −X.X% vs prev" (#a33). Sub-text shows absolute: "X vs Y prev". If prev is 0 show absolute change only (no division).
 Cards:
-  TOTAL REVENUE — sum period.flows[].conversion_value + campaign conversion values. £X,XXX.XX. Delta vs comparison if available.
-  CAMPAIGNS SENT — period.campaigns.length. Sub "No sends this period" if zero.
-  NEW SUBSCRIBERS — sum(aggregates.subscribers.counts) or "—"
-  TOTAL ORDERS — sum(aggregates.orders.counts) or "—". Delta vs comparison: if comparison.aggregates?.orders non-null, show ↑/↓ Δ orders
+  TOTAL REVENUE — sum period.flows[].conversion_value + campaign conversion values. £X,XXX.XX. If comparison available: delta % vs comparison total revenue.
+  CAMPAIGNS SENT — period.campaigns.length. Delta: show count change vs comparison ("+X vs prev"). Sub "No sends this period" if zero.
+  NEW SUBSCRIBERS — sum(aggregates.subscribers.counts) or "—". Delta % if comparison.aggregates?.subscribers available.
+  TOTAL ORDERS — sum(aggregates.orders.counts) or "—". Delta % if comparison.aggregates?.orders available.
 
 **4. LIST GROWTH** (skip if aggregates.subscribers is null)
 <h2>List Growth</h2>
@@ -217,11 +218,11 @@ In DOMContentLoaded script, create bar chart:
              y:{beginAtZero:true, grid:{color:'rgba(0,0,0,0.06)'}, ticks:{color:'#aaa',font:{size:10}}}
 3-col grid gap:12px. Each stat card (same card style as Period Snapshot):
   NEW SUBSCRIBERS — sum(aggregates.subscribers.counts)
-    Delta: if comparison.aggregates?.subscribers non-null: Δ = period_subs − comp_subs; show "↑ +X vs prev" (#2a7a4f) or "↓ −X vs prev" (#a33)
+    Delta: if comparison.aggregates?.subscribers non-null: pct = ((period_subs − comp_subs) / comp_subs × 100); show "↑ +X.X%" or "↓ −X.X%" with sub-text "X vs Y prev"
   UNSUBSCRIBES — sum(aggregates.unsubscribes.counts) or "—"
-    Delta: same pattern using comparison.aggregates?.unsubscribes if available
+    Delta: same percentage pattern using comparison.aggregates?.unsubscribes if available
   NET GROWTH — (period_subs − period_unsubs); prefix "+" if positive
-    Delta: if comparison available: Δ = period_net − comp_net; show with arrow
+    Delta: if comparison available: pct vs comp_net; show with arrow and sub-text
 
 **5. ORDER VOLUME** (skip if aggregates.orders is null)
 <h2>Order Volume</h2>
