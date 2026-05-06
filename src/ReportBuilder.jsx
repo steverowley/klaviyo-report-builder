@@ -47,6 +47,11 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion }
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [justFinished, setJustFinished] = useState(false);
   const [lastUsage, setLastUsage] = useState(null);
+  const [lastDuration, setLastDuration] = useState(null);
+  const [slidesPrompt, setSlidesPrompt] = useState("");
+  const [isCreatingSlides, setIsCreatingSlides] = useState(false);
+  const [showSlidesModal, setShowSlidesModal] = useState(false);
+  const [slidesCopied, setSlidesCopied] = useState(false);
   const iframeRef = useRef(null);
   const progressTimerRef = useRef(null);
   const lineTimerRef = useRef(null);
@@ -65,7 +70,7 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion }
     { range: [36, 44], text: "Asking the flows how they've been" },
     { range: [44, 52], text: "Reconciling revenue against expectation" },
     { range: [52, 60], text: "Comparing this period to its former self" },
-    { range: [60, 68], text: "Setting the table in Cormorant Garamond" },
+    { range: [60, 68], text: "Setting the table in Ovo" },
     { range: [68, 76], text: "Polishing the numerals until they gleam" },
     { range: [76, 84], text: "Composing the executive summary" },
     { range: [84, 92], text: "Drafting recommendations, considered" },
@@ -146,8 +151,8 @@ Produce a complete, self-contained HTML report. Follow every instruction below e
 
 ━━━ FONTS ━━━
 Load via Google Fonts:
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-Headings (h2), card values, step titles: Cormorant Garamond. All other text: Inter.
+<link href="https://fonts.googleapis.com/css2?family=Ovo&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300;1,9..40,400&display=swap" rel="stylesheet">
+Headings (h2), card values, step titles: Ovo. All other text: DM Sans.
 
 ━━━ COLOURS (use these exact hex values) ━━━
 Page bg: #fff. Primary: #0a0a0a. Body text: #1a1a1a. Muted: #555. Label: #999. Very muted: #aaa.
@@ -155,11 +160,11 @@ Card bg: #f7f6f3. Divider: #e0e0da. Row divider: #f0f0ec. Section rule: #e8e8e4.
 Delta positive: #2a7a4f (inline text only). Delta negative: #a33 (inline text only). Delta neutral: #999.
 
 ━━━ PAGE ━━━
-body { margin:0; padding:40px 48px; background:#fff; font-family:'Inter',sans-serif; color:#1a1a1a; font-size:13px; }
+body { margin:0; padding:40px 48px; background:#fff; font-family:'DM Sans',sans-serif; color:#1a1a1a; font-size:13px; }
 font-variant-numeric:tabular-nums on all numeric table cells.
 
 ━━━ SECTION HEADINGS ━━━
-h2 { font-family:'Cormorant Garamond',serif; font-size:22px; font-weight:400; color:#0a0a0a; margin:36px 0 16px; border-bottom:1px solid #e8e8e4; padding-bottom:8px; }
+h2 { font-family:'Ovo',serif; font-size:22px; font-weight:400; color:#0a0a0a; margin:36px 0 16px; border-bottom:1px solid #e8e8e4; padding-bottom:8px; }
 
 ━━━ SECTIONS (all 11, in this order) ━━━
 
@@ -167,13 +172,13 @@ h2 { font-family:'Cormorant Garamond',serif; font-size:22px; font-weight:400; co
 White bg, border-bottom:2px solid #0a0a0a, padding-bottom:32px, margin-bottom:36px.
 Top row flex space-between:
   Left: <img src="https://swankyagency.com/wp-content/uploads/2022/05/swanky-2020-black.png" style="height:40px;display:block">
-  Right: <button onclick="window.print()" style="position:fixed;top:16px;right:16px;background:#0a0a0a;color:#fff;border:none;padding:8px 18px;font-family:Inter,sans-serif;font-size:10px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;cursor:pointer;z-index:100">Print / Save PDF</button>
-Then: "Email Marketing Report" — Inter 10px weight 500 letter-spacing:0.14em uppercase #888 margin-bottom:10px
-Title: Cormorant Garamond 40px weight 300 #0a0a0a line-height:1.15 margin-bottom:6px — "Klaviyo ${reportType}<br>Performance Report"
-Client: Inter 12px weight 300 #888 margin-bottom:20px — "${accountName}"
+  Right: <button onclick="window.print()" style="position:fixed;top:16px;right:16px;background:#0a0a0a;color:#fff;border:none;padding:8px 18px;font-family:'DM Sans',sans-serif;font-size:10px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;cursor:pointer;z-index:100">Print / Save PDF</button>
+Then: "Email Marketing Report" — DM Sans 10px weight 500 letter-spacing:0.14em uppercase #888 margin-bottom:10px
+Title: Ovo 40px weight 400 #0a0a0a line-height:1.15 margin-bottom:6px — "Klaviyo ${reportType}<br>Performance Report"
+Client: DM Sans 12px weight 300 #888 margin-bottom:20px — "${accountName}"
 Meta bar: border-top:0.5px solid #e0e0da padding-top:10px flex space-between —
-  Left: "Generated [D MMM YYYY]" Inter 11px #aaa
-  Right: "[start D MMM YYYY] to [end D MMM YYYY]" Inter 12px #555
+  Left: "Generated [D MMM YYYY]" DM Sans 11px #aaa
+  Right: "[start D MMM YYYY] to [end D MMM YYYY]" DM Sans 12px #555
 
 **2. EXECUTIVE SUMMARY**
 <h2>Executive Summary</h2>
@@ -183,10 +188,10 @@ Meta bar: border-top:0.5px solid #e0e0da padding-top:10px flex space-between —
 <h2>Period Snapshot</h2>
 
 4-col grid gap:12px margin-bottom:32px. Each card: background:#f7f6f3; border-radius:3px; padding:16px 18px; border-left:2px solid #0a0a0a.
-  Label: Inter 10px weight 500 letter-spacing:0.08em uppercase #999 margin-bottom:8px
-  Value: Cormorant Garamond 26px weight 400 #0a0a0a line-height:1
-  Delta: Inter 11px margin-top:4px — #2a7a4f if positive, #a33 if negative, #999 neutral
-  Sub-text: Inter 11px #aaa margin-top:2px
+  Label: DM Sans 10px weight 500 letter-spacing:0.08em uppercase #999 margin-bottom:8px
+  Value: Ovo 26px weight 400 #0a0a0a line-height:1
+  Delta: DM Sans 11px margin-top:4px — #2a7a4f if positive, #a33 if negative, #999 neutral
+  Sub-text: DM Sans 11px #aaa margin-top:2px
 Delta format for all cards: compute pct = ((current − prev) / prev × 100). Show "↑ +X.X% vs prev" (#2a7a4f) or "↓ −X.X% vs prev" (#a33). Sub-text shows absolute: "X vs Y prev". If prev is 0 show absolute change only (no division).
 Cards:
   TOTAL REVENUE — sum period.flows[].conversion_value + campaign conversion values. £X,XXX.XX. If comparison available: delta % vs comparison total revenue.
@@ -196,7 +201,7 @@ Cards:
 
 **4. LIST GROWTH** (skip if aggregates.subscribers is null)
 <h2>List Growth</h2>
-Sub-label "New Subscribers Per Day" Inter 10px weight 500 uppercase #999 margin-bottom:8px.
+Sub-label "New Subscribers Per Day" DM Sans 10px weight 500 uppercase #999 margin-bottom:8px.
 Load Chart.js: <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 Container div: position:relative; height:180px; margin-bottom:16px. <canvas id="subChart"></canvas>
 In DOMContentLoaded script, create bar chart:
@@ -235,7 +240,7 @@ period.flows is pre-aggregated per flow: [{name, trigger, recipients, delivered,
 Table (same CSS). Columns: FLOW | RECIPIENTS | DELIVERED | OPEN | CLICK | CTOR | CVR | REVENUE | RPR
   open_rate×100 = X.X%, click_rate×100 = X.X%, ctor×100 = X.X%, conversion_rate×100 = X.X%
   Revenue: £X,XXX.XX (or "—" if zero). RPR (rpr field): £X.XX (or "—" if zero).
-  Flow name: Inter 13px #0a0a0a weight 500; below it trigger in #999 11px.
+  Flow name: DM Sans 13px #0a0a0a weight 500; below it trigger in #999 11px.
   tfoot "Totals / Weighted Avg" — recalculate from raw fields.
 
 TABLE CSS (apply to both tables):
@@ -246,7 +251,7 @@ tbody td{padding:10px;border-bottom:0.5px solid #f0f0ec;color:#1a1a1a;text-align
 tbody td:first-child{text-align:left}
 tfoot td{padding:10px;font-size:11px;font-weight:600;background:#f7f6f3;border-top:1px solid #e0e0da;color:#0a0a0a;text-align:right}
 tfoot td:first-child{text-align:left}
-Revenue cells: font-family:'Cormorant Garamond',serif;font-size:14px;font-weight:600
+Revenue cells: font-family:'Ovo',serif;font-size:14px;font-weight:600
 
 **8. KEY INSIGHTS**
 <h2>Key Insights</h2>
@@ -265,7 +270,7 @@ Each step is a <div class="step-wrapper" style="position:relative;cursor:grab"> 
   .pri: font-size:9px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:4px — contains TWO spans:
     <span class="pri-level" style="cursor:pointer;color:#0a0a0a">High priority</span><span style="color:#888"> — </span><span class="pri-area" style="color:#888">[Area]</span>
     (pri-level colour: #0a0a0a=High, #555=Medium, #999=Low)
-  .stitle: font-family:'Cormorant Garamond',serif;font-size:17px;font-weight:400;color:#0a0a0a;margin-bottom:4px
+  .stitle: font-family:'Ovo',serif;font-size:17px;font-weight:400;color:#0a0a0a;margin-bottom:4px
   .sdesc: font-size:12px;color:#606060;line-height:1.6;font-weight:300;margin-bottom:8px
   .tag: display:inline-block;font-size:10px;color:#555;background:#f7f6f3;border:1px solid #e0e0da;border-radius:3px;padding:2px 8px;margin:2px 4px 2px 0
   Each step: 2–4 .tag pills with specific supporting metrics.
@@ -275,7 +280,7 @@ Each step is a <div class="step-wrapper" style="position:relative;cursor:grab"> 
     <button class="btn-del" title="Delete">×</button>
 
 After stepsContainer:
-<button id="addStep" style="margin-top:16px;background:none;border:1px solid #e0e0da;padding:8px 16px;font-family:'Inter',sans-serif;font-size:11px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#6b6b6b;cursor:pointer">+ Add recommendation</button>
+<button id="addStep" style="margin-top:16px;background:none;border:1px solid #e0e0da;padding:8px 16px;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;color:#6b6b6b;cursor:pointer">+ Add recommendation</button>
 
 Each .step-wrapper must have a unique data-sid attribute: data-sid="s0", "s1", etc. (assigned at render time, incrementing from 0).
 
@@ -326,7 +331,7 @@ document.getElementById('addStep').onclick=function(){
   var idx=document.querySelectorAll('#stepsContainer .step-wrapper').length;
   var sid='s'+(sidSeq++);
   var w=document.createElement('div');w.className='step-wrapper';w.style.cssText='position:relative;cursor:grab';w.dataset.sid=sid;
-  w.innerHTML='<div style="display:flex;gap:14px;padding:16px 0;border-bottom:0.5px solid #f0f0ec"><div class="num" style="width:28px;height:28px;border-radius:50%;background:#0a0a0a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex-shrink:0;margin-top:2px">'+(idx+1)+'</div><div style="flex:1"><div class="pri" style="font-size:9px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:4px"><span class="pri-level" style="cursor:pointer;color:#555">Medium priority</span><span style="color:#888"> — </span><span class="pri-area" contenteditable="true" style="color:#888;outline:1px dashed #ccc">New</span></div><div class="stitle" contenteditable="true" style="font-family:\'Cormorant Garamond\',serif;font-size:17px;font-weight:400;color:#0a0a0a;margin-bottom:4px;outline:1px dashed #ccc">New recommendation</div><div class="sdesc" contenteditable="true" style="font-size:12px;color:#606060;line-height:1.6;font-weight:300;margin-bottom:8px;outline:1px dashed #ccc">Describe this recommendation…</div></div><div style="position:absolute;top:14px;right:0;display:flex;gap:8px"><button class="btn-edit" style="background:none;border:none;cursor:pointer;font-size:13px;color:#b8b8b8;padding:2px 4px" title="Edit">✓</button><button class="btn-regen" style="background:none;border:none;cursor:pointer;font-size:13px;color:#b8b8b8;padding:2px 4px" title="Regenerate">↺</button><button class="btn-del" style="background:none;border:none;cursor:pointer;font-size:13px;color:#b8b8b8;padding:2px 4px" title="Delete">×</button></div></div>';
+  w.innerHTML='<div style="display:flex;gap:14px;padding:16px 0;border-bottom:0.5px solid #f0f0ec"><div class="num" style="width:28px;height:28px;border-radius:50%;background:#0a0a0a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex-shrink:0;margin-top:2px">'+(idx+1)+'</div><div style="flex:1"><div class="pri" style="font-size:9px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:4px"><span class="pri-level" style="cursor:pointer;color:#555">Medium priority</span><span style="color:#888"> — </span><span class="pri-area" contenteditable="true" style="color:#888;outline:1px dashed #ccc">New</span></div><div class="stitle" contenteditable="true" style="font-family:\'Ovo\',serif;font-size:17px;font-weight:400;color:#0a0a0a;margin-bottom:4px;outline:1px dashed #ccc">New recommendation</div><div class="sdesc" contenteditable="true" style="font-size:12px;color:#606060;line-height:1.6;font-weight:300;margin-bottom:8px;outline:1px dashed #ccc">Describe this recommendation…</div></div><div style="position:absolute;top:14px;right:0;display:flex;gap:8px"><button class="btn-edit" style="background:none;border:none;cursor:pointer;font-size:13px;color:#b8b8b8;padding:2px 4px" title="Edit">✓</button><button class="btn-regen" style="background:none;border:none;cursor:pointer;font-size:13px;color:#b8b8b8;padding:2px 4px" title="Regenerate">↺</button><button class="btn-del" style="background:none;border:none;cursor:pointer;font-size:13px;color:#b8b8b8;padding:2px 4px" title="Delete">×</button></div></div>';
   document.getElementById('stepsContainer').appendChild(w);bindStep(w);w.querySelector('.stitle').focus();
 };
 
@@ -509,6 +514,11 @@ ${JSON.stringify(klaviyoData)}`;
         throw new Error("The model returned no report content. The prompt may have exceeded the context limit — try a shorter date range.");
       }
 
+      let rawHtml = textBlock.text.trim();
+      if (rawHtml.startsWith("```")) {
+        rawHtml = rawHtml.replace(/^```[^\n]*\n?/, "").replace(/\n?```\s*$/, "");
+      }
+
       const u = data.usage || {};
       const costUsd =
         (u.input_tokens || 0) * 3 / 1_000_000 +
@@ -526,10 +536,12 @@ ${JSON.stringify(klaviyoData)}`;
       clearTimers();
       setProgress(100);
       setLoadingLine("Ready");
+      setLastDuration(Math.round((Date.now() - startedAt) / 1000));
       const key = cacheKey(selectedClientId, range.start, range.end, comparisonMode);
-      writeCache(key, textBlock.text, { clientId: selectedClientId, reportType });
+      writeCache(key, rawHtml, { clientId: selectedClientId, reportType });
       setCachedInfo(null);
-      setReportHtml(textBlock.text);
+      setReportHtml(rawHtml);
+      setSlidesPrompt("");
       setJustFinished(true);
 
     } catch (e) {
@@ -655,6 +667,69 @@ ${JSON.stringify(klaviyoData)}`;
     setStatusMessage("");
   };
 
+  const handleCreateSlidesPrompt = async () => {
+    const anthropicKey = localStorage.getItem(ANTHROPIC_KEY);
+    if (!anthropicKey || !reportHtml) return;
+    setIsCreatingSlides(true);
+    setSlidesPrompt("");
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-api-key": anthropicKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 4000,
+          messages: [{
+            role: "user",
+            content: `You are converting an email marketing performance report into a structured presentation slide outline for a slide generation tool.
+
+PRESENTATION BEST PRACTICES:
+- One clear message per slide — never cram multiple ideas onto a single slide
+- Maximum 4 bullet points per slide; each bullet max 10 words
+- Hero metrics get their own slide with a big number and a single sentence of context
+- Charts: extract the underlying data (labels + values) as a compact data block that the slide tool can render as a chart
+- Executive summary → 2 slides max
+- Recommendations → 1 slide per recommendation (or group 2 short ones if very similar)
+- Opening slide: title, client name, period
+- Closing slide: single strong takeaway + next step
+
+FORMAT each slide exactly like this:
+---
+SLIDE [N]: [Slide Title]
+TYPE: [title | metric | chart | bullets | comparison | recommendation | closing]
+HEADLINE: [one punchy sentence — the single message of this slide]
+CONTENT:
+• [bullet or data line]
+• [bullet or data line]
+CHART DATA (only if TYPE is chart):
+Labels: [comma-separated]
+Series A "[label]": [comma-separated values]
+Series B "[label]": [comma-separated values — only if comparison data exists]
+SPEAKER NOTE: [one sentence of extra context for the presenter]
+---
+
+Now convert the following HTML report into slides. Extract all chart data from the JavaScript in the HTML. Do not invent numbers.
+
+${reportHtml}`,
+          }],
+        }),
+      });
+      const data = await res.json();
+      const text = data.content?.[0]?.text ?? "";
+      setSlidesPrompt(text);
+      setShowSlidesModal(true);
+    } catch (e) {
+      setError("Could not generate slides prompt: " + (e.message || "unknown error"));
+    } finally {
+      setIsCreatingSlides(false);
+    }
+  };
+
   useEffect(() => {
     if (iframeRef.current && reportHtml) {
       iframeRef.current.srcdoc = reportHtml;
@@ -681,7 +756,7 @@ ${JSON.stringify(klaviyoData)}`;
         height: "100vh",
         width: "100%",
         display: "flex",
-        fontFamily: "'Inter', -apple-system, sans-serif",
+        fontFamily: "'DM Sans', -apple-system, sans-serif",
         background: "#f8f6f2",
         color: "#0a0a0a",
         overflow: "hidden",
@@ -711,7 +786,7 @@ ${JSON.stringify(klaviyoData)}`;
             />
             <div
               style={{
-                fontFamily: "'Cormorant Garamond', serif",
+                fontFamily: "'Ovo', serif",
                 fontSize: "26px",
                 fontWeight: 400,
                 marginTop: "20px",
@@ -765,11 +840,11 @@ ${JSON.stringify(klaviyoData)}`;
 
         <Field label="Client">
           {clientsError ? (
-            <div style={{ fontSize: "11px", color: "#6b6b6b", fontStyle: "italic", fontFamily: "'Cormorant Garamond', serif" }}>
+            <div style={{ fontSize: "11px", color: "#6b6b6b", fontStyle: "italic", fontFamily: "'Ovo', serif" }}>
               {clientsError}
             </div>
           ) : clients.length === 0 ? (
-            <div style={{ fontSize: "11px", color: "#b8b8b8", fontStyle: "italic", fontFamily: "'Cormorant Garamond', serif" }}>
+            <div style={{ fontSize: "11px", color: "#b8b8b8", fontStyle: "italic", fontFamily: "'Ovo', serif" }}>
               No clients configured in worker yet.
             </div>
           ) : (
@@ -828,7 +903,7 @@ ${JSON.stringify(klaviyoData)}`;
             background: isGenerating ? "#6b6b6b" : "#0a0a0a",
             color: "#ffffff",
             border: "none",
-            fontFamily: "'Inter', sans-serif",
+            fontFamily: "'DM Sans', sans-serif",
             fontSize: "12px",
             fontWeight: 500,
             letterSpacing: "0.18em",
@@ -864,7 +939,7 @@ ${JSON.stringify(klaviyoData)}`;
                 fontSize: "10px",
                 color: "#6b6b6b",
                 fontStyle: "italic",
-                fontFamily: "'Cormorant Garamond', serif",
+                fontFamily: "'Ovo', serif",
                 lineHeight: 1.4,
                 minHeight: "14px",
               }}
@@ -878,7 +953,7 @@ ${JSON.stringify(klaviyoData)}`;
                 color: "#6b6b6b",
                 textTransform: "uppercase",
                 letterSpacing: "0.16em",
-                fontFamily: "'Inter', sans-serif",
+                fontFamily: "'DM Sans', sans-serif",
               }}
             >
               {elapsedSeconds < 60 ? `${elapsedSeconds}s elapsed` : `${Math.floor(elapsedSeconds / 60)}m ${elapsedSeconds % 60}s elapsed`}
@@ -893,7 +968,7 @@ ${JSON.stringify(klaviyoData)}`;
                 background: "transparent",
                 color: "#0a0a0a",
                 border: "1px solid #0a0a0a",
-                fontFamily: "'Inter', sans-serif",
+                fontFamily: "'DM Sans', sans-serif",
                 fontSize: "10px",
                 fontWeight: 500,
                 letterSpacing: "0.18em",
@@ -913,7 +988,7 @@ ${JSON.stringify(klaviyoData)}`;
                   fontSize: "11px",
                   lineHeight: 1.5,
                   color: "#2a2a2a",
-                  fontFamily: "'Cormorant Garamond', serif",
+                  fontFamily: "'Ovo', serif",
                   fontStyle: "italic",
                 }}
               >
@@ -924,25 +999,47 @@ ${JSON.stringify(klaviyoData)}`;
         )}
 
         {reportHtml && !isGenerating && (
-          <button
-            onClick={handleDownload}
-            style={{
-              width: "100%",
-              padding: "12px 20px",
-              background: "transparent",
-              color: "#0a0a0a",
-              border: "1px solid #0a0a0a",
-              fontFamily: "'Inter', sans-serif",
-              fontSize: "11px",
-              fontWeight: 500,
-              letterSpacing: "0.18em",
-              textTransform: "uppercase",
-              cursor: "pointer",
-              marginTop: "10px",
-            }}
-          >
-            Download HTML
-          </button>
+          <>
+            <button
+              onClick={handleDownload}
+              style={{
+                width: "100%",
+                padding: "12px 20px",
+                background: "transparent",
+                color: "#0a0a0a",
+                border: "1px solid #0a0a0a",
+                fontFamily: "'DM Sans', sans-serif",
+                fontSize: "11px",
+                fontWeight: 500,
+                letterSpacing: "0.18em",
+                textTransform: "uppercase",
+                cursor: "pointer",
+                marginTop: "10px",
+              }}
+            >
+              Download HTML
+            </button>
+            <button
+              onClick={handleCreateSlidesPrompt}
+              disabled={isCreatingSlides}
+              style={{
+                width: "100%",
+                padding: "12px 20px",
+                background: "transparent",
+                color: isCreatingSlides ? "#b8b8b8" : "#0a0a0a",
+                border: `1px solid ${isCreatingSlides ? "#ededed" : "#0a0a0a"}`,
+                fontFamily: "'DM Sans', sans-serif",
+                fontSize: "11px",
+                fontWeight: 500,
+                letterSpacing: "0.18em",
+                textTransform: "uppercase",
+                cursor: isCreatingSlides ? "wait" : "pointer",
+                marginTop: "6px",
+              }}
+            >
+              {isCreatingSlides ? "Building slides…" : "Create slides prompt"}
+            </button>
+          </>
         )}
 
         {lastUsage && !isGenerating && (
@@ -952,7 +1049,7 @@ ${JSON.stringify(klaviyoData)}`;
             borderTop: "0.5px solid #ededed",
             fontSize: "10px",
             color: "#6b6b6b",
-            fontFamily: "'Inter', sans-serif",
+            fontFamily: "'DM Sans', sans-serif",
             lineHeight: 1.8,
           }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
@@ -961,6 +1058,14 @@ ${JSON.stringify(klaviyoData)}`;
                 ${lastUsage.costUsd.toFixed(4)}
               </span>
             </div>
+            {lastDuration != null && (
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
+                <span style={{ letterSpacing: "0.10em", textTransform: "uppercase" }}>Time taken</span>
+                <span style={{ fontVariantNumeric: "tabular-nums" }}>
+                  {lastDuration < 60 ? `${lastDuration}s` : `${Math.floor(lastDuration / 60)}m ${lastDuration % 60}s`}
+                </span>
+              </div>
+            )}
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
               <span style={{ letterSpacing: "0.10em", textTransform: "uppercase" }}>Output tokens</span>
               <span style={{ fontVariantNumeric: "tabular-nums" }}>{lastUsage.outputTokens.toLocaleString()}</span>
@@ -1007,7 +1112,7 @@ ${JSON.stringify(klaviyoData)}`;
               color: "#6b6b6b",
               letterSpacing: "0.05em",
               fontStyle: "italic",
-              fontFamily: "'Cormorant Garamond', serif",
+              fontFamily: "'Ovo', serif",
             }}
           >
             {statusMessage}
@@ -1038,7 +1143,7 @@ ${JSON.stringify(klaviyoData)}`;
               border: "1px solid #ededed",
               fontSize: "11px",
               color: "#6b6b6b",
-              fontFamily: "'Inter', sans-serif",
+              fontFamily: "'DM Sans', sans-serif",
               flexShrink: 0,
             }}
           >
@@ -1055,7 +1160,7 @@ ${JSON.stringify(klaviyoData)}`;
                 background: "none",
                 border: "1px solid #b8b8b8",
                 padding: "4px 12px",
-                fontFamily: "'Inter', sans-serif",
+                fontFamily: "'DM Sans', sans-serif",
                 fontSize: "10px",
                 fontWeight: 500,
                 letterSpacing: "0.14em",
@@ -1101,6 +1206,111 @@ ${JSON.stringify(klaviyoData)}`;
           )}
         </div>
       </main>
+
+      {/* Slides prompt modal */}
+      {showSlidesModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(10,10,10,0.55)",
+            zIndex: 200,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "32px",
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowSlidesModal(false); }}
+        >
+          <div style={{
+            background: "#ffffff",
+            width: "min(760px, 100%)",
+            maxHeight: "80vh",
+            display: "flex",
+            flexDirection: "column",
+            border: "1px solid #e0e0da",
+          }}>
+            {/* Modal header */}
+            <div style={{
+              padding: "18px 24px",
+              borderBottom: "1px solid #ededed",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexShrink: 0,
+            }}>
+              <div>
+                <div style={{ fontFamily: "'Ovo', serif", fontSize: "22px", fontWeight: 400, color: "#0a0a0a" }}>
+                  Slides Prompt
+                </div>
+                <div style={{ fontSize: "11px", color: "#999", marginTop: "2px", letterSpacing: "0.06em" }}>
+                  Paste this into your slide generation tool
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(slidesPrompt).then(() => {
+                      setSlidesCopied(true);
+                      setTimeout(() => setSlidesCopied(false), 2000);
+                    });
+                  }}
+                  style={{
+                    padding: "8px 18px",
+                    background: slidesCopied ? "#2a2a2a" : "#0a0a0a",
+                    color: "#ffffff",
+                    border: "none",
+                    fontFamily: "'DM Sans', sans-serif",
+                    fontSize: "10px",
+                    fontWeight: 500,
+                    letterSpacing: "0.16em",
+                    textTransform: "uppercase",
+                    cursor: "pointer",
+                    transition: "background 0.2s",
+                  }}
+                >
+                  {slidesCopied ? "Copied" : "Copy"}
+                </button>
+                <button
+                  onClick={() => setShowSlidesModal(false)}
+                  style={{
+                    padding: "8px 14px",
+                    background: "transparent",
+                    color: "#6b6b6b",
+                    border: "1px solid #e0e0da",
+                    fontFamily: "'DM Sans', sans-serif",
+                    fontSize: "10px",
+                    fontWeight: 500,
+                    letterSpacing: "0.16em",
+                    textTransform: "uppercase",
+                    cursor: "pointer",
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+            {/* Modal body */}
+            <textarea
+              readOnly
+              value={slidesPrompt}
+              style={{
+                flex: 1,
+                padding: "20px 24px",
+                border: "none",
+                outline: "none",
+                resize: "none",
+                fontFamily: "'DM Sans', monospace, sans-serif",
+                fontSize: "12px",
+                lineHeight: 1.7,
+                color: "#1a1a1a",
+                background: "#fafaf8",
+                overflowY: "auto",
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1111,7 +1321,7 @@ const inputStyle = {
   border: "1px solid #b8b8b8",
   background: "#ffffff",
   fontSize: "13px",
-  fontFamily: "'Inter', sans-serif",
+  fontFamily: "'DM Sans', sans-serif",
   color: "#0a0a0a",
   outline: "none",
   boxSizing: "border-box",
@@ -1148,7 +1358,7 @@ function SegmentButton({ active, onClick, children, fullWidth }) {
         color: active ? "#ffffff" : "#2a2a2a",
         border: `1px solid ${active ? "#0a0a0a" : "#b8b8b8"}`,
         fontSize: "11px",
-        fontFamily: "'Inter', sans-serif",
+        fontFamily: "'DM Sans', sans-serif",
         fontWeight: 500,
         letterSpacing: "0.06em",
         cursor: "pointer",
@@ -1183,7 +1393,7 @@ function EmptyState() {
       />
       <div
         style={{
-          fontFamily: "'Cormorant Garamond', serif",
+          fontFamily: "'Ovo', serif",
           fontSize: "44px",
           fontWeight: 300,
           color: "#0a0a0a",
@@ -1254,7 +1464,7 @@ function MiniChart({ index }) {
         <circle cx={cx} cy={cy} r={r} fill="none" stroke="#0a0a0a" strokeWidth="3" strokeDasharray={`0 ${circumference}`} transform={`rotate(-90 ${cx} ${cy})`}>
           <animate attributeName="stroke-dasharray" from={`0 ${circumference}`} to={`${filled} ${circumference}`} dur="1.1s" begin="0.2s" fill="freeze" />
         </circle>
-        <text x={cx} y={cy + 3} textAnchor="middle" fontFamily="'Cormorant Garamond', serif" fontSize="9" fontWeight="400" fill="#0a0a0a" opacity="0">
+        <text x={cx} y={cy + 3} textAnchor="middle" fontFamily="'Ovo', serif" fontSize="9" fontWeight="400" fill="#0a0a0a" opacity="0">
           <animate attributeName="opacity" from="0" to="1" dur="0.3s" begin="1.3s" fill="freeze" />
           68%
         </text>
@@ -1371,7 +1581,7 @@ function LoadingState({ progress, line, elapsed, justFinished, onDismissCompleti
         </svg>
       </div>
 
-      <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "32px", fontWeight: 300, color: "#0a0a0a", fontStyle: "italic", marginBottom: "8px", zIndex: 2 }}>
+      <div style={{ fontFamily: "'Ovo', serif", fontSize: "32px", fontWeight: 300, color: "#0a0a0a", fontStyle: "italic", marginBottom: "8px", zIndex: 2 }}>
         Composing your report
       </div>
 
@@ -1397,7 +1607,7 @@ function LoadingState({ progress, line, elapsed, justFinished, onDismissCompleti
             display: "flex",
             justifyContent: "space-between",
             alignItems: "baseline",
-            fontFamily: "'Inter', sans-serif",
+            fontFamily: "'DM Sans', sans-serif",
             fontSize: "10px",
             textTransform: "uppercase",
             letterSpacing: "0.18em",
@@ -1405,7 +1615,7 @@ function LoadingState({ progress, line, elapsed, justFinished, onDismissCompleti
           }}
         >
           <span>Progress · {formatTime(elapsed)} elapsed</span>
-          <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "22px", fontWeight: 300, color: "#0a0a0a", letterSpacing: "0", fontVariantNumeric: "tabular-nums" }}>
+          <span style={{ fontFamily: "'Ovo', serif", fontSize: "22px", fontWeight: 300, color: "#0a0a0a", letterSpacing: "0", fontVariantNumeric: "tabular-nums" }}>
             {pct}<span style={{ fontSize: "12px", color: "#6b6b6b", marginLeft: "2px" }}>%</span>
           </span>
         </div>
@@ -1443,7 +1653,7 @@ function LoadingState({ progress, line, elapsed, justFinished, onDismissCompleti
               fontSize: "12px",
               color: "#6b6b6b",
               fontStyle: "italic",
-              fontFamily: "'Cormorant Garamond', serif",
+              fontFamily: "'Ovo', serif",
               lineHeight: 1.5,
               animation: "fadeLine 0.6s ease-out",
             }}
@@ -1519,7 +1729,7 @@ function CompletionOverlay({ onDismiss, onNewReport, lastUsage }) {
 
       {/* Title */}
       <div style={{
-        fontFamily: "'Cormorant Garamond', serif",
+        fontFamily: "'Ovo', serif",
         fontSize: "52px",
         fontWeight: 300,
         color: "#0a0a0a",
@@ -1571,7 +1781,7 @@ function CompletionOverlay({ onDismiss, onNewReport, lastUsage }) {
             background: "#0a0a0a",
             color: "#ffffff",
             border: "1px solid #0a0a0a",
-            fontFamily: "'Inter', sans-serif",
+            fontFamily: "'DM Sans', sans-serif",
             fontSize: "11px",
             fontWeight: 500,
             letterSpacing: "0.18em",
@@ -1591,7 +1801,7 @@ function CompletionOverlay({ onDismiss, onNewReport, lastUsage }) {
             background: "transparent",
             color: "#0a0a0a",
             border: "1px solid #0a0a0a",
-            fontFamily: "'Inter', sans-serif",
+            fontFamily: "'DM Sans', sans-serif",
             fontSize: "11px",
             fontWeight: 500,
             letterSpacing: "0.18em",
@@ -1664,7 +1874,7 @@ function FloatingNumerals() {
             position: "absolute",
             left: n.left,
             bottom: "-40px",
-            fontFamily: "'Cormorant Garamond', serif",
+            fontFamily: "'Ovo', serif",
             fontSize: `${n.size}px`,
             fontWeight: 300,
             color: "#0a0a0a",
