@@ -47,6 +47,11 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion }
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [justFinished, setJustFinished] = useState(false);
   const [lastUsage, setLastUsage] = useState(null);
+  const [lastDuration, setLastDuration] = useState(null);
+  const [slidesPrompt, setSlidesPrompt] = useState("");
+  const [isCreatingSlides, setIsCreatingSlides] = useState(false);
+  const [showSlidesModal, setShowSlidesModal] = useState(false);
+  const [slidesCopied, setSlidesCopied] = useState(false);
   const iframeRef = useRef(null);
   const progressTimerRef = useRef(null);
   const lineTimerRef = useRef(null);
@@ -531,10 +536,12 @@ ${JSON.stringify(klaviyoData)}`;
       clearTimers();
       setProgress(100);
       setLoadingLine("Ready");
+      setLastDuration(Math.round((Date.now() - startedAt) / 1000));
       const key = cacheKey(selectedClientId, range.start, range.end, comparisonMode);
       writeCache(key, rawHtml, { clientId: selectedClientId, reportType });
       setCachedInfo(null);
       setReportHtml(rawHtml);
+      setSlidesPrompt("");
       setJustFinished(true);
 
     } catch (e) {
@@ -658,6 +665,69 @@ ${JSON.stringify(klaviyoData)}`;
     setJustFinished(false);
     setError("Request cancelled.");
     setStatusMessage("");
+  };
+
+  const handleCreateSlidesPrompt = async () => {
+    const anthropicKey = localStorage.getItem(ANTHROPIC_KEY);
+    if (!anthropicKey || !reportHtml) return;
+    setIsCreatingSlides(true);
+    setSlidesPrompt("");
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "x-api-key": anthropicKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 4000,
+          messages: [{
+            role: "user",
+            content: `You are converting an email marketing performance report into a structured presentation slide outline for a slide generation tool.
+
+PRESENTATION BEST PRACTICES:
+- One clear message per slide — never cram multiple ideas onto a single slide
+- Maximum 4 bullet points per slide; each bullet max 10 words
+- Hero metrics get their own slide with a big number and a single sentence of context
+- Charts: extract the underlying data (labels + values) as a compact data block that the slide tool can render as a chart
+- Executive summary → 2 slides max
+- Recommendations → 1 slide per recommendation (or group 2 short ones if very similar)
+- Opening slide: title, client name, period
+- Closing slide: single strong takeaway + next step
+
+FORMAT each slide exactly like this:
+---
+SLIDE [N]: [Slide Title]
+TYPE: [title | metric | chart | bullets | comparison | recommendation | closing]
+HEADLINE: [one punchy sentence — the single message of this slide]
+CONTENT:
+• [bullet or data line]
+• [bullet or data line]
+CHART DATA (only if TYPE is chart):
+Labels: [comma-separated]
+Series A "[label]": [comma-separated values]
+Series B "[label]": [comma-separated values — only if comparison data exists]
+SPEAKER NOTE: [one sentence of extra context for the presenter]
+---
+
+Now convert the following HTML report into slides. Extract all chart data from the JavaScript in the HTML. Do not invent numbers.
+
+${reportHtml}`,
+          }],
+        }),
+      });
+      const data = await res.json();
+      const text = data.content?.[0]?.text ?? "";
+      setSlidesPrompt(text);
+      setShowSlidesModal(true);
+    } catch (e) {
+      setError("Could not generate slides prompt: " + (e.message || "unknown error"));
+    } finally {
+      setIsCreatingSlides(false);
+    }
   };
 
   useEffect(() => {
@@ -929,25 +999,47 @@ ${JSON.stringify(klaviyoData)}`;
         )}
 
         {reportHtml && !isGenerating && (
-          <button
-            onClick={handleDownload}
-            style={{
-              width: "100%",
-              padding: "12px 20px",
-              background: "transparent",
-              color: "#0a0a0a",
-              border: "1px solid #0a0a0a",
-              fontFamily: "'Inter', sans-serif",
-              fontSize: "11px",
-              fontWeight: 500,
-              letterSpacing: "0.18em",
-              textTransform: "uppercase",
-              cursor: "pointer",
-              marginTop: "10px",
-            }}
-          >
-            Download HTML
-          </button>
+          <>
+            <button
+              onClick={handleDownload}
+              style={{
+                width: "100%",
+                padding: "12px 20px",
+                background: "transparent",
+                color: "#0a0a0a",
+                border: "1px solid #0a0a0a",
+                fontFamily: "'Inter', sans-serif",
+                fontSize: "11px",
+                fontWeight: 500,
+                letterSpacing: "0.18em",
+                textTransform: "uppercase",
+                cursor: "pointer",
+                marginTop: "10px",
+              }}
+            >
+              Download HTML
+            </button>
+            <button
+              onClick={handleCreateSlidesPrompt}
+              disabled={isCreatingSlides}
+              style={{
+                width: "100%",
+                padding: "12px 20px",
+                background: "transparent",
+                color: isCreatingSlides ? "#b8b8b8" : "#0a0a0a",
+                border: `1px solid ${isCreatingSlides ? "#ededed" : "#0a0a0a"}`,
+                fontFamily: "'Inter', sans-serif",
+                fontSize: "11px",
+                fontWeight: 500,
+                letterSpacing: "0.18em",
+                textTransform: "uppercase",
+                cursor: isCreatingSlides ? "wait" : "pointer",
+                marginTop: "6px",
+              }}
+            >
+              {isCreatingSlides ? "Building slides…" : "Create slides prompt"}
+            </button>
+          </>
         )}
 
         {lastUsage && !isGenerating && (
@@ -966,6 +1058,14 @@ ${JSON.stringify(klaviyoData)}`;
                 ${lastUsage.costUsd.toFixed(4)}
               </span>
             </div>
+            {lastDuration != null && (
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
+                <span style={{ letterSpacing: "0.10em", textTransform: "uppercase" }}>Time taken</span>
+                <span style={{ fontVariantNumeric: "tabular-nums" }}>
+                  {lastDuration < 60 ? `${lastDuration}s` : `${Math.floor(lastDuration / 60)}m ${lastDuration % 60}s`}
+                </span>
+              </div>
+            )}
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
               <span style={{ letterSpacing: "0.10em", textTransform: "uppercase" }}>Output tokens</span>
               <span style={{ fontVariantNumeric: "tabular-nums" }}>{lastUsage.outputTokens.toLocaleString()}</span>
@@ -1106,6 +1206,111 @@ ${JSON.stringify(klaviyoData)}`;
           )}
         </div>
       </main>
+
+      {/* Slides prompt modal */}
+      {showSlidesModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(10,10,10,0.55)",
+            zIndex: 200,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "32px",
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowSlidesModal(false); }}
+        >
+          <div style={{
+            background: "#ffffff",
+            width: "min(760px, 100%)",
+            maxHeight: "80vh",
+            display: "flex",
+            flexDirection: "column",
+            border: "1px solid #e0e0da",
+          }}>
+            {/* Modal header */}
+            <div style={{
+              padding: "18px 24px",
+              borderBottom: "1px solid #ededed",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexShrink: 0,
+            }}>
+              <div>
+                <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "22px", fontWeight: 400, color: "#0a0a0a" }}>
+                  Slides Prompt
+                </div>
+                <div style={{ fontSize: "11px", color: "#999", marginTop: "2px", letterSpacing: "0.06em" }}>
+                  Paste this into your slide generation tool
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(slidesPrompt).then(() => {
+                      setSlidesCopied(true);
+                      setTimeout(() => setSlidesCopied(false), 2000);
+                    });
+                  }}
+                  style={{
+                    padding: "8px 18px",
+                    background: slidesCopied ? "#2a2a2a" : "#0a0a0a",
+                    color: "#ffffff",
+                    border: "none",
+                    fontFamily: "'Inter', sans-serif",
+                    fontSize: "10px",
+                    fontWeight: 500,
+                    letterSpacing: "0.16em",
+                    textTransform: "uppercase",
+                    cursor: "pointer",
+                    transition: "background 0.2s",
+                  }}
+                >
+                  {slidesCopied ? "Copied" : "Copy"}
+                </button>
+                <button
+                  onClick={() => setShowSlidesModal(false)}
+                  style={{
+                    padding: "8px 14px",
+                    background: "transparent",
+                    color: "#6b6b6b",
+                    border: "1px solid #e0e0da",
+                    fontFamily: "'Inter', sans-serif",
+                    fontSize: "10px",
+                    fontWeight: 500,
+                    letterSpacing: "0.16em",
+                    textTransform: "uppercase",
+                    cursor: "pointer",
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+            {/* Modal body */}
+            <textarea
+              readOnly
+              value={slidesPrompt}
+              style={{
+                flex: 1,
+                padding: "20px 24px",
+                border: "none",
+                outline: "none",
+                resize: "none",
+                fontFamily: "'Inter', monospace, sans-serif",
+                fontSize: "12px",
+                lineHeight: 1.7,
+                color: "#1a1a1a",
+                background: "#fafaf8",
+                overflowY: "auto",
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
