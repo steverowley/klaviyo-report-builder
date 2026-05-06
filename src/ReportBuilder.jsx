@@ -519,10 +519,13 @@ ${JSON.stringify(klaviyoData)}`;
         throw new Error("The model returned no report content. The prompt may have exceeded the context limit — try a shorter date range.");
       }
 
-      let rawHtml = textBlock.text.trim();
-      if (rawHtml.startsWith("```")) {
-        rawHtml = rawHtml.replace(/^```[^\n]*\n?/, "").replace(/\n?```\s*$/, "");
-      }
+      let rawHtml = textBlock.text;
+      // Extract the HTML document — discard any preamble/reasoning text and trailing content
+      const htmlStart = rawHtml.search(/<!DOCTYPE\s+html/i);
+      if (htmlStart > 0) rawHtml = rawHtml.slice(htmlStart);
+      const htmlEnd = rawHtml.search(/<\/html\s*>/i);
+      if (htmlEnd > 0) rawHtml = rawHtml.slice(0, htmlEnd + "</html>".length);
+      rawHtml = rawHtml.trim();
 
       const u = data.usage || {};
       const costUsd =
