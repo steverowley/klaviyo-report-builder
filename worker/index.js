@@ -331,6 +331,12 @@ export default {
           orderAggError:      orderAgg?._error ?? null,
           subscriberAggError: subscriberAgg?._error ?? null,
           unsubAggError:      unsubAgg?._error ?? null,
+          // Temporary debug — remove once structure confirmed
+          flowNameSample:     Object.entries(flowNames).slice(0, 6),
+          orderAggAttrsKeys:  orderAgg && !orderAgg._error ? Object.keys(orderAgg?.data?.attributes ?? {}) : null,
+          orderAggAttrsSample: orderAgg && !orderAgg._error
+            ? JSON.stringify(orderAgg?.data?.attributes).slice(0, 400)
+            : null,
         },
       }), {
         headers: { 'Content-Type': 'application/json', ...cors(origin) },
