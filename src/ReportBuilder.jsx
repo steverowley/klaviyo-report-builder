@@ -50,8 +50,13 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion }
   const [lastDuration, setLastDuration] = useState(null);
   const [slidesPrompt, setSlidesPrompt] = useState("");
   const [isCreatingSlides, setIsCreatingSlides] = useState(false);
+  const [slidesProgress, setSlidesProgress] = useState(0);
   const [showSlidesModal, setShowSlidesModal] = useState(false);
   const [slidesCopied, setSlidesCopied] = useState(false);
+  const [regenSid, setRegenSid] = useState(null);
+  const [regenProgress, setRegenProgress] = useState(0);
+  const slidesProgressTimerRef = useRef(null);
+  const regenProgressTimerRef = useRef(null);
   const iframeRef = useRef(null);
   const progressTimerRef = useRef(null);
   const lineTimerRef = useRef(null);
@@ -580,9 +585,19 @@ ${JSON.stringify(klaviyoData)}`;
   useEffect(() => {
     const handler = async (event) => {
       if (event.data?.type !== 'regenerate-step') return;
-      const { sid, title, desc } = event.data;
+      const { sid } = event.data;
       const anthropicKey = localStorage.getItem(ANTHROPIC_KEY);
       if (!anthropicKey || !iframeRef.current) return;
+
+      setRegenSid(sid);
+      setRegenProgress(0);
+      const regenStartedAt = Date.now();
+      const expectedRegenMs = 8000;
+      regenProgressTimerRef.current = setInterval(() => {
+        const t = Math.min((Date.now() - regenStartedAt) / expectedRegenMs, 1);
+        setRegenProgress(Math.min(90, (1 - Math.pow(1 - t, 2)) * 90));
+      }, 80);
+
       try {
         const res = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
@@ -597,19 +612,25 @@ ${JSON.stringify(klaviyoData)}`;
             max_tokens: 300,
             messages: [{
               role: 'user',
-              content: `You are improving a set of email marketing growth recommendations. Here are all the current recommendations:\n${event.data.allSteps?.map((s,i)=>`${i+1}. ${s}`).join('\n')}\n\nRecommendation #${index+1} is being replaced. Generate the single best NEW recommendation that would be most impactful for this account AND does not duplicate any of the others. Be specific and actionable. Reply with ONLY valid JSON: {"title":"...","desc":"..."}`,
+              content: `You are improving a set of email marketing growth recommendations. Here are all the current recommendations:\n${event.data.allSteps?.map((s,i)=>`${i+1}. ${s}`).join('\n')}\n\nOne recommendation is being replaced. Generate the single best NEW recommendation that would be most impactful for this account AND does not duplicate any of the others. Be specific and actionable. Reply with ONLY valid JSON: {"title":"...","desc":"..."}`,
             }],
           }),
         });
         const data = await res.json();
         const parsed = JSON.parse(data.content?.[0]?.text ?? '{}');
+        clearInterval(regenProgressTimerRef.current);
+        setRegenProgress(100);
         if (parsed.title && parsed.desc) {
           iframeRef.current.contentWindow?.postMessage(
             { type: 'step-regenerated', sid, title: parsed.title, desc: parsed.desc },
             '*'
           );
         }
-      } catch {}
+      } catch {
+        clearInterval(regenProgressTimerRef.current);
+      } finally {
+        setTimeout(() => { setRegenSid(null); setRegenProgress(0); }, 600);
+      }
     };
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
@@ -671,7 +692,15 @@ ${JSON.stringify(klaviyoData)}`;
     const anthropicKey = localStorage.getItem(ANTHROPIC_KEY);
     if (!anthropicKey || !reportHtml) return;
     setIsCreatingSlides(true);
+    setSlidesProgress(0);
     setSlidesPrompt("");
+    const slidesStartedAt = Date.now();
+    const expectedSlidesMs = 18000;
+    slidesProgressTimerRef.current = setInterval(() => {
+      const t = Math.min((Date.now() - slidesStartedAt) / expectedSlidesMs, 1);
+      const eased = 1 - Math.pow(1 - t, 2);
+      setSlidesProgress(Math.min(92, eased * 92));
+    }, 100);
     try {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -721,9 +750,12 @@ ${reportHtml}`,
       });
       const data = await res.json();
       const text = data.content?.[0]?.text ?? "";
+      clearInterval(slidesProgressTimerRef.current);
+      setSlidesProgress(100);
       setSlidesPrompt(text);
       setShowSlidesModal(true);
     } catch (e) {
+      clearInterval(slidesProgressTimerRef.current);
       setError("Could not generate slides prompt: " + (e.message || "unknown error"));
     } finally {
       setIsCreatingSlides(false);
@@ -1039,6 +1071,24 @@ ${reportHtml}`,
             >
               {isCreatingSlides ? "Building slides…" : "Create slides prompt"}
             </button>
+            {isCreatingSlides && (
+              <div style={{ marginTop: "8px" }}>
+                <div style={{ width: "100%", height: "1px", background: "#ededed", position: "relative", overflow: "hidden" }}>
+                  <div style={{
+                    position: "absolute", top: 0, left: 0, height: "100%",
+                    width: `${slidesProgress}%`,
+                    background: "#0a0a0a",
+                    transition: "width 0.3s cubic-bezier(0.4,0,0.2,1)",
+                  }} />
+                </div>
+                <div style={{
+                  marginTop: "6px", fontSize: "10px", color: "#6b6b6b",
+                  fontStyle: "italic", fontFamily: "'Ovo', serif",
+                }}>
+                  Structuring slides…
+                </div>
+              </div>
+            )}
           </>
         )}
 
@@ -1174,6 +1224,32 @@ ${reportHtml}`,
           </div>
         )}
 
+        {regenSid && (
+          <div style={{
+            padding: "8px 14px",
+            marginBottom: "8px",
+            background: "#ffffff",
+            border: "1px solid #ededed",
+            fontSize: "11px",
+            color: "#6b6b6b",
+            fontFamily: "'DM Sans', sans-serif",
+            flexShrink: 0,
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+              <span style={{ fontStyle: "italic", fontFamily: "'Ovo', serif" }}>Regenerating recommendation…</span>
+              <span style={{ fontVariantNumeric: "tabular-nums", fontSize: "10px" }}>{Math.round(regenProgress)}%</span>
+            </div>
+            <div style={{ width: "100%", height: "1px", background: "#ededed", position: "relative", overflow: "hidden" }}>
+              <div style={{
+                position: "absolute", top: 0, left: 0, height: "100%",
+                width: `${regenProgress}%`,
+                background: "#0a0a0a",
+                transition: "width 0.25s cubic-bezier(0.4,0,0.2,1)",
+              }} />
+            </div>
+          </div>
+        )}
+
         <div
           style={{
             flex: 1,
@@ -1225,7 +1301,7 @@ ${reportHtml}`,
           <div style={{
             background: "#ffffff",
             width: "min(760px, 100%)",
-            maxHeight: "80vh",
+            height: "min(880px, 90vh)",
             display: "flex",
             flexDirection: "column",
             border: "1px solid #e0e0da",
