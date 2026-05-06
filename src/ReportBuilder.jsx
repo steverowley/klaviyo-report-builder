@@ -164,6 +164,7 @@ Meta bar: border-top:0.5px solid #e0e0da padding-top:10px flex space-between —
 
 **3. PERIOD SNAPSHOT**
 <h2>Period Snapshot</h2>
+
 4-col grid gap:12px margin-bottom:32px. Each card: background:#f7f6f3; border-radius:3px; padding:16px 18px; border-left:2px solid #0a0a0a.
   Label: Inter 10px weight 500 letter-spacing:0.08em uppercase #999 margin-bottom:8px
   Value: Cormorant Garamond 26px weight 400 #0a0a0a line-height:1
@@ -175,7 +176,7 @@ Cards:
   NEW SUBSCRIBERS — sum(aggregates.subscribers.counts) or "—"
   TOTAL ORDERS — sum(aggregates.orders.counts) or "—". Delta vs comparison: if comparison.aggregates?.orders non-null, show ↑/↓ Δ orders
 
-**3. LIST GROWTH** (skip if aggregates.subscribers is null)
+**4. LIST GROWTH** (skip if aggregates.subscribers is null)
 <h2>List Growth</h2>
 Sub-label "New Subscribers Per Day" Inter 10px weight 500 uppercase #999 margin-bottom:8px.
 Load Chart.js: <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -194,13 +195,13 @@ In DOMContentLoaded script, create bar chart:
   NET GROWTH — (period_subs − period_unsubs); prefix "+" if positive
     Delta: if comparison available: Δ = period_net − comp_net; show with arrow
 
-**4. ORDER VOLUME** (skip if aggregates.orders is null)
+**5. ORDER VOLUME** (skip if aggregates.orders is null)
 <h2>Order Volume</h2>
 Sub-label "Orders Per Day". Container height:180px. <canvas id="orderChart"></canvas>
 Line chart: { data: aggregates.orders.counts, borderColor:'#555', backgroundColor:'rgba(80,80,80,0.08)', fill:true, tension:0.4, pointRadius:3, pointBackgroundColor:'#555', pointBorderColor:'#fff', pointBorderWidth:1.5 }
 Same scale options as bar chart.
 
-**5. CAMPAIGN PERFORMANCE**
+**6. CAMPAIGN PERFORMANCE**
 <h2>Campaign Performance</h2>
 period.campaigns is a pre-normalised flat array: [{campaign_name, send_channel, recipients, delivered, open_rate, click_rate, conversions, conversion_rate, conversion_value}]. Empty array = no campaigns.
 If empty: dashed placeholder div (border:0.5px dashed #e0e0da; border-radius:3px; padding:20px; text-align:center; color:#999; font-size:13px; font-style:italic) — "No campaigns sent in this period."
@@ -210,7 +211,7 @@ If rows exist: table (CSS below). Columns: CAMPAIGN | SENT | DELIVERED | OPEN RA
   Revenue: £X,XXX.XX (or "—" if zero)
   tfoot "Totals / Weighted Avg" — weighted averages
 
-**6. FLOW PERFORMANCE**
+**7. FLOW PERFORMANCE**
 <h2>Flow Performance</h2>
 period.flows is pre-aggregated per flow: [{name, trigger, recipients, delivered, open_rate, click_rate, ctor, conversion_rate, conversion_value, rpr}]
 Table (same CSS). Columns: FLOW | RECIPIENTS | DELIVERED | OPEN | CLICK | CTOR | CVR | REVENUE | RPR
@@ -229,15 +230,15 @@ tfoot td{padding:10px;font-size:11px;font-weight:600;background:#f7f6f3;border-t
 tfoot td:first-child{text-align:left}
 Revenue cells: font-family:'Cormorant Garamond',serif;font-size:14px;font-weight:600
 
-**7. KEY INSIGHTS**
+**8. KEY INSIGHTS**
 <h2>Key Insights</h2>
 4–5 paragraphs as plain <p> tags (font-size:13px;line-height:1.9;color:#1a1a1a;margin:0 0 14px). No wrapper div, no background, no inline colours. Bold key figures with <strong style="font-weight:600">. NO bullets, NO icons, NO emojis.
 
-**8. COMPARISON ANALYSIS** (omit if no comparison data)
+**9. COMPARISON ANALYSIS** (omit if no comparison data)
 <h2>Comparison Analysis</h2>
 Same: plain <p> tags only. 4–5 sentences. What changed, why, what to watch.
 
-**9. NEXT STEPS FOR GROWTH**
+**10. NEXT STEPS FOR GROWTH**
 <h2>Next Steps for Growth</h2>
 4–6 .step items: display:flex;gap:14px;padding:16px 0;border-bottom:0.5px solid #f0f0ec. Last: no border.
   .num: width:28px;height:28px;border-radius:50%;background:#0a0a0a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex-shrink:0;margin-top:2px
@@ -248,7 +249,7 @@ Same: plain <p> tags only. 4–5 sentences. What changed, why, what to watch.
   Priority format: "High priority — [Area]" / "Medium priority — [Area]" / "Low priority — [Area]"
   Each step: 2–4 .tag pills with specific supporting metrics.
 
-**10. FOOTER**
+**11. FOOTER**
 background:#0a0a0a;color:#555;padding:18px 48px;display:flex;justify-content:space-between;font-size:11px;margin:48px -48px -40px
 Left: "Prepared by Swanky Agency for ${accountName}"
 Right: "[start D MMM YYYY] to [end D MMM YYYY]"

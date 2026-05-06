@@ -8,9 +8,10 @@ export default function App() {
     const wu = localStorage.getItem("swanky_worker_url");
     return !ak || !wu;
   });
+
   const [settingsVersion, setSettingsVersion] = useState(0);
 
-  const handleSettingsSave = () => {
+  const handleSettingsSaved = () => {
     setShowSettings(false);
     setSettingsVersion(v => v + 1);
   };
@@ -23,7 +24,7 @@ export default function App() {
       />
       {showSettings && (
         <div style={{ position: "fixed", inset: 0, zIndex: 1000 }}>
-          <Settings onSave={handleSettingsSave} />
+          <Settings onSave={handleSettingsSaved} />
         </div>
       )}
     </>
