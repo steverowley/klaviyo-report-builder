@@ -1024,7 +1024,7 @@ ${reportHtml}`,
                   fontStyle: "italic",
                 }}
               >
-                This is taking longer than expected. The Klaviyo MCP may not be authenticated, or the request may have stalled. Consider cancelling and checking your Klaviyo key in Settings.
+                This is taking longer than expected. The request may have stalled — consider cancelling and trying again. If it keeps happening, check your Worker URL in Settings or verify the client's Klaviyo key is configured correctly in your Cloudflare Worker.
               </div>
             )}
           </div>
