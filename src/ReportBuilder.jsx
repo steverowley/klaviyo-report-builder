@@ -5,6 +5,16 @@ const WORKER_URL = "swanky_worker_url";
 const REPORT_CACHE_KEY = "swanky_report_cache";
 const MAX_CACHE = 20;
 
+function writeSlidesCache(key, slidesPrompt) {
+  try {
+    const store = JSON.parse(localStorage.getItem(REPORT_CACHE_KEY) || "{}");
+    if (store[key]) {
+      store[key].slidesPrompt = slidesPrompt;
+      localStorage.setItem(REPORT_CACHE_KEY, JSON.stringify(store));
+    }
+  } catch {}
+}
+
 function cacheKey(clientId, start, end, comparisonMode) {
   return `${clientId}|${start}|${end}|${comparisonMode}`;
 }
@@ -54,6 +64,8 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion }
   const [showSlidesModal, setShowSlidesModal] = useState(false);
   const [slidesCopied, setSlidesCopied] = useState(false);
   const [regenSid, setRegenSid] = useState(null);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
   const [regenProgress, setRegenProgress] = useState(0);
   const slidesProgressTimerRef = useRef(null);
   const regenProgressTimerRef = useRef(null);
@@ -684,9 +696,11 @@ ${JSON.stringify(klaviyoData)}`;
     const cached = readCache(key);
     if (cached) {
       setReportHtml(cached.html);
+      setSlidesPrompt(cached.slidesPrompt || "");
       setCachedInfo({ generatedAt: cached.generatedAt, key });
     } else {
       setReportHtml("");
+      setSlidesPrompt("");
       setCachedInfo(null);
     }
   }, [selectedClientId, reportType, comparisonMode, customStart, customEnd]);
@@ -776,6 +790,10 @@ ${reportHtml}`,
       setSlidesProgress(100);
       setSlidesPrompt(text);
       setShowSlidesModal(true);
+      // Persist alongside the report in cache
+      const range = computeDateRange();
+      const ck = cacheKey(selectedClientId, range.start, range.end, comparisonMode);
+      writeSlidesCache(ck, text);
     } catch (e) {
       clearInterval(slidesProgressTimerRef.current);
       setError("Could not generate slides prompt: " + (e.message || "unknown error"));
@@ -795,6 +813,17 @@ ${reportHtml}`,
     );
     iframeRef.current.srcdoc = injected;
   }, [reportHtml]);
+
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    const onDown = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [dropdownOpen]);
 
   const handleDownload = () => {
     if (!reportHtml) return;
@@ -908,16 +937,70 @@ ${reportHtml}`,
               No clients configured in worker yet.
             </div>
           ) : (
-            <select
-              value={selectedClientId}
-              onChange={e => setSelectedClientId(e.target.value)}
-              style={{ ...inputStyle, appearance: "none", backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b6b6b'/%3E%3C/svg%3E")`, backgroundRepeat: "no-repeat", backgroundPosition: "right 12px center", paddingRight: "32px", cursor: "pointer" }}
-            >
-              {clients.length > 1 && <option value="">— select client —</option>}
-              {clients.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+            <div ref={dropdownRef} style={{ position: "relative" }}>
+              <button
+                onClick={() => setDropdownOpen(o => !o)}
+                style={{
+                  ...inputStyle,
+                  width: "100%",
+                  textAlign: "left",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  background: "#fff",
+                }}
+              >
+                <span style={{ color: selectedClientId ? "#0a0a0a" : "#b8b8b8" }}>
+                  {selectedClientId ? (clients.find(c => c.id === selectedClientId)?.name ?? "—") : "— select client —"}
+                </span>
+                <svg width="10" height="6" viewBox="0 0 10 6" fill="none" style={{ flexShrink: 0, transform: dropdownOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s ease" }}>
+                  <path d="M0 0l5 6 5-6z" fill="#6b6b6b" />
+                </svg>
+              </button>
+              {dropdownOpen && (
+                <div style={{
+                  position: "absolute",
+                  top: "calc(100% + 2px)",
+                  left: 0,
+                  right: 0,
+                  background: "#fff",
+                  border: "1px solid #ededed",
+                  zIndex: 200,
+                  maxHeight: "220px",
+                  overflowY: "auto",
+                }}>
+                  {clients.length > 1 && (
+                    <button
+                      onClick={() => { setSelectedClientId(""); setDropdownOpen(false); }}
+                      style={{
+                        display: "block", width: "100%", textAlign: "left",
+                        padding: "9px 12px", background: selectedClientId === "" ? "#f8f6f2" : "transparent",
+                        border: "none", borderBottom: "1px solid #f4f4f4",
+                        fontFamily: "'DM Sans', sans-serif", fontSize: "12px",
+                        color: "#b8b8b8", fontWeight: 400,
+                      }}
+                    >
+                      — select client —
+                    </button>
+                  )}
+                  {clients.map(c => (
+                    <button
+                      key={c.id}
+                      onClick={() => { setSelectedClientId(c.id); setDropdownOpen(false); }}
+                      style={{
+                        display: "block", width: "100%", textAlign: "left",
+                        padding: "9px 12px", background: selectedClientId === c.id ? "#f8f6f2" : "transparent",
+                        border: "none", borderBottom: "1px solid #f4f4f4",
+                        fontFamily: "'DM Sans', sans-serif", fontSize: "12px",
+                        color: "#0a0a0a", fontWeight: selectedClientId === c.id ? 500 : 400,
+                      }}
+                    >
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </Field>
 
