@@ -46,6 +46,7 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion }
   const [loadingLine, setLoadingLine] = useState("");
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [justFinished, setJustFinished] = useState(false);
+  const [lastUsage, setLastUsage] = useState(null);
   const iframeRef = useRef(null);
   const progressTimerRef = useRef(null);
   const lineTimerRef = useRef(null);
@@ -508,6 +509,20 @@ ${JSON.stringify(klaviyoData)}`;
         throw new Error("The model returned no report content. The prompt may have exceeded the context limit — try a shorter date range.");
       }
 
+      const u = data.usage || {};
+      const costUsd =
+        (u.input_tokens || 0) * 3 / 1_000_000 +
+        (u.cache_creation_input_tokens || 0) * 3.75 / 1_000_000 +
+        (u.cache_read_input_tokens || 0) * 0.30 / 1_000_000 +
+        (u.output_tokens || 0) * 15 / 1_000_000;
+      setLastUsage({
+        inputTokens: u.input_tokens || 0,
+        cacheCreationTokens: u.cache_creation_input_tokens || 0,
+        cacheReadTokens: u.cache_read_input_tokens || 0,
+        outputTokens: u.output_tokens || 0,
+        costUsd,
+      });
+
       clearTimers();
       setProgress(100);
       setLoadingLine("Ready");
@@ -542,6 +557,7 @@ ${JSON.stringify(klaviyoData)}`;
     setReportHtml("");
     setStatusMessage("");
     setError("");
+    setLastUsage(null);
   };
 
   useEffect(() => {
@@ -929,6 +945,45 @@ ${JSON.stringify(klaviyoData)}`;
           </button>
         )}
 
+        {lastUsage && !isGenerating && (
+          <div style={{
+            marginTop: "12px",
+            padding: "10px 12px",
+            borderTop: "0.5px solid #ededed",
+            fontSize: "10px",
+            color: "#6b6b6b",
+            fontFamily: "'Inter', sans-serif",
+            lineHeight: 1.8,
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
+              <span style={{ letterSpacing: "0.10em", textTransform: "uppercase" }}>Cost</span>
+              <span style={{ fontVariantNumeric: "tabular-nums", color: "#0a0a0a", fontWeight: 500 }}>
+                ${lastUsage.costUsd.toFixed(4)}
+              </span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
+              <span style={{ letterSpacing: "0.10em", textTransform: "uppercase" }}>Output tokens</span>
+              <span style={{ fontVariantNumeric: "tabular-nums" }}>{lastUsage.outputTokens.toLocaleString()}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
+              <span style={{ letterSpacing: "0.10em", textTransform: "uppercase" }}>Input tokens</span>
+              <span style={{ fontVariantNumeric: "tabular-nums" }}>{lastUsage.inputTokens.toLocaleString()}</span>
+            </div>
+            {lastUsage.cacheReadTokens > 0 && (
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
+                <span style={{ letterSpacing: "0.10em", textTransform: "uppercase" }}>Cache read</span>
+                <span style={{ fontVariantNumeric: "tabular-nums" }}>{lastUsage.cacheReadTokens.toLocaleString()}</span>
+              </div>
+            )}
+            {lastUsage.cacheCreationTokens > 0 && (
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span style={{ letterSpacing: "0.10em", textTransform: "uppercase" }}>Cache write</span>
+                <span style={{ fontVariantNumeric: "tabular-nums" }}>{lastUsage.cacheCreationTokens.toLocaleString()}</span>
+              </div>
+            )}
+          </div>
+        )}
+
         {error && (
           <div
             style={{
@@ -1032,6 +1087,7 @@ ${JSON.stringify(klaviyoData)}`;
               justFinished={justFinished}
               onDismissCompletion={handleDismissCompletion}
               onNewReport={handleNewReport}
+              lastUsage={lastUsage}
             />
           )}
           {/* Render iframe whenever reportHtml exists so the ref is available for srcdoc */}
@@ -1245,7 +1301,7 @@ function MiniChart({ index }) {
   );
 }
 
-function LoadingState({ progress, line, elapsed, justFinished, onDismissCompletion, onNewReport }) {
+function LoadingState({ progress, line, elapsed, justFinished, onDismissCompletion, onNewReport, lastUsage }) {
   const pct = Math.round(progress);
   const formatTime = (s) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`);
   const showPatience = elapsed >= 90 && !justFinished;
@@ -1408,12 +1464,12 @@ function LoadingState({ progress, line, elapsed, justFinished, onDismissCompleti
         }
       `}</style>
 
-      {justFinished && <CompletionOverlay onDismiss={onDismissCompletion} onNewReport={onNewReport} />}
+      {justFinished && <CompletionOverlay onDismiss={onDismissCompletion} onNewReport={onNewReport} lastUsage={lastUsage} />}
     </div>
   );
 }
 
-function CompletionOverlay({ onDismiss, onNewReport }) {
+function CompletionOverlay({ onDismiss, onNewReport, lastUsage }) {
   return (
     <div
       style={{
@@ -1549,6 +1605,28 @@ function CompletionOverlay({ onDismiss, onNewReport }) {
           New report
         </button>
       </div>
+
+      {lastUsage && (
+        <div style={{
+          marginTop: "28px",
+          display: "flex",
+          gap: "24px",
+          opacity: 0,
+          animation: "fadeUp 0.6s ease-out 1.7s forwards",
+        }}>
+          {[
+            ["Cost", `$${lastUsage.costUsd.toFixed(4)}`],
+            ["Output", lastUsage.outputTokens.toLocaleString() + " tk"],
+            ...(lastUsage.cacheReadTokens > 0 ? [["Cache hit", lastUsage.cacheReadTokens.toLocaleString() + " tk"]] : []),
+            ...(lastUsage.cacheCreationTokens > 0 ? [["Cache write", lastUsage.cacheCreationTokens.toLocaleString() + " tk"]] : []),
+          ].map(([label, value]) => (
+            <div key={label} style={{ textAlign: "center" }}>
+              <div style={{ fontSize: "9px", textTransform: "uppercase", letterSpacing: "0.2em", color: "#b8b8b8", marginBottom: "3px" }}>{label}</div>
+              <div style={{ fontSize: "11px", fontVariantNumeric: "tabular-nums", color: "#6b6b6b", letterSpacing: "0.04em" }}>{value}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <style>{`
         @keyframes overlayFadeIn { from { opacity: 0; } to { opacity: 1; } }
