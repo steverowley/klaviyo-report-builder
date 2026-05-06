@@ -482,6 +482,9 @@ Right: "[start D MMM YYYY] to [end D MMM YYYY]"
 
 Add to <style>: @keyframes spin{to{transform:rotate(-360deg)}} .spinning{display:inline-block;animation:spin 0.8s linear infinite;transform-origin:center center;line-height:1;vertical-align:middle;}
 
+━━━ SCROLLBAR ━━━
+In the <style> block: ::-webkit-scrollbar{width:5px;height:5px} ::-webkit-scrollbar-track{background:transparent} ::-webkit-scrollbar-thumb{background:#c8c6c0;border-radius:0} ::-webkit-scrollbar-thumb:hover{background:#6b6b6b} *{scrollbar-width:thin;scrollbar-color:#c8c6c0 transparent}
+
 ━━━ OUTPUT RULES ━━━
 Output ONLY a complete <!DOCTYPE html>…</html>. CSS in <style> in <head>. Chart.js CDN + init script in <body>.
 No markdown fences. No commentary before or after. Show "—" for missing values. Never invent numbers.`;
