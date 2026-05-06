@@ -181,10 +181,13 @@ In DOMContentLoaded script, create bar chart:
   options: responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
     scales: x:{grid:{display:false}, ticks:{color:'#aaa',font:{size:10}}},
              y:{beginAtZero:true, grid:{color:'rgba(0,0,0,0.06)'}, ticks:{color:'#aaa',font:{size:10}}}
-3-col grid gap:12px. Each stat: background:#f7f6f3; border-radius:3px; padding:16px 18px; border-left:2px solid #0a0a0a.
-  NEW SUBSCRIBERS: sum(aggregates.subscribers.counts)
-  UNSUBSCRIBES: sum(aggregates.unsubscribes.counts) or "—"
-  NET GROWTH: subs − unsubs, prefix "+" if positive
+3-col grid gap:12px. Each stat card (same card style as Period Snapshot):
+  NEW SUBSCRIBERS — sum(aggregates.subscribers.counts)
+    Delta: if comparison.aggregates?.subscribers non-null: Δ = period_subs − comp_subs; show "↑ +X vs prev" (#2a7a4f) or "↓ −X vs prev" (#a33)
+  UNSUBSCRIBES — sum(aggregates.unsubscribes.counts) or "—"
+    Delta: same pattern using comparison.aggregates?.unsubscribes if available
+  NET GROWTH — (period_subs − period_unsubs); prefix "+" if positive
+    Delta: if comparison available: Δ = period_net − comp_net; show with arrow
 
 **4. ORDER VOLUME** (skip if aggregates.orders is null)
 <h2>Order Volume</h2>
@@ -803,7 +806,7 @@ No markdown fences. No commentary before or after. Show "—" for missing values
               ref={iframeRef}
               title="Klaviyo report preview"
               style={{ width: "100%", height: "100%", border: "none", background: "#ffffff", display: isGenerating ? "none" : "block" }}
-              sandbox="allow-same-origin"
+              sandbox="allow-scripts allow-modals"
             />
           )}
         </div>

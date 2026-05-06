@@ -285,11 +285,11 @@ export default {
       const subscribedMetricId   = subscribedMetric?.id   ?? null;
       const unsubscribedMetricId = unsubscribedMetric?.id ?? null;
 
-      const safeAgg = (metricId, measurements) =>
+      const safeAgg = (metricId, measurements, start = startDate, end = endDate) =>
         metricId
           ? kFetch('/metric-aggregates/', klaviyoKey, {
               method: 'POST',
-              body: aggregateBody(metricId, startDate, endDate, measurements),
+              body: aggregateBody(metricId, start, end, measurements),
             }).catch(e => ({ _error: e.message }))
           : Promise.resolve(null);
 
@@ -307,17 +307,23 @@ export default {
 
       let comparison = null;
       if (comparisonStart && comparisonEnd) {
-        const [compCampaigns, compFlows] = await Promise.all([
+        const [compCampaigns, compFlows, compSubAgg, compUnsubAgg] = await Promise.all([
           kFetch('/campaign-values-reports/', klaviyoKey, {
             method: 'POST', body: reportBody('campaign-values-report', comparisonStart, comparisonEnd, conversionMetricId),
           }),
           kFetch('/flow-values-reports/', klaviyoKey, {
             method: 'POST', body: reportBody('flow-values-report', comparisonStart, comparisonEnd, conversionMetricId),
           }),
+          safeAgg(subscribedMetricId,   ['count'], comparisonStart, comparisonEnd),
+          safeAgg(unsubscribedMetricId, ['count'], comparisonStart, comparisonEnd),
         ]);
         comparison = {
-          campaigns: normaliseCampaigns(compCampaigns, campaignNames),
-          flows:     aggregateFlowRows(compFlows, flowNames),
+          campaigns:  normaliseCampaigns(compCampaigns, campaignNames),
+          flows:      aggregateFlowRows(compFlows, flowNames),
+          aggregates: {
+            subscribers:  processAggregate(compSubAgg,   'count'),
+            unsubscribes: processAggregate(compUnsubAgg, 'count'),
+          },
         };
       }
 
