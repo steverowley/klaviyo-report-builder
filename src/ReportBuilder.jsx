@@ -590,7 +590,10 @@ ${JSON.stringify(klaviyoData)}`;
       if (event.data?.type !== 'regenerate-step') return;
       const { sid } = event.data;
       const anthropicKey = localStorage.getItem(ANTHROPIC_KEY);
-      if (!anthropicKey || !iframeRef.current) return;
+      if (!anthropicKey) {
+        setError("Anthropic key missing — open Settings to add it.");
+        return;
+      }
 
       setRegenSid(sid);
       setRegenProgress(0);
@@ -619,18 +622,24 @@ ${JSON.stringify(klaviyoData)}`;
             }],
           }),
         });
+        if (!res.ok) throw new Error(`API error ${res.status}`);
         const data = await res.json();
-        const parsed = JSON.parse(data.content?.[0]?.text ?? '{}');
+        const text = data.content?.[0]?.text ?? '{}';
+        const parsed = JSON.parse(text);
         clearInterval(regenProgressTimerRef.current);
         setRegenProgress(100);
         if (parsed.title && parsed.desc) {
-          iframeRef.current.contentWindow?.postMessage(
-            { type: 'step-regenerated', sid, title: parsed.title, desc: parsed.desc },
-            '*'
-          );
+          // Post back to iframe — try contentWindow first, fall back to srcdoc reload
+          const iwin = iframeRef.current?.contentWindow;
+          if (iwin) {
+            iwin.postMessage({ type: 'step-regenerated', sid, title: parsed.title, desc: parsed.desc }, '*');
+          }
+        } else {
+          throw new Error("Model returned unexpected format for recommendation.");
         }
-      } catch {
+      } catch (e) {
         clearInterval(regenProgressTimerRef.current);
+        setError("Recommendation regeneration failed: " + (e.message || "unknown error"));
       } finally {
         setTimeout(() => { setRegenSid(null); setRegenProgress(0); }, 600);
       }
@@ -1074,6 +1083,21 @@ ${reportHtml}`,
             >
               {isCreatingSlides ? "Generating…" : "Speedy Slides prompt"}
             </button>
+            {isCreatingSlides && (
+              <div style={{ marginTop: "8px" }}>
+                <div style={{ width: "100%", height: "1px", background: "#ededed", position: "relative", overflow: "hidden" }}>
+                  <div style={{
+                    position: "absolute", top: 0, left: 0, height: "100%",
+                    width: `${slidesProgress}%`,
+                    background: "#0a0a0a",
+                    transition: "width 0.3s cubic-bezier(0.4,0,0.2,1)",
+                  }} />
+                </div>
+                <div style={{ marginTop: "5px", fontSize: "10px", color: "#6b6b6b", fontStyle: "italic", fontFamily: "'Ovo', serif" }}>
+                  Structuring for Speedy Slides…
+                </div>
+              </div>
+            )}
           </>
         )}
 
