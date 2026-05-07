@@ -46,11 +46,18 @@ function fmtChartLabel(d) {
   return `${day} ${month}`;
 }
 
-function getEcommerceEvents(startDate, endDate) {
+const SCHOOL_KEYWORDS = /school|uniform|schoolwear|education|nursery|academy|college|pupil|student|kids ?wear|childrenswear|children.?s wear/i;
+
+function isSchoolBrand(accountName, context) {
+  return SCHOOL_KEYWORDS.test(accountName) || SCHOOL_KEYWORDS.test(context || "");
+}
+
+function getEcommerceEvents(startDate, endDate, accountName, context) {
   const start = new Date(startDate);
   const end = new Date(endDate);
   const events = [];
   const MS = 86400000;
+  const school = isSchoolBrand(accountName, context);
 
   const add = (d, name, type) => {
     if (d >= start && d <= end) events.push({ date: fmtEventDate(d), chartLabel: fmtChartLabel(d), name, type });
@@ -70,21 +77,21 @@ function getEcommerceEvents(startDate, endDate) {
     add(nthWeekday(y, 5, 0, 3), "Father's Day",          "ecommerce"); // 3rd Sunday June
     add(new Date(y, 6, 15),  "Amazon Prime Day (approx)","ecommerce");
 
-    // UK school terms (England approximate)
-    add(new Date(y, 6, 22),  "School Summer Holidays",   "school");   // ~22 Jul
-    add(new Date(y, 6, 25),  "Uniform buying peak",      "school");   // late Jul — schoolwear peak
-    add(new Date(y, 7, 28),  "Summer Bank Holiday",      "holiday");
-    add(new Date(y, 8, 3),   "Autumn Term Starts",       "school");   // ~1st week Sep
-    add(new Date(y, 9, 28),  "Autumn Half Term",         "school");   // ~last week Oct
-    add(new Date(y, 11, 19), "School Christmas Break",   "school");   // ~3rd week Dec
+    if (school) {
+      // UK school terms (England approximate) — only for school/education brands
+      add(new Date(y, 6, 22),  "School Summer Holidays",   "school");   // ~22 Jul
+      add(new Date(y, 6, 25),  "Uniform buying peak",      "school");   // late Jul — schoolwear peak
+      add(new Date(y, 8, 3),   "Autumn Term Starts",       "school");   // ~1st week Sep
+      add(new Date(y, 9, 28),  "Autumn Half Term",         "school");   // ~last week Oct
+      add(new Date(y, 11, 19), "School Christmas Break",   "school");   // ~3rd week Dec
+      add(new Date(y, 0, 7),   "Spring Term Starts",       "school");   // ~7 Jan
+      add(new Date(y, 1, 17),  "Spring Half Term",         "school");   // ~3rd week Feb
+      const summerTermStart = new Date(easter.getTime() + 14 * MS);
+      add(summerTermStart,                                 "Summer Term Starts",  "school");
+      add(nthWeekday(y, 4, 1, 4), "May Half Term",        "school");   // ~last Mon May
+    }
 
-    // Spring term
-    add(new Date(y, 0, 7),   "Spring Term Starts",       "school");   // ~7 Jan
-    add(new Date(y, 1, 17),  "Spring Half Term",         "school");   // ~3rd week Feb
-    // Summer term (2 weeks after Easter Monday)
-    const summerTermStart = new Date(easter.getTime() + 14 * MS);
-    add(summerTermStart,                                 "Summer Term Starts",  "school");
-    add(nthWeekday(y, 4, 1, 4), "May Half Term",        "school");   // ~last Mon May
+    add(new Date(y, 7, 28),  "Summer Bank Holiday",      "holiday");
     add(new Date(y, 9, 31),  "Halloween",                "ecommerce");
     add(new Date(y, 10, 11), "Singles' Day",             "ecommerce");
 
@@ -493,7 +500,7 @@ No markdown fences. No commentary before or after. Show "—" for missing values
   const buildUserMessage = (klaviyoData) => {
     const range = computeDateRange();
     const comparison = computeComparisonRange(range.start, range.end);
-    const events = getEcommerceEvents(range.start, range.end);
+    const events = getEcommerceEvents(range.start, range.end, accountName, additionalContext);
     const eventsBlock = events.length > 0
       ? `\nECOMMERCE EVENTS IN THIS PERIOD (use these for chart annotations and insight correlation):\n${events.map(e => `• ${e.date} (chart label: "${e.chartLabel}") — ${e.name} [${e.type}]`).join('\n')}\n`
       : "\nNo major ecommerce events fall within this period.\n";
@@ -677,7 +684,7 @@ ${JSON.stringify(klaviyoData)}`;
       rawHtml = rawHtml.trim();
 
       // Inject event markers script — using JSON.stringify avoids all apostrophe/quote syntax errors
-      const eventsForChart = getEcommerceEvents(range.start, range.end)
+      const eventsForChart = getEcommerceEvents(range.start, range.end, accountName, additionalContext)
         .map(e => ({ label: e.chartLabel, name: e.name }));
       const annotationScript = `<script>
 window.CHART_EVENTS=${JSON.stringify(eventsForChart)};
