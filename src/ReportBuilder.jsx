@@ -509,13 +509,41 @@ No markdown fences. No commentary before or after. Show "—" for missing values
     const contextBlock = additionalContext.trim()
       ? `\nADDITIONAL CONTEXT FROM USER:\n${additionalContext.trim()}\n`
       : "";
+
+    // Strip fields the model doesn't need to reduce input tokens
+    const r4 = (v) => Math.round((v || 0) * 10000) / 10000;
+    const trimCampaign = ({ campaign_id, send_channel, ...c }) => ({
+      ...c, open_rate: r4(c.open_rate), click_rate: r4(c.click_rate), conversion_rate: r4(c.conversion_rate),
+    });
+    const trimFlow = ({ id, send_channel, opens, clicks, ...f }) => ({
+      ...f, open_rate: r4(f.open_rate), click_rate: r4(f.click_rate), ctor: r4(f.ctor),
+      conversion_rate: r4(f.conversion_rate), rpr: r4(f.rpr),
+    });
+    const trimData = (kd) => ({
+      account: kd.account?.attributes
+        ? { name: kd.account.attributes.organization_name ?? kd.account.attributes.name ?? null }
+        : null,
+      period: {
+        campaigns: (kd.period?.campaigns ?? []).map(trimCampaign),
+        flows:     (kd.period?.flows     ?? []).map(trimFlow),
+      },
+      aggregates: kd.aggregates,
+      ...(kd.comparison ? {
+        comparison: {
+          campaigns:  (kd.comparison.campaigns ?? []).map(trimCampaign),
+          flows:      (kd.comparison.flows     ?? []).map(trimFlow),
+          aggregates: kd.comparison.aggregates,
+        },
+      } : {}),
+    });
+
     return `IMPORTANT: Read ALL data carefully before writing any HTML. Every number you output must come from the data.
 
 Reporting period: ${range.start} to ${range.end} (${reportType})
 ${comparison ? `Comparison period: ${comparison.start} to ${comparison.end} (${comparisonMode})` : "No comparison period."}
 ${eventsBlock}${contextBlock}
-RAW KLAVIYO DATA:
-${JSON.stringify(klaviyoData)}`;
+KLAVIYO DATA:
+${JSON.stringify(trimData(klaviyoData))}`;
   };
 
   const clearTimers = () => {
@@ -655,34 +683,13 @@ Return ONLY a JSON array of the index numbers for events that are commercially r
 
       if (myRequestId !== requestIdRef.current) return;
 
-      // Hand off from pre-phase timer to the main Anthropic timer.
-      // Capture wherever the progress currently sits so the curve starts there.
+      // Hand off: clear pre-phase timer — streaming drives progress from here.
       clearInterval(progressTimerRef.current);
-      const anthropicStartedAt = Date.now();
-      const TAU_MS = 65000;
-      // Read latest progress value via a one-shot setState callback pattern using a ref.
-      // We estimate it from elapsed time to avoid stale closure issues.
+      progressTimerRef.current = null;
       const preElapsed = Date.now() - startedAt;
       const handoffPct = Math.min(19, 19 * (1 - Math.exp(-preElapsed / PRE_TAU_MS)));
-      const remaining = 98 - handoffPct;
 
-      progressTimerRef.current = setInterval(() => {
-        const elapsed = Date.now() - anthropicStartedAt;
-        const next = Math.min(98, handoffPct + remaining * (1 - Math.exp(-elapsed / TAU_MS)));
-        setProgress(next);
-        const line = lineForProgress(next);
-        if (line) setLoadingLine(line);
-      }, 150);
-
-      lineTimerRef.current = setInterval(() => {
-        const elapsed = Date.now() - anthropicStartedAt;
-        if (elapsed >= TAU_MS * 0.85) {
-          setLoadingLine(holdingLines[holdingLineIndex % holdingLines.length].text);
-          holdingLineIndex += 1;
-        }
-      }, 4000);
-
-      // ── Phase 2: send data to Anthropic, get back HTML ──────────────────────
+      // ── Phase 2: stream HTML from Anthropic ─────────────────────────────────
       const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: {
@@ -695,13 +702,8 @@ Return ONLY a JSON array of the index numbers for events that are commercially r
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
           max_tokens: 40000,
-          system: [
-            {
-              type: "text",
-              text: buildSystemPrompt(),
-              cache_control: { type: "ephemeral" },
-            },
-          ],
+          stream: true,
+          system: [{ type: "text", text: buildSystemPrompt(), cache_control: { type: "ephemeral" } }],
           messages: [{ role: "user", content: buildUserMessage(klaviyoData, relevantEvents) }],
         }),
         signal,
@@ -711,26 +713,76 @@ Return ONLY a JSON array of the index numbers for events that are commercially r
 
       if (!anthropicRes.ok) {
         let message = `Anthropic API error ${anthropicRes.status}`;
-        try {
-          const errData = await anthropicRes.json();
-          message = errData.error?.message || message;
-        } catch (_) {}
+        try { const errData = await anthropicRes.json(); message = errData.error?.message || message; } catch (_) {}
         throw new Error(message);
       }
 
-      const data = await anthropicRes.json();
+      // Read the SSE stream — accumulate full HTML, drive progress from real token count
+      const reader = anthropicRes.body.getReader();
+      const decoder = new TextDecoder();
+      let sseBuffer = '';
+      let rawHtml = '';
+      let outputTokens = 0;
+      let stopReason = null;
+      let inputUsage = {};
+      // Typical report ~20-28k output tokens; use 24k as denominator for progress 20→96%
+      const EST_OUTPUT = 24000;
+
+      outer: while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (myRequestId !== requestIdRef.current) { reader.cancel(); return; }
+
+        sseBuffer += decoder.decode(value, { stream: true });
+        const lines = sseBuffer.split('\n');
+        sseBuffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const payload = line.slice(6).trim();
+          if (payload === '[DONE]') break outer;
+          try {
+            const ev = JSON.parse(payload);
+            if (ev.type === 'message_start' && ev.message?.usage) {
+              inputUsage = ev.message.usage;
+            } else if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
+              rawHtml += ev.delta.text;
+              outputTokens++;
+              // Update progress every 100 tokens to avoid thrashing React
+              if (outputTokens % 100 === 0) {
+                const pct = Math.min(96, handoffPct + (96 - handoffPct) * Math.min(1, outputTokens / EST_OUTPUT));
+                setProgress(pct);
+                const line2 = lineForProgress(pct);
+                if (line2) setLoadingLine(line2);
+                else {
+                  setLoadingLine(holdingLines[holdingLineIndex % holdingLines.length].text);
+                  if (outputTokens % 2000 === 0) holdingLineIndex++;
+                }
+              }
+            } else if (ev.type === 'message_delta') {
+              stopReason = ev.delta?.stop_reason ?? null;
+              if (ev.usage?.output_tokens) outputTokens = ev.usage.output_tokens;
+            }
+          } catch (_) {}
+        }
+      }
 
       if (myRequestId !== requestIdRef.current) return;
 
-      const textBlock = data.content?.find((b) => b.type === "text");
-      if (!textBlock?.text) {
-        throw new Error("The model returned no report content. The prompt may have exceeded the context limit — try a shorter date range.");
-      }
-      if (data.stop_reason === "max_tokens") {
+      if (stopReason === 'max_tokens') {
         throw new Error("The report was too long and got cut off (max tokens reached). Try a shorter date range or contact Rowley to increase the output limit.");
       }
+      if (!rawHtml.trim()) {
+        throw new Error("The model returned no report content. The prompt may have exceeded the context limit — try a shorter date range.");
+      }
 
-      let rawHtml = textBlock.text;
+      // Build usage object from streaming events (input from message_start, output from message_delta)
+      const streamUsage = {
+        input_tokens: inputUsage.input_tokens || 0,
+        cache_creation_input_tokens: inputUsage.cache_creation_input_tokens || 0,
+        cache_read_input_tokens: inputUsage.cache_read_input_tokens || 0,
+        output_tokens: outputTokens,
+      };
       // Extract the HTML document — discard any preamble/reasoning text and trailing content
       const htmlStart = rawHtml.search(/<!DOCTYPE\s+html/i);
       if (htmlStart > 0) rawHtml = rawHtml.slice(htmlStart);
@@ -778,7 +830,7 @@ function addEventMarkers(chart,events){
 <\/script>`;
       rawHtml = rawHtml.replace(/<\/head>/i, annotationScript + '</head>');
 
-      const u = data.usage || {};
+      const u = streamUsage;
       const costUsd =
         (u.input_tokens || 0) * 3 / 1_000_000 +
         (u.cache_creation_input_tokens || 0) * 3.75 / 1_000_000 +
