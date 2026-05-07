@@ -497,10 +497,9 @@ In the <style> block: ::-webkit-scrollbar{width:5px;height:5px} ::-webkit-scroll
 Output ONLY a complete <!DOCTYPE html>…</html>. CSS in <style> in <head>. Chart.js CDN in <head>. Chart init script at bottom of <body> (direct execution, no DOMContentLoaded).
 No markdown fences. No commentary before or after. Show "—" for missing values. Never invent numbers.`;
 
-  const buildUserMessage = (klaviyoData) => {
+  const buildUserMessage = (klaviyoData, events) => {
     const range = computeDateRange();
     const comparison = computeComparisonRange(range.start, range.end);
-    const events = getEcommerceEvents(range.start, range.end, accountName, additionalContext);
     const eventsBlock = events.length > 0
       ? `\nECOMMERCE EVENTS IN THIS PERIOD (use these for chart annotations and insight correlation):\n${events.map(e => `• ${e.date} (chart label: "${e.chartLabel}") — ${e.name} [${e.type}]`).join('\n')}\n`
       : "\nNo major ecommerce events fall within this period.\n";
@@ -599,6 +598,52 @@ ${JSON.stringify(klaviyoData)}`;
 
       if (myRequestId !== requestIdRef.current) return;
 
+      // ── Phase 1b: ask Haiku which events are relevant for this brand ───────────
+      setProgress(12);
+      setLoadingLine("Consulting the almanac");
+      const allEvents = getEcommerceEvents(range.start, range.end, accountName, additionalContext);
+      let relevantEvents = allEvents;
+      if (allEvents.length > 0) {
+        try {
+          const filterRes = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "x-api-key": anthropicKey,
+              "anthropic-version": "2023-06-01",
+              "anthropic-dangerous-direct-browser-access": "true",
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "claude-haiku-4-5-20251001",
+              max_tokens: 512,
+              messages: [{
+                role: "user",
+                content: `You are configuring chart annotations for an email marketing report.
+Client: "${accountName}"${additionalContext.trim() ? `\nContext: ${additionalContext.trim()}` : ""}
+Potential calendar events in this period:
+${allEvents.map((e, i) => `${i}: ${e.name} (${e.date}) [${e.type}]`).join("\n")}
+
+Return ONLY a JSON array of the index numbers for events that are commercially relevant to THIS specific brand — events that could plausibly explain a spike or dip in their email metrics. Be inclusive for genuinely relevant events; exclude only what is clearly irrelevant to this business. Example: [0,2,5]`,
+              }],
+            }),
+            signal,
+          });
+          if (filterRes.ok) {
+            const filterData = await filterRes.json();
+            const text = filterData.content?.[0]?.text || "";
+            const match = text.match(/\[[\d,\s]*\]/);
+            if (match) {
+              const indices = JSON.parse(match[0]);
+              relevantEvents = indices.map(i => allEvents[i]).filter(Boolean);
+            }
+          }
+        } catch (_) {
+          // If filtering fails, fall back to all events
+        }
+      }
+
+      if (myRequestId !== requestIdRef.current) return;
+
       // Worker succeeded — jump to 20% and start the composing phase timers
       setProgress(20);
       setLoadingLine("Locating the campaign ledger");
@@ -647,7 +692,7 @@ ${JSON.stringify(klaviyoData)}`;
               cache_control: { type: "ephemeral" },
             },
           ],
-          messages: [{ role: "user", content: buildUserMessage(klaviyoData) }],
+          messages: [{ role: "user", content: buildUserMessage(klaviyoData, relevantEvents) }],
         }),
         signal,
       });
@@ -684,8 +729,7 @@ ${JSON.stringify(klaviyoData)}`;
       rawHtml = rawHtml.trim();
 
       // Inject event markers script — using JSON.stringify avoids all apostrophe/quote syntax errors
-      const eventsForChart = getEcommerceEvents(range.start, range.end, accountName, additionalContext)
-        .map(e => ({ label: e.chartLabel, name: e.name }));
+      const eventsForChart = relevantEvents.map(e => ({ label: e.chartLabel, name: e.name }));
       const annotationScript = `<script>
 window.CHART_EVENTS=${JSON.stringify(eventsForChart)};
 function addEventMarkers(chart,events){
