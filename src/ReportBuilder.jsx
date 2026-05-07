@@ -771,7 +771,7 @@ Return ONLY a JSON array of the index numbers for events that are commercially r
               // Update every 50 tokens — more responsive than 100
               if (outputTokens % 50 === 0) {
                 const pct = Math.min(96, handoffPct + (96 - handoffPct) * Math.min(1, outputTokens / EST_OUTPUT));
-                setProgress(pct);
+                setProgress(p => Math.max(p, pct));
                 const line2 = lineForProgress(pct);
                 if (line2) setLoadingLine(line2);
                 else {
