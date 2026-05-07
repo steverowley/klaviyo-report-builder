@@ -159,6 +159,21 @@ function relativeTime(iso) {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+function fmtDateDisplay(iso) {
+  if (!iso) return "";
+  const d = new Date(iso + "T00:00:00");
+  return d.getDate() + " " + ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];
+}
+
+function readAllCacheEntries() {
+  try {
+    const store = JSON.parse(localStorage.getItem(REPORT_CACHE_KEY) || "{}");
+    return Object.entries(store)
+      .map(([key, { html: _h, slidesPrompt: _sp, ...meta }]) => ({ key, ...meta }))
+      .sort((a, b) => new Date(b.generatedAt) - new Date(a.generatedAt));
+  } catch { return []; }
+}
+
 export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion }) {
   const [clients, setClients] = useState([]);
   const [selectedClientId, setSelectedClientId] = useState("");
@@ -187,6 +202,8 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion }
   const [regenSid, setRegenSid] = useState(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [showAddClientModal, setShowAddClientModal] = useState(false);
+  const [savedReports, setSavedReports] = useState(() => readAllCacheEntries());
+  const [currentReportMeta, setCurrentReportMeta] = useState(null);
   const dropdownRef = useRef(null);
   const [regenProgress, setRegenProgress] = useState(0);
   const slidesProgressTimerRef = useRef(null);
@@ -883,7 +900,10 @@ function addEventMarkers(chart,events){
       setLoadingLine("Ready");
       setLastDuration(Math.round((Date.now() - startedAt) / 1000));
       const key = cacheKey(selectedClientId, range.start, range.end, comparisonMode);
-      writeCache(key, rawHtml, { clientId: selectedClientId, reportType });
+      writeCache(key, rawHtml, { clientId: selectedClientId, reportType, dateStart: range.start, dateEnd: range.end, accountName });
+      const generatedNow = new Date().toISOString();
+      setCurrentReportMeta({ key, generatedAt: generatedNow, clientId: selectedClientId, reportType, dateStart: range.start, dateEnd: range.end, accountName });
+      setSavedReports(readAllCacheEntries());
       setCachedInfo(null);
       setReportHtml(rawHtml);
       setSlidesPrompt("");
@@ -915,6 +935,25 @@ function addEventMarkers(chart,events){
     setStatusMessage("");
     setError("");
     setLastUsage(null);
+    setCurrentReportMeta(null);
+  };
+
+  const loadSavedReport = (key) => {
+    const entry = readCache(key);
+    if (!entry) return;
+    setReportHtml(entry.html);
+    setSlidesPrompt(entry.slidesPrompt || "");
+    setCurrentReportMeta({ key, generatedAt: entry.generatedAt, clientId: entry.clientId, reportType: entry.reportType, dateStart: entry.dateStart || "", dateEnd: entry.dateEnd || "", accountName: entry.accountName || "" });
+    setCachedInfo({ generatedAt: entry.generatedAt, key });
+    setLastUsage(null);
+    setLastDuration(null);
+    setError("");
+    setStatusMessage("");
+    setIsGenerating(false);
+    setJustFinished(false);
+    setProgress(0);
+    if (entry.clientId) setSelectedClientId(entry.clientId);
+    if (entry.reportType) setReportType(entry.reportType);
   };
 
   useEffect(() => {
@@ -1251,6 +1290,163 @@ ${reportHtml}`,
         </div>
 
         <div style={{ height: "1px", background: "#ededed", margin: "0 0 24px" }} />
+
+        {reportHtml && !isGenerating ? (
+          /* ── Report mode: condensed action sidebar ── */
+          <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+
+            <button
+              onClick={handleNewReport}
+              style={{
+                display: "flex", alignItems: "center", gap: "8px",
+                background: "transparent", border: "1px solid #ededed",
+                padding: "11px 14px", width: "100%",
+                fontFamily: "'DM Sans', sans-serif", fontSize: "11px",
+                fontWeight: 500, letterSpacing: "0.14em", textTransform: "uppercase",
+                cursor: "pointer", color: "#0a0a0a", marginBottom: "20px",
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = "#f8f6f2"}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+            >
+              <svg width="12" height="10" viewBox="0 0 12 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="5,1 1,5 5,9" />
+                <line x1="1" y1="5" x2="11" y2="5" />
+              </svg>
+              New report
+            </button>
+
+            {currentReportMeta && (
+              <div style={{ marginBottom: "16px" }}>
+                <div style={{ fontFamily: "'Ovo', serif", fontSize: "20px", fontWeight: 400, color: "#0a0a0a", lineHeight: 1.2, marginBottom: "5px" }}>
+                  {currentReportMeta.accountName || accountName}
+                </div>
+                <div style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.14em", color: "#6b6b6b", fontWeight: 500, marginBottom: "2px" }}>
+                  {currentReportMeta.reportType} report
+                </div>
+                {currentReportMeta.dateStart && (
+                  <div style={{ fontSize: "11px", color: "#b8b8b8" }}>
+                    {fmtDateDisplay(currentReportMeta.dateStart)} – {fmtDateDisplay(currentReportMeta.dateEnd)}
+                  </div>
+                )}
+                {currentReportMeta.generatedAt && (
+                  <div style={{ marginTop: "3px", fontSize: "10px", color: "#b8b8b8", textTransform: "uppercase", letterSpacing: "0.10em" }}>
+                    Generated {relativeTime(currentReportMeta.generatedAt)}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div style={{ height: "1px", background: "#ededed", marginBottom: "16px" }} />
+
+            <button
+              onClick={handleDownload}
+              style={{
+                width: "100%", padding: "11px 16px", background: "transparent",
+                color: "#0a0a0a", border: "1px solid #0a0a0a",
+                fontFamily: "'DM Sans', sans-serif", fontSize: "11px",
+                fontWeight: 500, letterSpacing: "0.16em", textTransform: "uppercase",
+                cursor: "pointer", marginBottom: "8px",
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = "#f8f6f2"}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+            >
+              Download HTML
+            </button>
+
+            <button
+              onClick={slidesPrompt && !isCreatingSlides ? () => setShowSlidesModal(true) : handleCreateSlidesPrompt}
+              disabled={isCreatingSlides}
+              style={{
+                width: "100%", padding: "11px 16px", background: "transparent",
+                color: isCreatingSlides ? "#b8b8b8" : "#0a0a0a",
+                border: `1px solid ${isCreatingSlides ? "#ededed" : "#0a0a0a"}`,
+                fontFamily: "'DM Sans', sans-serif", fontSize: "11px",
+                fontWeight: 500, letterSpacing: "0.16em", textTransform: "uppercase",
+                cursor: isCreatingSlides ? "wait" : "pointer", marginBottom: "8px",
+              }}
+            >
+              {isCreatingSlides ? "Generating…" : slidesPrompt ? "View Speedy Slides prompt" : "Speedy Slides prompt"}
+            </button>
+
+            {isCreatingSlides && (
+              <div style={{ marginBottom: "8px" }}>
+                <div style={{ width: "100%", height: "1px", background: "#ededed", position: "relative", overflow: "hidden" }}>
+                  <div style={{ position: "absolute", top: 0, left: 0, height: "100%", width: `${slidesProgress}%`, background: "#0a0a0a", transition: "width 0.3s cubic-bezier(0.4,0,0.2,1)" }} />
+                </div>
+                <div style={{ marginTop: "5px", fontSize: "10px", color: "#6b6b6b", fontStyle: "italic", fontFamily: "'Ovo', serif" }}>
+                  Structuring for Speedy Slides…
+                </div>
+              </div>
+            )}
+
+            {lastUsage && (
+              <div style={{ marginTop: "4px", padding: "10px 0", borderTop: "0.5px solid #ededed", fontSize: "10px", color: "#6b6b6b", fontFamily: "'DM Sans', sans-serif", lineHeight: 1.8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
+                  <span style={{ letterSpacing: "0.10em", textTransform: "uppercase" }}>Cost</span>
+                  <span style={{ fontVariantNumeric: "tabular-nums", color: "#0a0a0a", fontWeight: 500 }}>${lastUsage.costUsd.toFixed(4)}</span>
+                </div>
+                {lastDuration != null && (
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "2px" }}>
+                    <span style={{ letterSpacing: "0.10em", textTransform: "uppercase" }}>Time taken</span>
+                    <span style={{ fontVariantNumeric: "tabular-nums" }}>{lastDuration < 60 ? `${lastDuration}s` : `${Math.floor(lastDuration / 60)}m ${lastDuration % 60}s`}</span>
+                  </div>
+                )}
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ letterSpacing: "0.10em", textTransform: "uppercase" }}>Output tokens</span>
+                  <span style={{ fontVariantNumeric: "tabular-nums" }}>{lastUsage.outputTokens.toLocaleString()}</span>
+                </div>
+              </div>
+            )}
+
+            {error && (
+              <div style={{ marginTop: "12px", padding: "12px 14px", border: "1px solid #0a0a0a", background: "#ededed", fontSize: "12px", lineHeight: 1.5 }}>
+                {error}
+              </div>
+            )}
+
+            <div style={{ flex: 1, minHeight: "16px" }} />
+
+            {savedReports.length > 0 && (
+              <>
+                <div style={{ height: "1px", background: "#ededed", marginBottom: "14px" }} />
+                <div style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.16em", color: "#6b6b6b", marginBottom: "10px", fontWeight: 500 }}>
+                  Past reports
+                </div>
+                <div style={{ overflowY: "auto", maxHeight: "240px", marginRight: "-8px", paddingRight: "8px" }}>
+                  {savedReports.map(entry => {
+                    const entryName = entry.accountName || clients.find(c => c.id === entry.clientId)?.name || "Unknown";
+                    const isCurrent = entry.key === currentReportMeta?.key;
+                    return (
+                      <button
+                        key={entry.key}
+                        onClick={() => loadSavedReport(entry.key)}
+                        style={{
+                          display: "block", width: "100%", textAlign: "left",
+                          padding: "8px 10px",
+                          background: isCurrent ? "#f8f6f2" : "transparent",
+                          border: "none", borderBottom: "0.5px solid #f0f0ec",
+                          cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+                        }}
+                        onMouseEnter={e => { if (!isCurrent) e.currentTarget.style.background = "#fafaf8"; }}
+                        onMouseLeave={e => { if (!isCurrent) e.currentTarget.style.background = "transparent"; }}
+                      >
+                        <div style={{ fontSize: "11px", fontWeight: 500, color: "#0a0a0a", marginBottom: "2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {entryName}
+                        </div>
+                        <div style={{ fontSize: "10px", color: "#6b6b6b", display: "flex", justifyContent: "space-between" }}>
+                          <span style={{ textTransform: "uppercase", letterSpacing: "0.08em" }}>{entry.reportType}</span>
+                          <span>{relativeTime(entry.generatedAt)}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        ) : (
+          /* ── Configure mode: report builder form ── */
+          <>
 
         <Field label="Client">
           {clientsError ? (
@@ -1628,6 +1824,8 @@ ${reportHtml}`,
           >
             {statusMessage}
           </div>
+        )}
+          </>
         )}
       </aside>
 
