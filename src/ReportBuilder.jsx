@@ -268,6 +268,7 @@ Produce a complete, self-contained HTML report. Follow every instruction below e
 ━━━ FONTS ━━━
 Load via Google Fonts:
 <link href="https://fonts.googleapis.com/css2?family=Ovo&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300;1,9..40,400&display=swap" rel="stylesheet">
+Also load Chart.js in <head> (not body): <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 Headings (h2), card values, step titles: Ovo. All other text: DM Sans.
 
 ━━━ COLOURS (use these exact hex values) ━━━
@@ -315,17 +316,10 @@ Cards:
   NEW SUBSCRIBERS — sum(aggregates.subscribers.counts) or "—". Delta % if comparison.aggregates?.subscribers available.
   TOTAL ORDERS — sum(aggregates.orders.counts) or "—". Delta % if comparison.aggregates?.orders available.
 
-**4. LIST GROWTH** (skip if aggregates.subscribers is null)
+**4. LIST GROWTH** (skip entirely if aggregates.subscribers is null)
 <h2>List Growth</h2>
 Sub-label "New Subscribers Per Day" DM Sans 10px weight 500 uppercase #999 margin-bottom:8px.
-Load Chart.js: <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 Container div: position:relative; height:180px; margin-bottom:16px. <canvas id="subChart"></canvas>
-In DOMContentLoaded script, create bar chart:
-  labels: aggregates.subscribers.dates formatted as "D MMM" (e.g. "21 Apr")
-  dataset: { data: aggregates.subscribers.counts, backgroundColor:'#0a0a0a', borderRadius:2, barPercentage:0.7 }
-  options: responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
-    scales: x:{grid:{display:false}, ticks:{color:'#aaa',font:{size:10}}},
-             y:{beginAtZero:true, grid:{color:'rgba(0,0,0,0.06)'}, ticks:{color:'#aaa',font:{size:10}}}
 3-col grid gap:12px. Each stat card (same card style as Period Snapshot):
   NEW SUBSCRIBERS — sum(aggregates.subscribers.counts)
     Delta: if comparison.aggregates?.subscribers non-null: pct = ((period_subs − comp_subs) / comp_subs × 100); show "↑ +X.X%" or "↓ −X.X%" with sub-text "X vs Y prev"
@@ -334,17 +328,24 @@ In DOMContentLoaded script, create bar chart:
   NET GROWTH — (period_subs − period_unsubs); prefix "+" if positive
     Delta: if comparison available: pct vs comp_net; show with arrow and sub-text
 
-**5. ORDER VOLUME** (skip if aggregates.orders is null)
+**5. ORDER VOLUME** (skip entirely if aggregates.orders is null)
 <h2>Order Volume</h2>
 Sub-label "Orders Per Day". Container height:180px. <canvas id="orderChart"></canvas>
 Line chart: { data: aggregates.orders.counts, borderColor:'#555', backgroundColor:'rgba(80,80,80,0.08)', fill:true, tension:0.4, pointRadius:3, pointBackgroundColor:'#555', pointBorderColor:'#fff', pointBorderWidth:1.5 }
 Same scale options as bar chart.
 
-━━━ CHART EVENT ANNOTATIONS ━━━
-The addEventMarkers function and CHART_EVENTS data are pre-injected into the page — do NOT define them yourself.
-After subChart is created, add exactly: try{addEventMarkers(subChart,window.CHART_EVENTS||[]);}catch(e){}
-After orderChart is created, add exactly: try{addEventMarkers(orderChart,window.CHART_EVENTS||[]);}catch(e){}
-Do NOT define var EVENTS, do NOT define function addEventMarkers — only call them as shown above.
+━━━ CHART INITIALISATION ━━━
+At the very bottom of <body>, after ALL html sections, place ONE <script> block (no DOMContentLoaded wrapper needed — all canvas elements already exist at this point).
+Wrap EACH chart in its own independent try/catch so a failure in one cannot affect the other:
+try{
+  var subChart=new Chart(document.getElementById('subChart'),{type:'bar',data:{labels:[/*"D MMM" dates*/],datasets:[{data:[/*counts*/],backgroundColor:'#0a0a0a',borderRadius:2,barPercentage:0.7}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{color:'#aaa',font:{size:10}}},y:{beginAtZero:true,grid:{color:'rgba(0,0,0,0.06)'},ticks:{color:'#aaa',font:{size:10}}}}}});
+  try{addEventMarkers(subChart,window.CHART_EVENTS||[]);}catch(e){}
+}catch(e){}
+try{
+  var orderChart=new Chart(document.getElementById('orderChart'),{type:'line',data:{labels:[/*"D MMM" dates*/],datasets:[{data:[/*counts*/],borderColor:'#555',backgroundColor:'rgba(80,80,80,0.08)',fill:true,tension:0.4,pointRadius:3,pointBackgroundColor:'#555',pointBorderColor:'#fff',pointBorderWidth:1.5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{color:'#aaa',font:{size:10}}},y:{beginAtZero:true,grid:{color:'rgba(0,0,0,0.06)'},ticks:{color:'#aaa',font:{size:10}}}}}});
+  try{addEventMarkers(orderChart,window.CHART_EVENTS||[]);}catch(e){}
+}catch(e){}
+Fill in the actual labels and data from the Klaviyo data. The addEventMarkers function and window.CHART_EVENTS are pre-injected — do NOT define them yourself.
 
 **6. CAMPAIGN PERFORMANCE**
 <h2>Campaign Performance</h2>
@@ -408,7 +409,7 @@ After stepsContainer:
 
 Each .step-wrapper must have a unique data-sid attribute: data-sid="s0", "s1", etc. (assigned at render time, incrementing from 0).
 
-In the DOMContentLoaded script, after chart init, include this JS verbatim:
+In the same script block at the bottom of <body> (after the chart try/catch blocks), include this JS verbatim:
 var dragSrc=null,sidSeq=document.querySelectorAll('#stepsContainer .step-wrapper').length;
 var LEVELS=['High priority','Medium priority','Low priority'];
 var LEVEL_COLORS={'High priority':'#0a0a0a','Medium priority':'#555','Low priority':'#999'};
@@ -470,7 +471,7 @@ Add to <style>: @keyframes spin{to{transform:rotate(-360deg)}} .spinning{display
 In the <style> block: ::-webkit-scrollbar{width:5px;height:5px} ::-webkit-scrollbar-track{background:transparent} ::-webkit-scrollbar-thumb{background:#c8c6c0;border-radius:0} ::-webkit-scrollbar-thumb:hover{background:#6b6b6b} *{scrollbar-width:thin;scrollbar-color:#c8c6c0 transparent}
 
 ━━━ OUTPUT RULES ━━━
-Output ONLY a complete <!DOCTYPE html>…</html>. CSS in <style> in <head>. Chart.js CDN + init script in <body>.
+Output ONLY a complete <!DOCTYPE html>…</html>. CSS in <style> in <head>. Chart.js CDN in <head>. Chart init script at bottom of <body> (direct execution, no DOMContentLoaded).
 No markdown fences. No commentary before or after. Show "—" for missing values. Never invent numbers.`;
 
   const buildUserMessage = (klaviyoData) => {
