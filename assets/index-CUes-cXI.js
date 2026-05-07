@@ -262,27 +262,29 @@ RAW KLAVIYO DATA:
 ${JSON.stringify(E)}`},Ir=()=>{[za,Da,ja].forEach(E=>{E.current&&(clearInterval(E.current),E.current=null)})},La=async()=>{var ie,yt;if(T(""),A(""),!o){T("Please select a client.");return}if(s==="Custom"&&(!m||!S)){T("Custom range requires a start and end date.");return}const E=localStorage.getItem(Ml),N=localStorage.getItem(Qs);if(!E||!N){e();return}p(!0),k(""),J(0),Ee("Knocking politely on Klaviyo's door"),Nr(0),A(""),Ke(!1),gt.current+=1;const O=gt.current,re=Date.now();let be=0;ja.current=setInterval(()=>{Nr(Math.floor((Date.now()-re)/1e3))},1e3),An.current=new AbortController;const{signal:Q}=An.current;try{const ae=Mr(),vt=Pa(ae.start,ae.end);Ee("Producing credentials, removing hat"),J(5);const Bt=await fetch(N,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({clientId:o,startDate:ae.start,endDate:ae.end,...vt?{comparisonStart:vt.start,comparisonEnd:vt.end}:{}}),signal:Q});if(O!==gt.current)return;if(!Bt.ok){const _e=await Bt.json().catch(()=>({}));throw new Error(`Klaviyo data fetch failed: ${_e.error||`HTTP ${Bt.status}`}`)}const Fr=await Bt.json();if(O!==gt.current)return;J(20),Ee("Locating the campaign ledger");const Te=Date.now(),Ut=92,Ar=115e3;za.current=setInterval(()=>{const _e=Date.now()-Te,il=Math.min(_e/Ar,1),Ld=1-Math.pow(1-il,2.2),al=Math.min(Ut,20+Ld*(Ut-20));if(J(al),al<Ut){const $a=wd(al);$a&&Ee($a)}},150),Da.current=setInterval(()=>{Date.now()-Te>=Ar*.85&&(Ee(Ra[be%Ra.length].text),be+=1)},4e3);const rt=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"x-api-key":E,"anthropic-version":"2023-06-01","anthropic-beta":"prompt-caching-2024-07-31,output-128k-2025-02-19","anthropic-dangerous-direct-browser-access":"true","content-type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:32e3,system:[{type:"text",text:Cd(),cache_control:{type:"ephemeral"}}],messages:[{role:"user",content:Ed(Fr)}]}),signal:Q});if(O!==gt.current)return;if(!rt.ok){let _e=`Anthropic API error ${rt.status}`;try{_e=((ie=(await rt.json()).error)==null?void 0:ie.message)||_e}catch{}throw new Error(_e)}const xt=await rt.json();if(O!==gt.current)return;const on=(yt=xt.content)==null?void 0:yt.find(_e=>_e.type==="text");if(!(on!=null&&on.text))throw new Error("The model returned no report content. The prompt may have exceeded the context limit — try a shorter date range.");if(xt.stop_reason==="max_tokens")throw new Error("The report was too long and got cut off (max tokens reached). Try a shorter date range or contact Rowley to increase the output limit.");let Le=on.text;const Fa=Le.search(/<!DOCTYPE\s+html/i);Fa>0&&(Le=Le.slice(Fa));const Aa=Le.search(/<\/html\s*>/i);Aa>0&&(Le=Le.slice(0,Aa+7)),Le=Le.trim();const jd=Zs(ae.start,ae.end).map(_e=>({label:_e.chartLabel,name:_e.name})),Nd=`<script>
 window.CHART_EVENTS=${JSON.stringify(jd)};
 function addEventMarkers(chart,events){
-  try{
-    var wrapper=chart.canvas.parentNode;
-    wrapper.style.position='relative';
-    events.forEach(function(ev){
-      var idx=chart.data.labels.indexOf(ev.label);
-      if(idx===-1)return;
-      var x=Math.round(chart.scales.x.getPixelForValue(idx));
-      var col=document.createElement('div');
-      col.style.cssText='position:absolute;top:0;bottom:0;left:'+x+'px;width:0;z-index:5;pointer-events:none';
-      var rule=document.createElement('div');
-      rule.style.cssText='position:absolute;inset:0;border-left:1px dashed rgba(10,10,10,0.15)';
-      var pin=document.createElement('div');
-      pin.style.cssText='position:absolute;top:3px;left:-4px;width:8px;height:8px;background:#fff;border:1px solid #0a0a0a;transform:rotate(45deg);pointer-events:auto;transition:background 0.1s;z-index:6;cursor:default';
-      var tip=document.createElement('div');
-      tip.style.cssText='display:none;position:absolute;top:18px;left:0;transform:translateX(-50%);background:#0a0a0a;color:#fff;font-size:10px;font-family:"DM Sans",sans-serif;font-weight:400;letter-spacing:0.08em;padding:5px 10px;white-space:nowrap;pointer-events:none;z-index:20';
-      tip.textContent=ev.name;
-      pin.addEventListener('mouseenter',function(){tip.style.display='block';pin.style.background='#0a0a0a';});
-      pin.addEventListener('mouseleave',function(){tip.style.display='none';pin.style.background='#fff';});
-      pin.appendChild(tip);col.appendChild(rule);col.appendChild(pin);wrapper.appendChild(col);
-    });
-  }catch(e){}
+  requestAnimationFrame(function(){
+    try{
+      var wrapper=chart.canvas.parentNode;
+      wrapper.style.position='relative';
+      events.forEach(function(ev){
+        var idx=chart.data.labels.indexOf(ev.label);
+        if(idx===-1)return;
+        var x=Math.round(chart.scales.x.getPixelForValue(idx));
+        var col=document.createElement('div');
+        col.style.cssText='position:absolute;top:0;bottom:0;left:'+x+'px;width:0;z-index:5;pointer-events:none';
+        var rule=document.createElement('div');
+        rule.style.cssText='position:absolute;inset:0;border-left:1px dashed rgba(10,10,10,0.15)';
+        var pin=document.createElement('div');
+        pin.style.cssText='position:absolute;top:3px;left:-4px;width:8px;height:8px;background:#fff;border:1px solid #0a0a0a;transform:rotate(45deg);pointer-events:auto;transition:background 0.1s;z-index:6;cursor:default';
+        var tip=document.createElement('div');
+        tip.style.cssText='display:none;position:absolute;top:18px;left:0;transform:translateX(-50%);background:#0a0a0a;color:#fff;font-size:10px;font-family:"DM Sans",sans-serif;font-weight:400;letter-spacing:0.08em;padding:5px 10px;white-space:nowrap;pointer-events:none;z-index:20';
+        tip.textContent=ev.name;
+        pin.addEventListener('mouseenter',function(){tip.style.display='block';pin.style.background='#0a0a0a';});
+        pin.addEventListener('mouseleave',function(){tip.style.display='none';pin.style.background='#fff';});
+        pin.appendChild(tip);col.appendChild(rule);col.appendChild(pin);wrapper.appendChild(col);
+      });
+    }catch(e){}
+  });
 }
 <\/script>`;Le=Le.replace(/<\/head>/i,Nd+"</head>");const wt=xt.usage||{},Rd=(wt.input_tokens||0)*3/1e6+(wt.cache_creation_input_tokens||0)*3.75/1e6+(wt.cache_read_input_tokens||0)*.3/1e6+(wt.output_tokens||0)*15/1e6;P({inputTokens:wt.input_tokens||0,cacheCreationTokens:wt.cache_creation_input_tokens||0,cacheReadTokens:wt.cache_read_input_tokens||0,outputTokens:wt.output_tokens||0,costUsd:Rd}),Ir(),J(100),Ee("Ready"),H(Math.round((Date.now()-re)/1e3));const Pd=Ol(o,ae.start,ae.end,h);mm(Pd,Le,{clientId:o,reportType:s}),f(null),k(Le),Qe(""),Ke(!0)}catch(ae){if(O!==gt.current||ae.name==="AbortError")return;Ir(),T(ae.message||"Something went wrong. Check your settings and try again."),J(0),Ke(!1),p(!1)}},Td=()=>{Ke(!1),p(!1),J(0)},_d=()=>{Ke(!1),p(!1),J(0),k(""),A(""),T(""),P(null)};D.useEffect(()=>()=>Ir(),[]),D.useEffect(()=>{const E=async N=>{var ie,yt,ae,vt,Bt,Fr;if(((ie=N.data)==null?void 0:ie.type)==="cursor-move"){const Te=Fn.current;if(Te){const Ut=Te.getBoundingClientRect();window.dispatchEvent(new CustomEvent("iframe-cursor-move",{detail:{x:Ut.left+N.data.x,y:Ut.top+N.data.y}}))}return}if(((yt=N.data)==null?void 0:yt.type)!=="regenerate-step")return;const{sid:O}=N.data,re=localStorage.getItem(Ml);if(!re){T("Anthropic key missing — open Settings to add it.");return}_a(O),Lr(0);const be=Date.now(),Q=8e3;ll.current=setInterval(()=>{const Te=Math.min((Date.now()-be)/Q,1);Lr(Math.min(90,(1-Math.pow(1-Te,2))*90))},80);try{const Te=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"x-api-key":re,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true","content-type":"application/json"},body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:300,messages:[{role:"user",content:`You are improving a set of email marketing growth recommendations. Here are all the current recommendations:
 ${(ae=N.data.allSteps)==null?void 0:ae.map((xt,on)=>`${on+1}. ${xt}`).join(`
