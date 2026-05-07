@@ -230,8 +230,16 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion }
 
   const holdingLines = loadingLines.filter((l) => l.hold);
 
-  const reportTypes = ["Fortnightly", "Monthly", "YTD", "Custom"];
+  const reportTypes = ["Weekly", "Fortnightly", "Monthly", "Quarterly", "YTD", "Custom"];
   const comparisonModes = ["None", "Previous Period", "Year on Year"];
+
+  const maxTokensForReport = () => {
+    if (reportType === "Weekly") return 14000;
+    if (reportType === "Fortnightly") return 20000;
+    if (reportType === "Monthly") return 28000;
+    if (reportType === "Quarterly") return 36000;
+    return 40000; // YTD, Custom
+  };
 
   const computeDateRange = () => {
     const today = new Date();
@@ -239,10 +247,14 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion }
     end.setDate(end.getDate() - 1);
     let start = new Date(end);
 
-    if (reportType === "Fortnightly") {
+    if (reportType === "Weekly") {
+      start.setDate(end.getDate() - 6);
+    } else if (reportType === "Fortnightly") {
       start.setDate(end.getDate() - 13);
     } else if (reportType === "Monthly") {
       start.setDate(end.getDate() - 29);
+    } else if (reportType === "Quarterly") {
+      start.setDate(end.getDate() - 89);
     } else if (reportType === "YTD") {
       start = new Date(today.getFullYear(), 0, 1);
     } else if (reportType === "Custom") {
@@ -288,6 +300,7 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion }
   const buildSystemPrompt = () => `You are generating a Klaviyo email marketing performance report for "${accountName}".
 Produce a complete, self-contained HTML report. Follow every instruction below exactly.
 Be concise — write tight, editorial prose. Do not pad sections or repeat figures already shown in tables. The whole document should be thorough but not verbose.
+Scale your analysis depth and prose length proportionally to the date range — a 7-day report should be noticeably shorter than a monthly or quarterly one. Fewer campaigns and flows means shorter analysis, not filler.
 
 ━━━ FONTS ━━━
 Load via Google Fonts:
@@ -375,7 +388,7 @@ Fill in the actual labels and data from the Klaviyo data. The addEventMarkers fu
 <h2>Campaign Performance</h2>
 period.campaigns is a pre-normalised flat array: [{campaign_name, send_channel, recipients, delivered, open_rate, click_rate, conversions, conversion_rate, conversion_value}]. Empty array = no campaigns.
 If empty: dashed placeholder div (border:0.5px dashed #e0e0da; border-radius:3px; padding:20px; text-align:center; color:#999; font-size:13px; font-style:italic) — "No campaigns sent in this period."
-If rows exist: table (CSS below). Columns: CAMPAIGN | SENT | DELIVERED | OPEN RATE | CLICK RATE | CTOR | CVR | REVENUE
+If rows exist: table (CSS below). Columns: CAMPAIGN | RECIPIENTS | DELIVERED | OPEN RATE | CLICK RATE | CTOR | CVR | REVENUE
   CTOR = click_rate/open_rate×100 formatted X.X% (or "—")
   CVR = conversion_rate×100 formatted X.X%
   Revenue: £X,XXX.XX (or "—" if zero)
@@ -384,7 +397,7 @@ If rows exist: table (CSS below). Columns: CAMPAIGN | SENT | DELIVERED | OPEN RA
 **7. FLOW PERFORMANCE**
 <h2>Flow Performance</h2>
 period.flows is pre-aggregated per flow: [{name, trigger, recipients, delivered, open_rate, click_rate, ctor, conversion_rate, conversion_value, rpr}]
-Table (same CSS). Columns: FLOW | RECIPIENTS | DELIVERED | OPEN | CLICK | CTOR | CVR | REVENUE | RPR
+Table (same CSS). Columns: FLOW | RECIPIENTS | DELIVERED | OPEN RATE | CLICK RATE | CTOR | CVR | REVENUE | RPR
   open_rate×100 = X.X%, click_rate×100 = X.X%, ctor×100 = X.X%, conversion_rate×100 = X.X%
   Revenue: £X,XXX.XX (or "—" if zero). RPR (rpr field): £X.XX (or "—" if zero).
   Flow name: DM Sans 13px #0a0a0a weight 500; below it trigger in #999 11px.
@@ -392,11 +405,12 @@ Table (same CSS). Columns: FLOW | RECIPIENTS | DELIVERED | OPEN | CLICK | CTOR |
 
 TABLE CSS (apply to both tables):
 Wrap each table in: <div style="overflow-x:auto;margin-bottom:24px">
-table{width:100%;border-collapse:collapse;font-size:12px;min-width:600px}
+table{width:100%;border-collapse:collapse;font-size:12px;min-width:700px}
 thead th{font-size:10px;font-weight:500;letter-spacing:0.08em;text-transform:uppercase;color:#999;padding:8px 10px;text-align:right;border-bottom:1px solid #e0e0da;white-space:nowrap}
-thead th:first-child{text-align:left;min-width:160px}
+thead th:first-child{text-align:left;width:30%;min-width:180px}
+thead th:not(:first-child){width:10%}
 tbody td{padding:10px;border-bottom:0.5px solid #f0f0ec;color:#1a1a1a;text-align:right;white-space:nowrap}
-tbody td:first-child{text-align:left;white-space:normal;min-width:160px}
+tbody td:first-child{text-align:left;white-space:normal;width:30%;min-width:180px}
 tfoot td{padding:10px;font-size:11px;font-weight:600;background:#f7f6f3;border-top:1px solid #e0e0da;color:#0a0a0a;text-align:right;white-space:nowrap}
 tfoot td:first-child{text-align:left}
 Revenue cells: font-family:'Ovo',serif;font-size:14px;font-weight:600
@@ -721,7 +735,7 @@ Return ONLY a JSON array of the index numbers for events that are commercially r
         },
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
-          max_tokens: 40000,
+          max_tokens: maxTokensForReport(),
           stream: true,
           system: [{ type: "text", text: buildSystemPrompt(), cache_control: { type: "ephemeral" } }],
           messages: [{ role: "user", content: buildUserMessage(klaviyoData, relevantEvents) }],
@@ -1330,7 +1344,7 @@ ${reportHtml}`,
         </Field>
 
         <Field label="Report type">
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "6px" }}>
             {reportTypes.map((t) => (
               <SegmentButton key={t} active={reportType === t} onClick={() => setReportType(t)}>
                 {t}
@@ -1340,14 +1354,24 @@ ${reportHtml}`,
         </Field>
 
         {reportType === "Custom" && (
-          <>
-            <Field label="Start date">
-              <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} style={inputStyle} />
-            </Field>
-            <Field label="End date">
-              <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} style={inputStyle} />
-            </Field>
-          </>
+          <Field label="Date range">
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <input
+                type="date"
+                value={customStart}
+                onChange={(e) => setCustomStart(e.target.value)}
+                style={{ ...inputStyle, flex: 1 }}
+              />
+              <span style={{ color: "#b8b8b8", fontSize: "11px", flexShrink: 0 }}>→</span>
+              <input
+                type="date"
+                value={customEnd}
+                min={customStart || undefined}
+                onChange={(e) => setCustomEnd(e.target.value)}
+                style={{ ...inputStyle, flex: 1 }}
+              />
+            </div>
+          </Field>
         )}
 
         <Field label="Comparison">
