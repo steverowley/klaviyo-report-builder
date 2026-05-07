@@ -287,6 +287,7 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion }
 
   const buildSystemPrompt = () => `You are generating a Klaviyo email marketing performance report for "${accountName}".
 Produce a complete, self-contained HTML report. Follow every instruction below exactly.
+Be concise — write tight, editorial prose. Do not pad sections or repeat figures already shown in tables. The whole document should be thorough but not verbose.
 
 ━━━ FONTS ━━━
 Load via Google Fonts:
@@ -693,7 +694,7 @@ Return ONLY a JSON array of the index numbers for events that are commercially r
         },
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
-          max_tokens: 80000,
+          max_tokens: 40000,
           system: [
             {
               type: "text",
