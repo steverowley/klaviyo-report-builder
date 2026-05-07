@@ -230,8 +230,16 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion }
 
   const holdingLines = loadingLines.filter((l) => l.hold);
 
-  const reportTypes = ["Fortnightly", "Monthly", "YTD", "Custom"];
+  const reportTypes = ["Weekly", "Fortnightly", "Monthly", "Quarterly", "YTD", "Custom"];
   const comparisonModes = ["None", "Previous Period", "Year on Year"];
+
+  const maxTokensForReport = () => {
+    if (reportType === "Weekly") return 14000;
+    if (reportType === "Fortnightly") return 20000;
+    if (reportType === "Monthly") return 28000;
+    if (reportType === "Quarterly") return 36000;
+    return 40000; // YTD, Custom
+  };
 
   const computeDateRange = () => {
     const today = new Date();
@@ -239,10 +247,14 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion }
     end.setDate(end.getDate() - 1);
     let start = new Date(end);
 
-    if (reportType === "Fortnightly") {
+    if (reportType === "Weekly") {
+      start.setDate(end.getDate() - 6);
+    } else if (reportType === "Fortnightly") {
       start.setDate(end.getDate() - 13);
     } else if (reportType === "Monthly") {
       start.setDate(end.getDate() - 29);
+    } else if (reportType === "Quarterly") {
+      start.setDate(end.getDate() - 89);
     } else if (reportType === "YTD") {
       start = new Date(today.getFullYear(), 0, 1);
     } else if (reportType === "Custom") {
@@ -288,6 +300,7 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion }
   const buildSystemPrompt = () => `You are generating a Klaviyo email marketing performance report for "${accountName}".
 Produce a complete, self-contained HTML report. Follow every instruction below exactly.
 Be concise — write tight, editorial prose. Do not pad sections or repeat figures already shown in tables. The whole document should be thorough but not verbose.
+Scale your analysis depth and prose length proportionally to the date range — a 7-day report should be noticeably shorter than a monthly or quarterly one. Fewer campaigns and flows means shorter analysis, not filler.
 
 ━━━ FONTS ━━━
 Load via Google Fonts:
@@ -721,7 +734,7 @@ Return ONLY a JSON array of the index numbers for events that are commercially r
         },
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
-          max_tokens: 40000,
+          max_tokens: maxTokensForReport(),
           stream: true,
           system: [{ type: "text", text: buildSystemPrompt(), cache_control: { type: "ephemeral" } }],
           messages: [{ role: "user", content: buildUserMessage(klaviyoData, relevantEvents) }],
@@ -1330,7 +1343,7 @@ ${reportHtml}`,
         </Field>
 
         <Field label="Report type">
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "6px" }}>
             {reportTypes.map((t) => (
               <SegmentButton key={t} active={reportType === t} onClick={() => setReportType(t)}>
                 {t}
@@ -1340,14 +1353,24 @@ ${reportHtml}`,
         </Field>
 
         {reportType === "Custom" && (
-          <>
-            <Field label="Start date">
-              <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)} style={inputStyle} />
-            </Field>
-            <Field label="End date">
-              <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)} style={inputStyle} />
-            </Field>
-          </>
+          <Field label="Date range">
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <input
+                type="date"
+                value={customStart}
+                onChange={(e) => setCustomStart(e.target.value)}
+                style={{ ...inputStyle, flex: 1 }}
+              />
+              <span style={{ color: "#b8b8b8", fontSize: "11px", flexShrink: 0 }}>→</span>
+              <input
+                type="date"
+                value={customEnd}
+                min={customStart || undefined}
+                onChange={(e) => setCustomEnd(e.target.value)}
+                style={{ ...inputStyle, flex: 1 }}
+              />
+            </div>
+          </Field>
         )}
 
         <Field label="Comparison">
