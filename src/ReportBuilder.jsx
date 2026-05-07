@@ -1789,7 +1789,7 @@ function LoadingState({ progress, line, elapsed, justFinished, onDismissCompleti
   const barRefs = useRef([]);
   const [ripples, setRipples] = useState([]);
 
-  // Mouse move → bars swell toward cursor (direct DOM, no re-render)
+  // Mouse move → opacity spotlight (bars near cursor bright, far bars dim)
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -1801,21 +1801,19 @@ function LoadingState({ progress, line, elapsed, justFinished, onDismissCompleti
         const br = bar.getBoundingClientRect();
         const bx = br.left + br.width / 2 - rect.left;
         const dist = Math.abs(mx - bx);
-        const boost = 1 + 1.6 * Math.exp(-(dist * dist) / (2 * 90 * 90));
-        bar.style.setProperty('--bar-max', `${Math.round(BAR_HEIGHTS[i] * boost)}px`);
+        const opacity = 0.12 + 0.88 * Math.exp(-(dist * dist) / (2 * 85 * 85));
+        bar.style.opacity = opacity;
       });
     };
     const onLeave = () => {
-      barRefs.current.forEach((bar, i) => {
-        if (bar) bar.style.setProperty('--bar-max', `${BAR_HEIGHTS[i]}px`);
-      });
+      barRefs.current.forEach(bar => { if (bar) bar.style.opacity = 1; });
     };
     el.addEventListener('mousemove', onMove);
     el.addEventListener('mouseleave', onLeave);
     return () => { el.removeEventListener('mousemove', onMove); el.removeEventListener('mouseleave', onLeave); };
   }, []);
 
-  // Click → spawn ink ripple
+  // Click → precise ink mark
   const handleClick = (e) => {
     if (justFinished) return;
     const rect = containerRef.current.getBoundingClientRect();
@@ -1823,7 +1821,7 @@ function LoadingState({ progress, line, elapsed, justFinished, onDismissCompleti
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     setRipples(r => [...r, { id, x, y }]);
-    setTimeout(() => setRipples(r => r.filter(rip => rip.id !== id)), 1600);
+    setTimeout(() => setRipples(r => r.filter(rip => rip.id !== id)), 900);
   };
 
   return (
@@ -1846,16 +1844,14 @@ function LoadingState({ progress, line, elapsed, justFinished, onDismissCompleti
     >
       <FloatingNumerals />
 
-      {/* Ink ripples — SVG layer, pointer-events none */}
+      {/* Precise ink marks — SVG layer, pointer-events none */}
       <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 4, overflow: "visible" }}>
         {ripples.map(r => (
           <g key={r.id} transform={`translate(${r.x},${r.y})`}>
-            <circle cx="0" cy="0" r="1" fill="none" stroke="#0a0a0a" strokeWidth="0.6"
-              style={{ animation: "rippleOut 1.6s cubic-bezier(0.2,0.6,0.4,1) forwards" }} />
-            <circle cx="0" cy="0" r="1" fill="none" stroke="#0a0a0a" strokeWidth="0.4"
-              style={{ animation: "rippleOut 1.6s cubic-bezier(0.2,0.6,0.4,1) 0.18s forwards", opacity: 0 }} />
+            <circle cx="0" cy="0" r="1" fill="none" stroke="#0a0a0a" strokeWidth="0.5"
+              style={{ animation: "rippleOut 0.75s cubic-bezier(0.15,0.5,0.3,1) forwards" }} />
             <circle cx="0" cy="0" r="1" fill="none" stroke="#0a0a0a" strokeWidth="0.3"
-              style={{ animation: "rippleOut 1.6s cubic-bezier(0.2,0.6,0.4,1) 0.36s forwards", opacity: 0 }} />
+              style={{ animation: "rippleOut 0.9s cubic-bezier(0.15,0.5,0.3,1) 0.1s forwards", opacity: 0 }} />
           </g>
         ))}
       </svg>
@@ -1991,8 +1987,8 @@ function LoadingState({ progress, line, elapsed, justFinished, onDismissCompleti
           to { height: var(--bar-max); opacity: 0.85; }
         }
         @keyframes rippleOut {
-          0%   { transform: scale(0);   opacity: 0.3; }
-          100% { transform: scale(200); opacity: 0; }
+          0%   { transform: scale(0);  opacity: 0.5; }
+          100% { transform: scale(50); opacity: 0; }
         }
         @keyframes shimmer {
           0%   { transform: translateX(-100%); }
