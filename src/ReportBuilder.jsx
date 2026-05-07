@@ -186,6 +186,7 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion }
   const [slidesCopied, setSlidesCopied] = useState(false);
   const [regenSid, setRegenSid] = useState(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [showAddClientModal, setShowAddClientModal] = useState(false);
   const dropdownRef = useRef(null);
   const [regenProgress, setRegenProgress] = useState(0);
   const slidesProgressTimerRef = useRef(null);
@@ -1153,76 +1154,90 @@ ${reportHtml}`,
             <div style={{ fontSize: "11px", color: "#6b6b6b", fontStyle: "italic", fontFamily: "'Ovo', serif" }}>
               {clientsError}
             </div>
-          ) : clients.length === 0 ? (
-            <div style={{ fontSize: "11px", color: "#b8b8b8", fontStyle: "italic", fontFamily: "'Ovo', serif" }}>
-              No clients configured in worker yet.
-            </div>
-          ) : (
-            <div ref={dropdownRef} style={{ position: "relative" }}>
-              <button
-                onClick={() => setDropdownOpen(o => !o)}
-                style={{
-                  ...inputStyle,
-                  width: "100%",
-                  textAlign: "left",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  background: "#fff",
-                }}
-              >
-                <span style={{ color: selectedClientId ? "#0a0a0a" : "#b8b8b8" }}>
-                  {selectedClientId ? (clients.find(c => c.id === selectedClientId)?.name ?? "—") : "— select client —"}
-                </span>
-                <svg width="10" height="6" viewBox="0 0 10 6" fill="none" style={{ flexShrink: 0, transform: dropdownOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s ease" }}>
-                  <path d="M0 0l5 6 5-6z" fill="#6b6b6b" />
-                </svg>
-              </button>
-              {dropdownOpen && (
-                <div style={{
-                  position: "absolute",
-                  top: "calc(100% + 2px)",
-                  left: 0,
-                  right: 0,
-                  background: "#fff",
-                  border: "1px solid #ededed",
-                  zIndex: 200,
-                  maxHeight: "220px",
-                  overflowY: "auto",
-                }}>
-                  {clients.length > 1 && (
-                    <button
-                      onClick={() => { setSelectedClientId(""); setDropdownOpen(false); }}
-                      style={{
-                        display: "block", width: "100%", textAlign: "left",
-                        padding: "9px 12px", background: selectedClientId === "" ? "#f8f6f2" : "transparent",
-                        border: "none", borderBottom: "1px solid #f4f4f4",
-                        fontFamily: "'DM Sans', sans-serif", fontSize: "12px",
-                        color: "#b8b8b8", fontWeight: 400,
-                      }}
-                    >
-                      — select client —
-                    </button>
-                  )}
-                  {clients.map(c => (
-                    <button
-                      key={c.id}
-                      onClick={() => { setSelectedClientId(c.id); setDropdownOpen(false); }}
-                      style={{
-                        display: "block", width: "100%", textAlign: "left",
-                        padding: "9px 12px", background: selectedClientId === c.id ? "#f8f6f2" : "transparent",
-                        border: "none", borderBottom: "1px solid #f4f4f4",
-                        fontFamily: "'DM Sans', sans-serif", fontSize: "12px",
-                        color: "#0a0a0a", fontWeight: selectedClientId === c.id ? 500 : 400,
-                      }}
-                    >
-                      {c.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+          ) : null}
+          <div ref={dropdownRef} style={{ position: "relative" }}>
+            <button
+              onClick={() => setDropdownOpen(o => !o)}
+              style={{
+                ...inputStyle,
+                width: "100%",
+                textAlign: "left",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                background: "#fff",
+              }}
+            >
+              <span style={{ color: selectedClientId ? "#0a0a0a" : "#b8b8b8" }}>
+                {selectedClientId ? (clients.find(c => c.id === selectedClientId)?.name ?? "—") : (clients.length === 0 ? "— no clients yet —" : "— select client —")}
+              </span>
+              <svg width="10" height="6" viewBox="0 0 10 6" fill="none" style={{ flexShrink: 0, transform: dropdownOpen ? "rotate(180deg)" : "none", transition: "transform 0.15s ease" }}>
+                <path d="M0 0l5 6 5-6z" fill="#6b6b6b" />
+              </svg>
+            </button>
+            {dropdownOpen && (
+              <div style={{
+                position: "absolute",
+                top: "calc(100% + 2px)",
+                left: 0,
+                right: 0,
+                background: "#fff",
+                border: "1px solid #ededed",
+                zIndex: 200,
+                maxHeight: "260px",
+                overflowY: "auto",
+              }}>
+                {clients.length > 1 && (
+                  <button
+                    onClick={() => { setSelectedClientId(""); setDropdownOpen(false); }}
+                    style={{
+                      display: "block", width: "100%", textAlign: "left",
+                      padding: "9px 12px", background: selectedClientId === "" ? "#f8f6f2" : "transparent",
+                      border: "none", borderBottom: "1px solid #f4f4f4",
+                      fontFamily: "'DM Sans', sans-serif", fontSize: "12px",
+                      color: "#b8b8b8", fontWeight: 400,
+                    }}
+                  >
+                    — select client —
+                  </button>
+                )}
+                {clients.map(c => (
+                  <button
+                    key={c.id}
+                    onClick={() => { setSelectedClientId(c.id); setDropdownOpen(false); }}
+                    style={{
+                      display: "block", width: "100%", textAlign: "left",
+                      padding: "9px 12px", background: selectedClientId === c.id ? "#f8f6f2" : "transparent",
+                      border: "none", borderBottom: "1px solid #f4f4f4",
+                      fontFamily: "'DM Sans', sans-serif", fontSize: "12px",
+                      color: "#0a0a0a", fontWeight: selectedClientId === c.id ? 500 : 400,
+                    }}
+                  >
+                    {c.name}
+                  </button>
+                ))}
+                <button
+                  onClick={() => { setDropdownOpen(false); setShowAddClientModal(true); }}
+                  style={{
+                    display: "flex", alignItems: "center", gap: "6px",
+                    width: "100%", textAlign: "left",
+                    padding: "9px 12px", background: "transparent",
+                    border: "none", borderTop: clients.length > 0 ? "1px solid #ededed" : "none",
+                    fontFamily: "'DM Sans', sans-serif", fontSize: "11px",
+                    color: "#6b6b6b", fontWeight: 400, cursor: "pointer",
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.color = "#0a0a0a"; }}
+                  onMouseLeave={e => { e.currentTarget.style.color = "#6b6b6b"; }}
+                >
+                  <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                    <line x1="5.5" y1="1" x2="5.5" y2="10" />
+                    <line x1="1" y1="5.5" x2="10" y2="5.5" />
+                  </svg>
+                  Add new client
+                </button>
+              </div>
+            )}
+          </div>
         </Field>
 
         <Field label="Report type">
@@ -1596,6 +1611,18 @@ ${reportHtml}`,
           )}
         </div>
       </main>
+
+      {/* Add client modal */}
+      {showAddClientModal && (
+        <AddClientModal
+          onClose={() => setShowAddClientModal(false)}
+          onAdded={(newClients) => {
+            setClients(newClients);
+            setShowAddClientModal(false);
+            if (newClients.length === 1) setSelectedClientId(newClients[0].id);
+          }}
+        />
+      )}
 
       {/* Slides prompt modal */}
       {showSlidesModal && (
@@ -2400,3 +2427,208 @@ function FloatingNumerals() {
     </div>
   );
 }
+
+function AddClientModal({ onClose, onAdded }) {
+  const [name, setName] = useState("");
+  const [klaviyoKey, setKlaviyoKey] = useState("");
+  const [adminPassword, setAdminPassword] = useState(() => localStorage.getItem("swanky_admin_password") || "");
+  const [showKey, setShowKey] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [status, setStatus] = useState(null); // null | "loading" | "success" | "error"
+  const [errorMsg, setErrorMsg] = useState("");
+
+  const canSubmit = name.trim() && klaviyoKey.trim() && adminPassword.trim() && status !== "loading";
+
+  const handleSubmit = async () => {
+    if (!canSubmit) return;
+    const workerUrl = localStorage.getItem("swanky_worker_url");
+    if (!workerUrl) {
+      setStatus("error");
+      setErrorMsg("Worker URL not set. Open Settings and add it first.");
+      return;
+    }
+    setStatus("loading");
+    setErrorMsg("");
+    try {
+      const res = await fetch(workerUrl + "?action=add-client", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim(), klaviyoKey: klaviyoKey.trim(), adminPassword: adminPassword.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setStatus("error");
+        setErrorMsg(data.error || `Error ${res.status}`);
+        return;
+      }
+      setStatus("success");
+      if (data.clients) onAdded(data.clients);
+    } catch (e) {
+      setStatus("error");
+      setErrorMsg(e.message || "Network error — check your worker URL.");
+    }
+  };
+
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0, background: "rgba(10,10,10,0.55)",
+        zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: "32px",
+      }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{ background: "#fff", width: "min(480px,100%)", border: "1px solid #ededed", padding: "40px" }}>
+        <div style={{ marginBottom: "28px" }}>
+          <div style={{ fontFamily: "'Ovo', serif", fontSize: "26px", fontWeight: 400, color: "#0a0a0a", marginBottom: "6px" }}>
+            Add new client
+          </div>
+          <div style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.18em", color: "#6b6b6b" }}>
+            Stored securely in Cloudflare KV
+          </div>
+        </div>
+
+        <div style={{ height: "1px", background: "#ededed", marginBottom: "24px" }} />
+
+        {status === "success" ? (
+          <div style={{ textAlign: "center", padding: "24px 0" }}>
+            <div style={{ fontSize: "32px", marginBottom: "12px" }}>✓</div>
+            <div style={{ fontFamily: "'Ovo', serif", fontSize: "18px", color: "#0a0a0a", marginBottom: "8px" }}>
+              Client added
+            </div>
+            <div style={{ fontSize: "11px", color: "#6b6b6b", marginBottom: "28px" }}>
+              {name} is now available in the client list.
+            </div>
+            <button
+              onClick={onClose}
+              style={{
+                padding: "12px 32px", background: "#0a0a0a", color: "#fff",
+                border: "none", fontFamily: "'DM Sans', sans-serif", fontSize: "11px",
+                fontWeight: 500, letterSpacing: "0.16em", textTransform: "uppercase", cursor: "pointer",
+              }}
+            >
+              Done
+            </button>
+          </div>
+        ) : (
+          <>
+            <div style={{ marginBottom: "20px" }}>
+              <div style={modalLabelStyle}>Client name</div>
+              <input
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="Acme Clothing Co."
+                autoFocus
+                style={modalInputStyle}
+              />
+            </div>
+
+            <div style={{ marginBottom: "20px" }}>
+              <div style={modalLabelStyle}>Klaviyo private API key</div>
+              <div style={{ position: "relative" }}>
+                <input
+                  type={showKey ? "text" : "password"}
+                  value={klaviyoKey}
+                  onChange={e => setKlaviyoKey(e.target.value)}
+                  placeholder="pk_..."
+                  autoComplete="off"
+                  spellCheck={false}
+                  style={{ ...modalInputStyle, paddingRight: "48px" }}
+                />
+                <button onClick={() => setShowKey(v => !v)} tabIndex={-1} style={modalToggleStyle}>
+                  {showKey ? "hide" : "show"}
+                </button>
+              </div>
+              <div style={modalHintStyle}>
+                Klaviyo → Settings → API Keys → Create Private API Key. Needs read access to campaigns, flows and metrics.
+              </div>
+            </div>
+
+            <div style={{ marginBottom: "28px" }}>
+              <div style={modalLabelStyle}>Admin password</div>
+              <div style={{ position: "relative" }}>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={adminPassword}
+                  onChange={e => setAdminPassword(e.target.value)}
+                  placeholder="Set in Cloudflare Worker secrets"
+                  autoComplete="off"
+                  style={{ ...modalInputStyle, paddingRight: "48px" }}
+                />
+                <button onClick={() => setShowPassword(v => !v)} tabIndex={-1} style={modalToggleStyle}>
+                  {showPassword ? "hide" : "show"}
+                </button>
+              </div>
+              <div style={modalHintStyle}>
+                The ADMIN_PASSWORD secret set in your Cloudflare Worker. Save it in Settings to avoid re-entering each time.
+              </div>
+            </div>
+
+            {status === "error" && (
+              <div style={{
+                padding: "10px 14px", background: "#fafaf8", border: "1px solid #ededed",
+                fontSize: "11px", color: "#6b6b6b", fontFamily: "'Ovo', serif", fontStyle: "italic",
+                marginBottom: "20px", lineHeight: 1.5,
+              }}>
+                {errorMsg}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                onClick={handleSubmit}
+                disabled={!canSubmit}
+                style={{
+                  flex: 1, padding: "13px 20px",
+                  background: canSubmit ? "#0a0a0a" : "#b8b8b8",
+                  color: "#fff", border: "none",
+                  fontFamily: "'DM Sans', sans-serif", fontSize: "11px",
+                  fontWeight: 500, letterSpacing: "0.16em", textTransform: "uppercase",
+                  cursor: canSubmit ? "pointer" : "default",
+                  transition: "background 0.15s ease",
+                }}
+              >
+                {status === "loading" ? "Adding…" : "Add client"}
+              </button>
+              <button
+                onClick={onClose}
+                style={{
+                  padding: "13px 20px", background: "transparent",
+                  color: "#2a2a2a", border: "1px solid #ededed",
+                  fontFamily: "'DM Sans', sans-serif", fontSize: "11px",
+                  fontWeight: 500, letterSpacing: "0.16em", textTransform: "uppercase",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const modalLabelStyle = {
+  fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.16em",
+  color: "#6b6b6b", marginBottom: "8px", fontWeight: 500,
+};
+
+const modalInputStyle = {
+  width: "100%", padding: "10px 12px", border: "1px solid #b8b8b8",
+  background: "#fff", fontSize: "13px", fontFamily: "'DM Sans', sans-serif",
+  color: "#0a0a0a", outline: "none", boxSizing: "border-box", borderRadius: 0,
+};
+
+const modalToggleStyle = {
+  position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)",
+  background: "transparent", border: "none", cursor: "pointer", color: "#6b6b6b",
+  fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.1em",
+  fontFamily: "'DM Sans', sans-serif", padding: "2px 4px",
+};
+
+const modalHintStyle = {
+  marginTop: "6px", fontSize: "11px", color: "#6b6b6b",
+  fontFamily: "'Ovo', serif", fontStyle: "italic", lineHeight: 1.4,
+};

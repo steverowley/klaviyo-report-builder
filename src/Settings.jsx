@@ -2,11 +2,14 @@ import React, { useState, useEffect } from "react";
 
 const ANTHROPIC_KEY = "swanky_anthropic_key";
 const WORKER_URL = "swanky_worker_url";
+const ADMIN_PASSWORD = "swanky_admin_password";
 
 export default function Settings({ onSave }) {
   const [anthropicKey, setAnthropicKey] = useState("");
   const [workerUrl, setWorkerUrl] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
   const [showAnthropicKey, setShowAnthropicKey] = useState(false);
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
   const [saved, setSaved] = useState(false);
   const [cleared, setCleared] = useState(false);
 
@@ -20,6 +23,7 @@ export default function Settings({ onSave }) {
   useEffect(() => {
     setAnthropicKey(localStorage.getItem(ANTHROPIC_KEY) || "");
     setWorkerUrl(localStorage.getItem(WORKER_URL) || "");
+    setAdminPassword(localStorage.getItem(ADMIN_PASSWORD) || "");
   }, []);
 
   const canSave =
@@ -30,6 +34,11 @@ export default function Settings({ onSave }) {
     if (!canSave) return;
     localStorage.setItem(ANTHROPIC_KEY, anthropicKey.trim());
     localStorage.setItem(WORKER_URL, workerUrl.trim());
+    if (adminPassword.trim()) {
+      localStorage.setItem(ADMIN_PASSWORD, adminPassword.trim());
+    } else {
+      localStorage.removeItem(ADMIN_PASSWORD);
+    }
     setSaved(true);
     setTimeout(() => onSave(), 700);
   };
@@ -37,9 +46,11 @@ export default function Settings({ onSave }) {
   const handleClear = () => {
     localStorage.removeItem(ANTHROPIC_KEY);
     localStorage.removeItem(WORKER_URL);
+    localStorage.removeItem(ADMIN_PASSWORD);
     localStorage.removeItem("swanky_klaviyo_key"); // legacy cleanup
     setAnthropicKey("");
     setWorkerUrl("");
+    setAdminPassword("");
     setCleared(true);
     setTimeout(() => setCleared(false), 2500);
   };
@@ -128,9 +139,21 @@ export default function Settings({ onSave }) {
             style={inputStyle}
           />
           <div style={hintStyle}>
-            Your Cloudflare Worker URL. Client Klaviyo keys are stored as Worker secrets — add clients via the Cloudflare dashboard, not here.
+            Your Cloudflare Worker URL.
           </div>
         </div>
+
+        <KeyField
+          label="Admin password"
+          value={adminPassword}
+          onChange={setAdminPassword}
+          onKeyDown={handleKeyDown}
+          show={showAdminPassword}
+          onToggleShow={() => setShowAdminPassword(v => !v)}
+          placeholder="Set in Cloudflare Worker secrets"
+          hint="Required to add clients from the app. Set ADMIN_PASSWORD in your Worker's secrets."
+          isPassword
+        />
 
         <div
           style={{

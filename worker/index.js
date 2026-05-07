@@ -12,7 +12,7 @@ function klaviyoHeaders(apiKey) {
 function cors(origin) {
   return {
     'Access-Control-Allow-Origin': origin || '*',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Access-Control-Max-Age': '86400',
   };
@@ -33,6 +33,38 @@ async function kFetch(path, apiKey, init = {}, retries = 4) {
     throw new Error(`Klaviyo ${res.status} on ${path}: ${body.slice(0, 400)}`);
   }
   return res.json();
+}
+
+function slugify(name) {
+  return name.toLowerCase()
+    .replace(/\s+/g, '_')
+    .replace(/[^a-z0-9_]/g, '')
+    .slice(0, 32) || ('client_' + Date.now().toString(36));
+}
+
+// Read merged client list: KV-stored clients first, then CLIENTS_JSON secret fallback.
+async function readClients(env) {
+  let kvClients = [];
+  if (env.CLIENTS_KV) {
+    try { kvClients = JSON.parse(await env.CLIENTS_KV.get('clients') || '[]'); } catch {}
+  }
+  let secretClients = [];
+  try { secretClients = JSON.parse(env.CLIENTS_JSON || '[]'); } catch {}
+  const kvIds = new Set(kvClients.map(c => c.id));
+  const merged = [...kvClients];
+  for (const sc of secretClients) {
+    if (!kvIds.has(sc.id)) merged.push(sc);
+  }
+  return merged;
+}
+
+// Read Klaviyo key: KV first, then per-client env secret fallback.
+async function readKlaviyoKey(env, clientId) {
+  if (env.CLIENTS_KV) {
+    const kv = await env.CLIENTS_KV.get('key_' + clientId);
+    if (kv) return kv;
+  }
+  return env[`KLAVIYO_KEY_${clientId}`] || null;
 }
 
 function reportBody(type, startDate, endDate, conversionMetricId) {
@@ -66,7 +98,6 @@ function aggregateBody(metricId, startDate, endDate, measurements) {
   });
 }
 
-// Klaviyo values-report responses nest rows at data.attributes.results.
 function extractResults(report) {
   const results = report?.data?.attributes?.results;
   if (Array.isArray(results)) return results;
@@ -74,8 +105,6 @@ function extractResults(report) {
   return [];
 }
 
-// Fetch all flows and return { flowId -> flowName }.
-// Uses plain /flows/ with no field filter to avoid 400 from encoding issues.
 async function getFlowNames(klaviyoKey) {
   const names = {};
   let errMsg = null;
@@ -95,12 +124,10 @@ async function getFlowNames(klaviyoKey) {
   return { names, errMsg };
 }
 
-// Fetch all campaigns and return { campaignId -> campaignName }.
 async function getCampaignNames(klaviyoKey) {
   const names = {};
   let errMsg = null;
   try {
-    // Use URLSearchParams to safely encode filter with quotes
     let url = "/campaigns/?filter=equals(messages.channel,'email')";
     while (url) {
       const res = await kFetch(url, klaviyoKey);
@@ -116,14 +143,11 @@ async function getCampaignNames(klaviyoKey) {
   return { names, errMsg };
 }
 
-// Normalise metric-aggregate response into { dates, counts }.
-// Klaviyo returns either flat attrs.dates/attrs.data or nested attrs.results[].
 function processAggregate(agg, measurement = 'count') {
   try {
     const attrs = agg?.data?.attributes;
     if (!attrs) return null;
 
-    // Format A: nested results array (observed in 2024-10-15 revision)
     if (Array.isArray(attrs.results) && attrs.results.length > 0) {
       const r = attrs.results[0];
       const dates = r.dates;
@@ -133,20 +157,16 @@ function processAggregate(agg, measurement = 'count') {
       return { dates: dates.map(d => d.slice(0, 10)), counts };
     }
 
-    // Format B: flat dates + data field (3 known shapes)
     const dates = attrs.dates;
     let raw;
     if (Array.isArray(attrs.data)) {
       if (attrs.data[0]?.measurements) {
-        // Shape: [{dimensions:[], measurements:{count:[...], sum_value:[...]}}]
         raw = attrs.data[0].measurements[measurement];
       } else {
-        // Shape: [[count_vals], [sum_vals], ...]
         const idx = ['count', 'sum_value', 'unique'].indexOf(measurement);
         raw = attrs.data[idx >= 0 ? idx : 0];
       }
     } else {
-      // Shape: {count:[...], sum_value:[...]}
       raw = attrs.data?.[measurement];
     }
     if (!dates?.length || !raw?.length) return null;
@@ -157,7 +177,6 @@ function processAggregate(agg, measurement = 'count') {
   }
 }
 
-// Normalise campaign results into a flat array for Claude.
 function normaliseCampaigns(report, campaignNames = {}) {
   return extractResults(report).map(row => {
     const g = row.groupings ?? {};
@@ -178,7 +197,6 @@ function normaliseCampaigns(report, campaignNames = {}) {
   });
 }
 
-// Roll up per-message flow rows into per-flow aggregates.
 function aggregateFlowRows(report, flowNames = {}) {
   const rows = extractResults(report);
   const byFlow = {};
@@ -227,40 +245,110 @@ export default {
       return new Response(null, { status: 204, headers: cors(origin) });
     }
 
-    // GET /?debug — diagnostic check (no key values exposed)
-    if (request.method === 'GET' && new URL(request.url).searchParams.has('debug')) {
-      let clients = [];
-      let clientsJsonRaw = env.CLIENTS_JSON || null;
-      let clientsJsonError = null;
-      try { clients = JSON.parse(clientsJsonRaw || '[]'); } catch (e) { clientsJsonError = e.message; }
-      const keyStatus = clients.map(c => ({
+    const url = new URL(request.url);
+    const action = url.searchParams.get('action');
+
+    // ── POST /?action=add-client — add a new client via UI ──────────────────
+    if (request.method === 'POST' && action === 'add-client') {
+      if (!env.CLIENTS_KV) {
+        return new Response(JSON.stringify({ error: 'KV namespace not configured. Follow the setup guide to enable client management.' }), {
+          status: 503, headers: { 'Content-Type': 'application/json', ...cors(origin) },
+        });
+      }
+
+      let body;
+      try { body = await request.json(); } catch {
+        return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
+          status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) },
+        });
+      }
+
+      const { adminPassword, name, klaviyoKey } = body;
+
+      if (!env.ADMIN_PASSWORD || adminPassword !== env.ADMIN_PASSWORD) {
+        return new Response(JSON.stringify({ error: 'Invalid admin password.' }), {
+          status: 401, headers: { 'Content-Type': 'application/json', ...cors(origin) },
+        });
+      }
+
+      if (!name || !klaviyoKey) {
+        return new Response(JSON.stringify({ error: 'name and klaviyoKey are required.' }), {
+          status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) },
+        });
+      }
+
+      // Validate the Klaviyo key actually works
+      try {
+        await kFetch('/accounts/', klaviyoKey);
+      } catch (e) {
+        return new Response(JSON.stringify({ error: `Klaviyo key validation failed: ${e.message}` }), {
+          status: 422, headers: { 'Content-Type': 'application/json', ...cors(origin) },
+        });
+      }
+
+      // Build a unique ID, avoiding collisions with existing clients
+      const existing = await readClients(env);
+      const existingIds = new Set(existing.map(c => c.id));
+      let id = slugify(name);
+      if (existingIds.has(id)) {
+        let n = 2;
+        while (existingIds.has(`${id}_${n}`)) n++;
+        id = `${id}_${n}`;
+      }
+
+      // Check if client already exists (by name) — update key if so
+      const existingKv = JSON.parse(await env.CLIENTS_KV.get('clients') || '[]');
+      const nameMatch = existingKv.find(c => c.name.toLowerCase() === name.toLowerCase());
+      if (nameMatch) {
+        // Just update the key for this client
+        await env.CLIENTS_KV.put('key_' + nameMatch.id, klaviyoKey);
+        return new Response(JSON.stringify({ updated: true, client: nameMatch, clients: existing }), {
+          headers: { 'Content-Type': 'application/json', ...cors(origin) },
+        });
+      }
+
+      const newClient = { id, name, createdAt: new Date().toISOString() };
+      const updatedKv = [...existingKv, newClient];
+      await Promise.all([
+        env.CLIENTS_KV.put('clients', JSON.stringify(updatedKv)),
+        env.CLIENTS_KV.put('key_' + id, klaviyoKey),
+      ]);
+
+      const allClients = await readClients(env);
+      return new Response(JSON.stringify({ created: true, client: newClient, clients: allClients }), {
+        headers: { 'Content-Type': 'application/json', ...cors(origin) },
+      });
+    }
+
+    // GET /?debug — diagnostic check
+    if (request.method === 'GET' && url.searchParams.has('debug')) {
+      const clients = await readClients(env);
+      const keyStatus = await Promise.all(clients.map(async c => ({
         id: c.id,
         name: c.name,
-        secretName: `KLAVIYO_KEY_${c.id}`,
-        keyFound: !!env[`KLAVIYO_KEY_${c.id}`],
-      }));
+        keyInKv: env.CLIENTS_KV ? !!(await env.CLIENTS_KV.get('key_' + c.id)) : false,
+        keyInSecrets: !!env[`KLAVIYO_KEY_${c.id}`],
+      })));
       return new Response(JSON.stringify({
-        CLIENTS_JSON_set: !!clientsJsonRaw,
-        CLIENTS_JSON_parse_error: clientsJsonError,
+        kvAvailable: !!env.CLIENTS_KV,
+        CLIENTS_JSON_set: !!env.CLIENTS_JSON,
         clients: keyStatus,
       }, null, 2), {
         headers: { 'Content-Type': 'application/json', ...cors(origin) },
       });
     }
 
-    // GET / — return client list (names + ids only, no keys)
+    // GET / — return client list
     if (request.method === 'GET') {
-      let clients = [];
-      try { clients = JSON.parse(env.CLIENTS_JSON || '[]'); } catch {}
+      const clients = await readClients(env);
       return new Response(JSON.stringify(clients), {
         headers: { 'Content-Type': 'application/json', ...cors(origin) },
       });
     }
 
     if (request.method !== 'POST') {
-      return new Response(JSON.stringify({ error: 'POST only' }), {
-        status: 405,
-        headers: { 'Content-Type': 'application/json', ...cors(origin) },
+      return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+        status: 405, headers: { 'Content-Type': 'application/json', ...cors(origin) },
       });
     }
 
@@ -279,7 +367,7 @@ export default {
       });
     }
 
-    const klaviyoKey = env[`KLAVIYO_KEY_${clientId}`];
+    const klaviyoKey = await readKlaviyoKey(env, clientId);
     if (!klaviyoKey) {
       return new Response(JSON.stringify({ error: `No Klaviyo key configured for client: ${clientId}` }), {
         status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) },
@@ -296,10 +384,8 @@ export default {
 
       const flowNames     = flowResult.names;
       const campaignNames = campaignResult.names;
+      const metricList    = metrics.data ?? [];
 
-      const metricList = metrics.data ?? [];
-
-      // Precise matching — order matters (most specific first, exclude wrong categories)
       const conversionMetric = metricList.find(m => {
         const n = (m.attributes?.name ?? '').toLowerCase();
         return n.includes('placed order') || n.includes('place order');
