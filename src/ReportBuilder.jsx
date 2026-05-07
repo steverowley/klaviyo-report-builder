@@ -204,6 +204,7 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion }
   const [showAddClientModal, setShowAddClientModal] = useState(false);
   const [savedReports, setSavedReports] = useState(() => readAllCacheEntries());
   const [currentReportMeta, setCurrentReportMeta] = useState(null);
+  const [loadingSavedReport, setLoadingSavedReport] = useState(false);
   const dropdownRef = useRef(null);
   const [regenProgress, setRegenProgress] = useState(0);
   const slidesProgressTimerRef = useRef(null);
@@ -900,10 +901,12 @@ function addEventMarkers(chart,events){
       setLoadingLine("Ready");
       setLastDuration(Math.round((Date.now() - startedAt) / 1000));
       const key = cacheKey(selectedClientId, range.start, range.end, comparisonMode);
-      writeCache(key, rawHtml, { clientId: selectedClientId, reportType, dateStart: range.start, dateEnd: range.end, accountName });
       const generatedNow = new Date().toISOString();
-      setCurrentReportMeta({ key, generatedAt: generatedNow, clientId: selectedClientId, reportType, dateStart: range.start, dateEnd: range.end, accountName });
-      setSavedReports(readAllCacheEntries());
+      const reportMeta = { clientId: selectedClientId, reportType, dateStart: range.start, dateEnd: range.end, accountName, generatedAt: generatedNow };
+      writeCache(key, rawHtml, reportMeta);
+      saveReportToWorker(rawHtml, reportMeta);
+      setCurrentReportMeta({ key, ...reportMeta });
+      setSavedReports(readAllCacheEntries()); // optimistic local update; worker list refreshes when sidebar opens
       setCachedInfo(null);
       setReportHtml(rawHtml);
       setSlidesPrompt("");
@@ -938,27 +941,76 @@ function addEventMarkers(chart,events){
     setCurrentReportMeta(null);
   };
 
-  const loadSavedReport = (key) => {
-    const entry = readCache(key);
-    if (!entry) return;
-    setReportHtml(entry.html);
-    setSlidesPrompt(entry.slidesPrompt || "");
-    setCurrentReportMeta({ key, generatedAt: entry.generatedAt, clientId: entry.clientId, reportType: entry.reportType, dateStart: entry.dateStart || "", dateEnd: entry.dateEnd || "", accountName: entry.accountName || "" });
-    setCachedInfo({ generatedAt: entry.generatedAt, key });
-    setLastUsage(null);
-    setLastDuration(null);
-    setError("");
-    setStatusMessage("");
-    setIsGenerating(false);
-    setJustFinished(false);
-    setProgress(0);
-    if (entry.clientId) setSelectedClientId(entry.clientId);
-    if (entry.reportType) setReportType(entry.reportType);
+  // Refresh the past-reports list: worker KV first, localStorage fallback.
+  const refreshSavedReports = async () => {
+    const workerUrl = localStorage.getItem(WORKER_URL);
+    if (workerUrl) {
+      try {
+        const res = await fetch(`${workerUrl}?action=list-reports`);
+        if (res.ok) {
+          const entries = await res.json();
+          if (Array.isArray(entries)) { setSavedReports(entries); return; }
+        }
+      } catch {}
+    }
+    setSavedReports(readAllCacheEntries());
+  };
+
+  // Fire-and-forget: save a freshly generated report to KV for cross-device access.
+  const saveReportToWorker = (html, metadata) => {
+    const workerUrl = localStorage.getItem(WORKER_URL);
+    if (!workerUrl) return;
+    fetch(`${workerUrl}?action=save-report`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ html, metadata }),
+    }).catch(() => {});
+  };
+
+  // Load a past report: fetch HTML from worker (key prefix "report_") or localStorage.
+  const loadSavedReport = async (key) => {
+    setLoadingSavedReport(true);
+    try {
+      let html, meta;
+      const workerUrl = localStorage.getItem(WORKER_URL);
+      if (key.startsWith("report_") && workerUrl) {
+        try {
+          const res = await fetch(`${workerUrl}?action=get-report&key=${encodeURIComponent(key)}`);
+          if (res.ok) { const d = await res.json(); html = d.html; meta = d.metadata; }
+        } catch {}
+      }
+      // Fallback: localStorage cache (old-format keys or worker unavailable)
+      if (!html) {
+        const entry = readCache(key);
+        if (entry) { html = entry.html; meta = { generatedAt: entry.generatedAt, clientId: entry.clientId, reportType: entry.reportType, dateStart: entry.dateStart || "", dateEnd: entry.dateEnd || "", accountName: entry.accountName || "" }; }
+      }
+      if (!html) return;
+      setReportHtml(html);
+      setSlidesPrompt("");
+      setCurrentReportMeta({ key, ...meta });
+      setCachedInfo({ generatedAt: meta.generatedAt, key });
+      setLastUsage(null);
+      setLastDuration(null);
+      setError("");
+      setStatusMessage("");
+      setIsGenerating(false);
+      setJustFinished(false);
+      setProgress(0);
+      if (meta.clientId) setSelectedClientId(meta.clientId);
+      if (meta.reportType) setReportType(meta.reportType);
+    } finally {
+      setLoadingSavedReport(false);
+    }
   };
 
   useEffect(() => {
     return () => clearTimers();
   }, []);
+
+  // Refresh past-reports list from worker whenever report mode becomes visible.
+  useEffect(() => {
+    if (reportHtml && !isGenerating) refreshSavedReports();
+  }, [reportHtml, isGenerating]);
 
   // Listen for regenerate-step messages from the report iframe
   useEffect(() => {
@@ -1413,7 +1465,11 @@ ${reportHtml}`,
                   Past reports
                 </div>
                 <div style={{ overflowY: "auto", maxHeight: "240px", marginRight: "-8px", paddingRight: "8px" }}>
-                  {savedReports.map(entry => {
+                  {loadingSavedReport ? (
+                    <div style={{ padding: "10px", fontSize: "10px", color: "#b8b8b8", fontStyle: "italic", fontFamily: "'Ovo', serif" }}>
+                      Loading…
+                    </div>
+                  ) : savedReports.map(entry => {
                     const entryName = entry.accountName || clients.find(c => c.id === entry.clientId)?.name || "Unknown";
                     const isCurrent = entry.key === currentReportMeta?.key;
                     return (
