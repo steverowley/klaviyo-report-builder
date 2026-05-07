@@ -46,11 +46,18 @@ function fmtChartLabel(d) {
   return `${day} ${month}`;
 }
 
-function getEcommerceEvents(startDate, endDate) {
+const SCHOOL_KEYWORDS = /school|uniform|schoolwear|education|nursery|academy|college|pupil|student|kids ?wear|childrenswear|children.?s wear/i;
+
+function isSchoolBrand(accountName, context) {
+  return SCHOOL_KEYWORDS.test(accountName) || SCHOOL_KEYWORDS.test(context || "");
+}
+
+function getEcommerceEvents(startDate, endDate, accountName, context) {
   const start = new Date(startDate);
   const end = new Date(endDate);
   const events = [];
   const MS = 86400000;
+  const school = isSchoolBrand(accountName, context);
 
   const add = (d, name, type) => {
     if (d >= start && d <= end) events.push({ date: fmtEventDate(d), chartLabel: fmtChartLabel(d), name, type });
@@ -69,8 +76,22 @@ function getEcommerceEvents(startDate, endDate) {
 
     add(nthWeekday(y, 5, 0, 3), "Father's Day",          "ecommerce"); // 3rd Sunday June
     add(new Date(y, 6, 15),  "Amazon Prime Day (approx)","ecommerce");
-    add(new Date(y, 7, 28),  "Bank Holiday (approx)",    "holiday");
-    add(new Date(y, 8, 1),   "Back to School",           "ecommerce");
+
+    if (school) {
+      // UK school terms (England approximate) — only for school/education brands
+      add(new Date(y, 6, 22),  "School Summer Holidays",   "school");   // ~22 Jul
+      add(new Date(y, 6, 25),  "Uniform buying peak",      "school");   // late Jul — schoolwear peak
+      add(new Date(y, 8, 3),   "Autumn Term Starts",       "school");   // ~1st week Sep
+      add(new Date(y, 9, 28),  "Autumn Half Term",         "school");   // ~last week Oct
+      add(new Date(y, 11, 19), "School Christmas Break",   "school");   // ~3rd week Dec
+      add(new Date(y, 0, 7),   "Spring Term Starts",       "school");   // ~7 Jan
+      add(new Date(y, 1, 17),  "Spring Half Term",         "school");   // ~3rd week Feb
+      const summerTermStart = new Date(easter.getTime() + 14 * MS);
+      add(summerTermStart,                                 "Summer Term Starts",  "school");
+      add(nthWeekday(y, 4, 1, 4), "May Half Term",        "school");   // ~last Mon May
+    }
+
+    add(new Date(y, 7, 28),  "Summer Bank Holiday",      "holiday");
     add(new Date(y, 9, 31),  "Halloween",                "ecommerce");
     add(new Date(y, 10, 11), "Singles' Day",             "ecommerce");
 
@@ -146,6 +167,7 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion }
   const [comparisonMode, setComparisonMode] = useState("Previous Period");
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
+  const [additionalContext, setAdditionalContext] = useState("");
   const [cachedInfo, setCachedInfo] = useState(null); // {generatedAt, key} when showing cached
   const [isGenerating, setIsGenerating] = useState(false);
   const [reportHtml, setReportHtml] = useState("");
@@ -379,7 +401,8 @@ Revenue cells: font-family:'Ovo',serif;font-size:14px;font-weight:600
 **8. KEY INSIGHTS**
 <h2>Key Insights</h2>
 4–5 paragraphs as plain <p> tags (font-size:13px;line-height:1.9;color:#1a1a1a;margin:0 0 14px). No wrapper div, no background, no inline colours. Bold key figures with <strong style="font-weight:600">. NO bullets, NO icons, NO emojis.
-Where ecommerce events are provided, actively look for correlations in the data: revenue or order spikes near payday windows, subscriber lifts around gifting holidays, open-rate changes around sale events. Name the event and the observed metric movement explicitly (e.g. "Order volume lifted <strong>34%</strong> in the 3 days surrounding Valentine's Day…"). If the data shows no notable correlation, note that too briefly.
+Where ecommerce events are provided, actively look for correlations in the data: revenue or order spikes near payday windows, subscriber lifts around gifting holidays, open-rate changes around sale events, and school-term effects for education/childrenswear brands. Name the event and the observed metric movement explicitly (e.g. "Order volume lifted <strong>34%</strong> in the 3 days surrounding Valentine's Day…"). If the data shows no notable correlation, note that too briefly.
+Where ADDITIONAL CONTEXT FROM USER is provided, use it directly in the analysis — reference any mentioned sales, campaigns, product launches, or platform changes as explanatory factors for metric movements.
 
 **9. COMPARISON ANALYSIS** (omit if no comparison data)
 <h2>Comparison Analysis</h2>
@@ -477,15 +500,18 @@ No markdown fences. No commentary before or after. Show "—" for missing values
   const buildUserMessage = (klaviyoData) => {
     const range = computeDateRange();
     const comparison = computeComparisonRange(range.start, range.end);
-    const events = getEcommerceEvents(range.start, range.end);
+    const events = getEcommerceEvents(range.start, range.end, accountName, additionalContext);
     const eventsBlock = events.length > 0
       ? `\nECOMMERCE EVENTS IN THIS PERIOD (use these for chart annotations and insight correlation):\n${events.map(e => `• ${e.date} (chart label: "${e.chartLabel}") — ${e.name} [${e.type}]`).join('\n')}\n`
       : "\nNo major ecommerce events fall within this period.\n";
+    const contextBlock = additionalContext.trim()
+      ? `\nADDITIONAL CONTEXT FROM USER:\n${additionalContext.trim()}\n`
+      : "";
     return `IMPORTANT: Read ALL data carefully before writing any HTML. Every number you output must come from the data.
 
 Reporting period: ${range.start} to ${range.end} (${reportType})
 ${comparison ? `Comparison period: ${comparison.start} to ${comparison.end} (${comparisonMode})` : "No comparison period."}
-${eventsBlock}
+${eventsBlock}${contextBlock}
 RAW KLAVIYO DATA:
 ${JSON.stringify(klaviyoData)}`;
   };
@@ -658,7 +684,7 @@ ${JSON.stringify(klaviyoData)}`;
       rawHtml = rawHtml.trim();
 
       // Inject event markers script — using JSON.stringify avoids all apostrophe/quote syntax errors
-      const eventsForChart = getEcommerceEvents(range.start, range.end)
+      const eventsForChart = getEcommerceEvents(range.start, range.end, accountName, additionalContext)
         .map(e => ({ label: e.chartLabel, name: e.name }));
       const annotationScript = `<script>
 window.CHART_EVENTS=${JSON.stringify(eventsForChart)};
@@ -1184,6 +1210,24 @@ ${reportHtml}`,
               </SegmentButton>
             ))}
           </div>
+        </Field>
+
+        <Field label="Additional context">
+          <textarea
+            value={additionalContext}
+            onChange={(e) => setAdditionalContext(e.target.value)}
+            placeholder={"e.g. 'Ran a 20% Easter sale — code EASTER20 sent 1st April'\ne.g. 'Launched new schoolwear range in March'\ne.g. 'Email list migrated from Mailchimp in Jan — deliverability was lower'"}
+            rows={4}
+            style={{
+              ...inputStyle,
+              resize: "vertical",
+              lineHeight: "1.6",
+              fontFamily: "'DM Sans', sans-serif",
+              fontSize: "11px",
+              color: "#1a1a1a",
+              height: "auto",
+            }}
+          />
         </Field>
 
         <div style={{ flex: 1 }} />
