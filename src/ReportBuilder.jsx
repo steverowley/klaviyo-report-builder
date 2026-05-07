@@ -663,27 +663,29 @@ ${JSON.stringify(klaviyoData)}`;
       const annotationScript = `<script>
 window.CHART_EVENTS=${JSON.stringify(eventsForChart)};
 function addEventMarkers(chart,events){
-  try{
-    var wrapper=chart.canvas.parentNode;
-    wrapper.style.position='relative';
-    events.forEach(function(ev){
-      var idx=chart.data.labels.indexOf(ev.label);
-      if(idx===-1)return;
-      var x=Math.round(chart.scales.x.getPixelForValue(idx));
-      var col=document.createElement('div');
-      col.style.cssText='position:absolute;top:0;bottom:0;left:'+x+'px;width:0;z-index:5;pointer-events:none';
-      var rule=document.createElement('div');
-      rule.style.cssText='position:absolute;inset:0;border-left:1px dashed rgba(10,10,10,0.15)';
-      var pin=document.createElement('div');
-      pin.style.cssText='position:absolute;top:3px;left:-4px;width:8px;height:8px;background:#fff;border:1px solid #0a0a0a;transform:rotate(45deg);pointer-events:auto;transition:background 0.1s;z-index:6;cursor:default';
-      var tip=document.createElement('div');
-      tip.style.cssText='display:none;position:absolute;top:18px;left:0;transform:translateX(-50%);background:#0a0a0a;color:#fff;font-size:10px;font-family:"DM Sans",sans-serif;font-weight:400;letter-spacing:0.08em;padding:5px 10px;white-space:nowrap;pointer-events:none;z-index:20';
-      tip.textContent=ev.name;
-      pin.addEventListener('mouseenter',function(){tip.style.display='block';pin.style.background='#0a0a0a';});
-      pin.addEventListener('mouseleave',function(){tip.style.display='none';pin.style.background='#fff';});
-      pin.appendChild(tip);col.appendChild(rule);col.appendChild(pin);wrapper.appendChild(col);
-    });
-  }catch(e){}
+  requestAnimationFrame(function(){
+    try{
+      var wrapper=chart.canvas.parentNode;
+      wrapper.style.position='relative';
+      events.forEach(function(ev){
+        var idx=chart.data.labels.indexOf(ev.label);
+        if(idx===-1)return;
+        var x=Math.round(chart.scales.x.getPixelForValue(idx));
+        var col=document.createElement('div');
+        col.style.cssText='position:absolute;top:0;bottom:0;left:'+x+'px;width:0;z-index:5;pointer-events:none';
+        var rule=document.createElement('div');
+        rule.style.cssText='position:absolute;inset:0;border-left:1px dashed rgba(10,10,10,0.15)';
+        var pin=document.createElement('div');
+        pin.style.cssText='position:absolute;top:3px;left:-4px;width:8px;height:8px;background:#fff;border:1px solid #0a0a0a;transform:rotate(45deg);pointer-events:auto;transition:background 0.1s;z-index:6;cursor:default';
+        var tip=document.createElement('div');
+        tip.style.cssText='display:none;position:absolute;top:18px;left:0;transform:translateX(-50%);background:#0a0a0a;color:#fff;font-size:10px;font-family:"DM Sans",sans-serif;font-weight:400;letter-spacing:0.08em;padding:5px 10px;white-space:nowrap;pointer-events:none;z-index:20';
+        tip.textContent=ev.name;
+        pin.addEventListener('mouseenter',function(){tip.style.display='block';pin.style.background='#0a0a0a';});
+        pin.addEventListener('mouseleave',function(){tip.style.display='none';pin.style.background='#fff';});
+        pin.appendChild(tip);col.appendChild(rule);col.appendChild(pin);wrapper.appendChild(col);
+      });
+    }catch(e){}
+  });
 }
 <\/script>`;
       rawHtml = rawHtml.replace(/<\/head>/i, annotationScript + '</head>');
