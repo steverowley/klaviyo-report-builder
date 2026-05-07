@@ -274,15 +274,18 @@ ${sn.map((lt,Vn)=>`${Vn}: ${lt.name} (${lt.date}) [${lt.type}]`).join(`
 Return ONLY a JSON array of the index numbers for events that are commercially relevant to THIS specific brand — events that could plausibly explain a spike or dip in their email metrics. Be inclusive for genuinely relevant events; exclude only what is clearly irrelevant to this business. Example: [0,2,5]`}]}),signal:q});if(ie.ok){const Ga=(((gt=(Q=(await ie.json()).content)==null?void 0:Q[0])==null?void 0:gt.text)||"").match(/\[[\d,\s]*\]/);Ga&&(vt=JSON.parse(Ga[0]).map(Xd=>sn[Xd]).filter(Boolean))}}catch{}if(O!==ot.current)return;de(20),Qe("Locating the campaign ledger");const Ut=Date.now(),Br=65e3;Fa.current=setInterval(()=>{const ie=Date.now()-Ut,lt=Math.min(98,20+78*(1-Math.exp(-ie/Br)));de(lt);const Vn=Od(lt);Vn&&Qe(Vn)},150),ba.current=setInterval(()=>{Date.now()-Ut>=Br*.85&&(Qe(Ua[Be%Ua.length].text),Be+=1)},4e3);const Ur=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"x-api-key":k,"anthropic-version":"2023-06-01","anthropic-beta":"prompt-caching-2024-07-31,output-128k-2025-02-19","anthropic-dangerous-direct-browser-access":"true","content-type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:8e4,system:[{type:"text",text:Fd(),cache_control:{type:"ephemeral"}}],messages:[{role:"user",content:bd(Hn,vt)}]}),signal:q});if(O!==ot.current)return;if(!Ur.ok){let ie=`Anthropic API error ${Ur.status}`;try{ie=((yt=(await Ur.json()).error)==null?void 0:yt.message)||ie}catch{}throw new Error(ie)}const hl=await Ur.json();if(O!==ot.current)return;const Wr=(Bt=hl.content)==null?void 0:Bt.find(ie=>ie.type==="text");if(!(Wr!=null&&Wr.text))throw new Error("The model returned no report content. The prompt may have exceeded the context limit — try a shorter date range.");if(hl.stop_reason==="max_tokens")throw new Error("The report was too long and got cut off (max tokens reached). Try a shorter date range or contact Rowley to increase the output limit.");let Le=Wr.text;const Xa=Le.search(/<!DOCTYPE\s+html/i);Xa>0&&(Le=Le.slice(Xa));const Qa=Le.search(/<\/html\s*>/i);Qa>0&&(Le=Le.slice(0,Qa+7)),Le=Le.trim();const Hd=vt.map(ie=>({label:ie.chartLabel,name:ie.name})),Vd=`<script>
 window.CHART_EVENTS=${JSON.stringify(Hd)};
 function addEventMarkers(chart,events){
-  setTimeout(function(){
+  if(!events||!events.length)return;
+  var wrapper=chart.canvas.parentNode;
+  wrapper.style.position='relative';
+  function place(){
     try{
-      var wrapper=chart.canvas.parentNode;
-      wrapper.style.position='relative';
+      wrapper.querySelectorAll('.evt-marker').forEach(function(el){el.remove();});
       events.forEach(function(ev){
         var idx=chart.data.labels.indexOf(ev.label);
         if(idx===-1)return;
         var x=Math.round(chart.scales.x.getPixelForValue(idx));
         var col=document.createElement('div');
+        col.className='evt-marker';
         col.style.cssText='position:absolute;top:0;bottom:0;left:'+x+'px;width:0;z-index:5;pointer-events:none';
         var rule=document.createElement('div');
         rule.style.cssText='position:absolute;inset:0;border-left:1px dashed rgba(10,10,10,0.15)';
@@ -296,7 +299,12 @@ function addEventMarkers(chart,events){
         pin.appendChild(tip);col.appendChild(rule);col.appendChild(pin);wrapper.appendChild(col);
       });
     }catch(e){}
-  },200);
+  }
+  place();
+  if(typeof ResizeObserver!=='undefined'){
+    var ro=new ResizeObserver(function(){place();});
+    ro.observe(chart.canvas);
+  }
 }
 <\/script>`;Le=Le.replace(/<\/head>/i,Vd+"</head>");const xt=hl.usage||{},Yd=(xt.input_tokens||0)*3/1e6+(xt.cache_creation_input_tokens||0)*3.75/1e6+(xt.cache_read_input_tokens||0)*.3/1e6+(xt.output_tokens||0)*15/1e6;W({inputTokens:xt.input_tokens||0,cacheCreationTokens:xt.cache_creation_input_tokens||0,cacheReadTokens:xt.cache_read_input_tokens||0,outputTokens:xt.output_tokens||0,costUsd:Yd}),$r(),de(100),Qe("Ready"),on(Math.round((Date.now()-ee)/1e3));const Kd=Hl(o,Se.start,Se.end,m);Nm(Kd,Le,{clientId:o,reportType:s}),p(null),j(Le),rt(""),P(!0)}catch(Se){if(O!==ot.current||Se.name==="AbortError")return;$r(),A(Se.message||"Something went wrong. Check your settings and try again."),de(0),P(!1),C(!1)}},$d=()=>{P(!1),C(!1),de(0)},Bd=()=>{P(!1),C(!1),de(0),j(""),ce(""),A(""),W(null)};E.useEffect(()=>()=>$r(),[]),E.useEffect(()=>{const k=async M=>{var Q,gt,yt,Bt,Se,an;if(((Q=M.data)==null?void 0:Q.type)==="cursor-move"){const ge=Un.current;if(ge){const Hn=ge.getBoundingClientRect();window.dispatchEvent(new CustomEvent("iframe-cursor-move",{detail:{x:Hn.left+M.data.x,y:Hn.top+M.data.y}}))}return}if(((gt=M.data)==null?void 0:gt.type)!=="regenerate-step")return;const{sid:O}=M.data,ee=localStorage.getItem(Ul);if(!ee){A("Anthropic key missing — open Settings to add it.");return}Aa(O),Fr(0);const Be=Date.now(),q=8e3;ml.current=setInterval(()=>{const ge=Math.min((Date.now()-Be)/q,1);Fr(Math.min(90,(1-Math.pow(1-ge,2))*90))},80);try{const ge=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"x-api-key":ee,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true","content-type":"application/json"},body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:300,messages:[{role:"user",content:`You are improving a set of email marketing growth recommendations. Here are all the current recommendations:
 ${(yt=M.data.allSteps)==null?void 0:yt.map((Ut,Br)=>`${Br+1}. ${Ut}`).join(`
