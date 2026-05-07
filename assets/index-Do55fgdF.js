@@ -113,11 +113,11 @@ Same scale options as bar chart.
 At the very bottom of <body>, after ALL html sections, place ONE <script> block (no DOMContentLoaded wrapper needed — all canvas elements already exist at this point).
 Wrap EACH chart in its own independent try/catch so a failure in one cannot affect the other:
 try{
-  var subChart=new Chart(document.getElementById('subChart'),{type:'bar',data:{labels:[/*"D MMM" dates*/],datasets:[{data:[/*counts*/],backgroundColor:'#0a0a0a',borderRadius:2,barPercentage:0.7}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{color:'#aaa',font:{size:10}}},y:{beginAtZero:true,grid:{color:'rgba(0,0,0,0.06)'},ticks:{color:'#aaa',font:{size:10}}}}}});
+  var subChart=new Chart(document.getElementById('subChart'),{type:'bar',data:{labels:[/*"D MMM" dates*/],datasets:[{data:[/*counts*/],backgroundColor:'#0a0a0a',borderRadius:2,barPercentage:0.7}]},options:{animation:false,responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{color:'#aaa',font:{size:10}}},y:{beginAtZero:true,grid:{color:'rgba(0,0,0,0.06)'},ticks:{color:'#aaa',font:{size:10}}}}}});
   try{addEventMarkers(subChart,window.CHART_EVENTS||[]);}catch(e){}
 }catch(e){}
 try{
-  var orderChart=new Chart(document.getElementById('orderChart'),{type:'line',data:{labels:[/*"D MMM" dates*/],datasets:[{data:[/*counts*/],borderColor:'#555',backgroundColor:'rgba(80,80,80,0.08)',fill:true,tension:0.4,pointRadius:3,pointBackgroundColor:'#555',pointBorderColor:'#fff',pointBorderWidth:1.5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{color:'#aaa',font:{size:10}}},y:{beginAtZero:true,grid:{color:'rgba(0,0,0,0.06)'},ticks:{color:'#aaa',font:{size:10}}}}}});
+  var orderChart=new Chart(document.getElementById('orderChart'),{type:'line',data:{labels:[/*"D MMM" dates*/],datasets:[{data:[/*counts*/],borderColor:'#555',backgroundColor:'rgba(80,80,80,0.08)',fill:true,tension:0.4,pointRadius:3,pointBackgroundColor:'#555',pointBorderColor:'#fff',pointBorderWidth:1.5}]},options:{animation:false,responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{color:'#aaa',font:{size:10}}},y:{beginAtZero:true,grid:{color:'rgba(0,0,0,0.06)'},ticks:{color:'#aaa',font:{size:10}}}}}});
   try{addEventMarkers(orderChart,window.CHART_EVENTS||[]);}catch(e){}
 }catch(e){}
 Fill in the actual labels and data from the Klaviyo data. The addEventMarkers function and window.CHART_EVENTS are pre-injected — do NOT define them yourself.
