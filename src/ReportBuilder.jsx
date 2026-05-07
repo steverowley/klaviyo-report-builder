@@ -2,8 +2,6 @@ import React, { useState, useRef, useEffect } from "react";
 
 const ANTHROPIC_KEY = "swanky_anthropic_key";
 const WORKER_URL = "swanky_worker_url";
-const REPORT_CACHE_KEY = "swanky_report_cache";
-const MAX_CACHE = 20;
 
 // ── Ecommerce event calendar ─────────────────────────────────────────────────
 
@@ -125,31 +123,6 @@ function getEcommerceEvents(startDate, endDate, accountName, context) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-function writeSlidesCache(key, slidesPrompt) {
-  try {
-    const store = JSON.parse(localStorage.getItem(REPORT_CACHE_KEY) || "{}");
-    if (store[key]) {
-      store[key].slidesPrompt = slidesPrompt;
-      localStorage.setItem(REPORT_CACHE_KEY, JSON.stringify(store));
-    }
-  } catch {}
-}
-
-function cacheKey(clientId, start, end, comparisonMode) {
-  return `${clientId}|${start}|${end}|${comparisonMode}`;
-}
-function readCache(key) {
-  try { return JSON.parse(localStorage.getItem(REPORT_CACHE_KEY) || "{}")[key] || null; }
-  catch { return null; }
-}
-function writeCache(key, html, meta) {
-  try {
-    const store = JSON.parse(localStorage.getItem(REPORT_CACHE_KEY) || "{}");
-    store[key] = { html, generatedAt: new Date().toISOString(), ...meta };
-    const entries = Object.entries(store).sort((a, b) => new Date(b[1].generatedAt) - new Date(a[1].generatedAt));
-    localStorage.setItem(REPORT_CACHE_KEY, JSON.stringify(Object.fromEntries(entries.slice(0, MAX_CACHE))));
-  } catch {}
-}
 function relativeTime(iso) {
   const m = Math.floor((Date.now() - new Date(iso)) / 60000);
   if (m < 1) return "just now";
@@ -165,14 +138,6 @@ function fmtDateDisplay(iso) {
   return d.getDate() + " " + ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];
 }
 
-function readAllCacheEntries() {
-  try {
-    const store = JSON.parse(localStorage.getItem(REPORT_CACHE_KEY) || "{}");
-    return Object.entries(store)
-      .map(([key, { html: _h, slidesPrompt: _sp, ...meta }]) => ({ key, ...meta }))
-      .sort((a, b) => new Date(b.generatedAt) - new Date(a.generatedAt));
-  } catch { return []; }
-}
 
 export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion }) {
   const [clients, setClients] = useState([]);
@@ -183,7 +148,7 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion }
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
   const [additionalContext, setAdditionalContext] = useState("");
-  const [cachedInfo, setCachedInfo] = useState(null); // {generatedAt, key} when showing cached
+  const [cachedInfo, setCachedInfo] = useState(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [reportHtml, setReportHtml] = useState("");
   const [error, setError] = useState("");
@@ -202,7 +167,7 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion }
   const [regenSid, setRegenSid] = useState(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [showAddClientModal, setShowAddClientModal] = useState(false);
-  const [savedReports, setSavedReports] = useState(() => readAllCacheEntries());
+  const [savedReports, setSavedReports] = useState([]);
   const [currentReportMeta, setCurrentReportMeta] = useState(null);
   const [loadingSavedReport, setLoadingSavedReport] = useState(false);
   const dropdownRef = useRef(null);
@@ -900,13 +865,10 @@ function addEventMarkers(chart,events){
       setProgress(100);
       setLoadingLine("Ready");
       setLastDuration(Math.round((Date.now() - startedAt) / 1000));
-      const key = cacheKey(selectedClientId, range.start, range.end, comparisonMode);
       const generatedNow = new Date().toISOString();
       const reportMeta = { clientId: selectedClientId, reportType, dateStart: range.start, dateEnd: range.end, accountName, generatedAt: generatedNow };
-      writeCache(key, rawHtml, reportMeta);
       saveReportToWorker(rawHtml, reportMeta);
-      setCurrentReportMeta({ key, ...reportMeta });
-      setSavedReports(readAllCacheEntries()); // optimistic local update; worker list refreshes when sidebar opens
+      setCurrentReportMeta({ ...reportMeta });
       setCachedInfo(null);
       setReportHtml(rawHtml);
       setSlidesPrompt("");
@@ -941,19 +903,17 @@ function addEventMarkers(chart,events){
     setCurrentReportMeta(null);
   };
 
-  // Refresh the past-reports list: worker KV first, localStorage fallback.
+  // Refresh the past-reports list from worker KV.
   const refreshSavedReports = async () => {
     const workerUrl = localStorage.getItem(WORKER_URL);
-    if (workerUrl) {
-      try {
-        const res = await fetch(`${workerUrl}?action=list-reports`);
-        if (res.ok) {
-          const entries = await res.json();
-          if (Array.isArray(entries)) { setSavedReports(entries); return; }
-        }
-      } catch {}
-    }
-    setSavedReports(readAllCacheEntries());
+    if (!workerUrl) return;
+    try {
+      const res = await fetch(`${workerUrl}?action=list-reports`);
+      if (res.ok) {
+        const entries = await res.json();
+        if (Array.isArray(entries)) setSavedReports(entries);
+      }
+    } catch {}
   };
 
   // Fire-and-forget: save a freshly generated report to KV for cross-device access.
@@ -967,41 +927,30 @@ function addEventMarkers(chart,events){
     }).catch(() => {});
   };
 
-  // Delete a report from KV and localStorage, refresh the list.
+  // Delete a report from KV, refresh the list.
   const deleteReport = async (key, e) => {
     e.stopPropagation();
     const workerUrl = localStorage.getItem(WORKER_URL);
-    if (key.startsWith("report_") && workerUrl) {
+    if (workerUrl) {
       try {
         await fetch(`${workerUrl}?action=delete-report&key=${encodeURIComponent(key)}`, { method: "POST" });
       } catch {}
     }
-    try {
-      const store = JSON.parse(localStorage.getItem(REPORT_CACHE_KEY) || "{}");
-      delete store[key];
-      localStorage.setItem(REPORT_CACHE_KEY, JSON.stringify(store));
-    } catch {}
     if (currentReportMeta?.key === key) handleNewReport();
     await refreshSavedReports();
   };
 
-  // Load a past report: fetch HTML from worker (key prefix "report_") or localStorage.
+  // Load a past report from worker KV.
   const loadSavedReport = async (key) => {
     setLoadingSavedReport(true);
     try {
-      let html, meta;
       const workerUrl = localStorage.getItem(WORKER_URL);
-      if (key.startsWith("report_") && workerUrl) {
-        try {
-          const res = await fetch(`${workerUrl}?action=get-report&key=${encodeURIComponent(key)}`);
-          if (res.ok) { const d = await res.json(); html = d.html; meta = d.metadata; }
-        } catch {}
-      }
-      // Fallback: localStorage cache (old-format keys or worker unavailable)
-      if (!html) {
-        const entry = readCache(key);
-        if (entry) { html = entry.html; meta = { generatedAt: entry.generatedAt, clientId: entry.clientId, reportType: entry.reportType, dateStart: entry.dateStart || "", dateEnd: entry.dateEnd || "", accountName: entry.accountName || "" }; }
-      }
+      if (!workerUrl) return;
+      let html, meta;
+      try {
+        const res = await fetch(`${workerUrl}?action=get-report&key=${encodeURIComponent(key)}`);
+        if (res.ok) { const d = await res.json(); html = d.html; meta = d.metadata; }
+      } catch {}
       if (!html) return;
       setReportHtml(html);
       setSlidesPrompt("");
@@ -1121,23 +1070,6 @@ function addEventMarkers(chart,events){
       .catch(() => setClientsError("Could not load clients from worker."));
   }, [settingsVersion]);
 
-  // Auto-load from cache when params change
-  useEffect(() => {
-    if (!selectedClientId || isGenerating) return;
-    if (reportType === "Custom" && (!customStart || !customEnd)) return;
-    const range = computeDateRange();
-    const key = cacheKey(selectedClientId, range.start, range.end, comparisonMode);
-    const cached = readCache(key);
-    if (cached) {
-      setReportHtml(cached.html);
-      setSlidesPrompt(cached.slidesPrompt || "");
-      setCachedInfo({ generatedAt: cached.generatedAt, key });
-    } else {
-      setReportHtml("");
-      setSlidesPrompt("");
-      setCachedInfo(null);
-    }
-  }, [selectedClientId, reportType, comparisonMode, customStart, customEnd]);
 
   const handleCancel = () => {
     requestIdRef.current += 1;
@@ -1224,10 +1156,6 @@ ${reportHtml}`,
       setSlidesProgress(100);
       setSlidesPrompt(text);
       setShowSlidesModal(true);
-      // Persist alongside the report in cache
-      const range = computeDateRange();
-      const ck = cacheKey(selectedClientId, range.start, range.end, comparisonMode);
-      writeSlidesCache(ck, text);
     } catch (e) {
       clearInterval(slidesProgressTimerRef.current);
       setError("Could not generate slides prompt: " + (e.message || "unknown error"));
@@ -1934,48 +1862,6 @@ ${reportHtml}`,
           flexDirection: "column",
         }}
       >
-        {cachedInfo && !isGenerating && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "8px 14px",
-              marginBottom: "8px",
-              background: "#ffffff",
-              border: "1px solid #ededed",
-              fontSize: "11px",
-              color: "#6b6b6b",
-              fontFamily: "'DM Sans', sans-serif",
-              flexShrink: 0,
-            }}
-          >
-            <span>
-              <span style={{ textTransform: "uppercase", letterSpacing: "0.12em", fontWeight: 500, fontSize: "10px" }}>
-                Cached
-              </span>
-              {" · Generated "}
-              {relativeTime(cachedInfo.generatedAt)}
-            </span>
-            <button
-              onClick={handleGenerate}
-              style={{
-                background: "none",
-                border: "1px solid #b8b8b8",
-                padding: "4px 12px",
-                fontFamily: "'DM Sans', sans-serif",
-                fontSize: "10px",
-                fontWeight: 500,
-                letterSpacing: "0.14em",
-                textTransform: "uppercase",
-                color: "#2a2a2a",
-                cursor: "pointer",
-              }}
-            >
-              Regenerate fresh
-            </button>
-          </div>
-        )}
 
         {(regenSid || isCreatingSlides) && (
           <ActivityBanner
