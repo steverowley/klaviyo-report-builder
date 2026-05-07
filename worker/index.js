@@ -320,6 +320,76 @@ export default {
       });
     }
 
+    // POST /?action=save-report — persist a generated report to KV ────────────
+    if (action === 'save-report') {
+      if (!env.CLIENTS_KV) {
+        return new Response(JSON.stringify({ error: 'KV not configured' }), {
+          status: 503, headers: { 'Content-Type': 'application/json', ...cors(origin) },
+        });
+      }
+      let body;
+      try { body = await request.json(); } catch {
+        return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
+          status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) },
+        });
+      }
+      const { html, metadata } = body;
+      if (!html || !metadata?.clientId) {
+        return new Response(JSON.stringify({ error: 'html and metadata.clientId are required' }), {
+          status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) },
+        });
+      }
+      const ts = String(Date.now()).padStart(16, '0');
+      const key = `report_${ts}_${metadata.clientId}`;
+      const kvMeta = {
+        generatedAt: metadata.generatedAt || new Date().toISOString(),
+        clientId:    metadata.clientId,
+        reportType:  metadata.reportType  || '',
+        dateStart:   metadata.dateStart   || '',
+        dateEnd:     metadata.dateEnd     || '',
+        accountName: (metadata.accountName || '').slice(0, 100),
+      };
+      await env.CLIENTS_KV.put(key, html, { metadata: kvMeta });
+      return new Response(JSON.stringify({ saved: true, key }), {
+        headers: { 'Content-Type': 'application/json', ...cors(origin) },
+      });
+    }
+
+    // GET /?action=list-reports — list saved reports (metadata only) ──────────
+    if (request.method === 'GET' && action === 'list-reports') {
+      if (!env.CLIENTS_KV) {
+        return new Response(JSON.stringify([]), {
+          headers: { 'Content-Type': 'application/json', ...cors(origin) },
+        });
+      }
+      const list = await env.CLIENTS_KV.list({ prefix: 'report_', limit: 200 });
+      const entries = list.keys
+        .map(k => ({ key: k.name, ...k.metadata }))
+        .sort((a, b) => new Date(b.generatedAt) - new Date(a.generatedAt));
+      return new Response(JSON.stringify(entries), {
+        headers: { 'Content-Type': 'application/json', ...cors(origin) },
+      });
+    }
+
+    // GET /?action=get-report&key=<key> — fetch full HTML for a saved report ──
+    if (request.method === 'GET' && action === 'get-report') {
+      const key = url.searchParams.get('key');
+      if (!key || !env.CLIENTS_KV) {
+        return new Response(JSON.stringify({ error: 'key required and KV must be configured' }), {
+          status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) },
+        });
+      }
+      const { value, metadata } = await env.CLIENTS_KV.getWithMetadata(key, 'text');
+      if (value === null) {
+        return new Response(JSON.stringify({ error: 'Report not found' }), {
+          status: 404, headers: { 'Content-Type': 'application/json', ...cors(origin) },
+        });
+      }
+      return new Response(JSON.stringify({ html: value, metadata }), {
+        headers: { 'Content-Type': 'application/json', ...cors(origin) },
+      });
+    }
+
     // GET /?debug — diagnostic check
     if (request.method === 'GET' && url.searchParams.has('debug')) {
       const clients = await readClients(env);
