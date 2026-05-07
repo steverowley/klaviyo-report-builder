@@ -388,7 +388,7 @@ Fill in the actual labels and data from the Klaviyo data. The addEventMarkers fu
 <h2>Campaign Performance</h2>
 period.campaigns is a pre-normalised flat array: [{campaign_name, send_channel, recipients, delivered, open_rate, click_rate, conversions, conversion_rate, conversion_value}]. Empty array = no campaigns.
 If empty: dashed placeholder div (border:0.5px dashed #e0e0da; border-radius:3px; padding:20px; text-align:center; color:#999; font-size:13px; font-style:italic) — "No campaigns sent in this period."
-If rows exist: table (CSS below). Columns: CAMPAIGN | SENT | DELIVERED | OPEN RATE | CLICK RATE | CTOR | CVR | REVENUE
+If rows exist: table (CSS below). Columns: CAMPAIGN | RECIPIENTS | DELIVERED | OPEN RATE | CLICK RATE | CTOR | CVR | REVENUE
   CTOR = click_rate/open_rate×100 formatted X.X% (or "—")
   CVR = conversion_rate×100 formatted X.X%
   Revenue: £X,XXX.XX (or "—" if zero)
@@ -397,7 +397,7 @@ If rows exist: table (CSS below). Columns: CAMPAIGN | SENT | DELIVERED | OPEN RA
 **7. FLOW PERFORMANCE**
 <h2>Flow Performance</h2>
 period.flows is pre-aggregated per flow: [{name, trigger, recipients, delivered, open_rate, click_rate, ctor, conversion_rate, conversion_value, rpr}]
-Table (same CSS). Columns: FLOW | RECIPIENTS | DELIVERED | OPEN | CLICK | CTOR | CVR | REVENUE | RPR
+Table (same CSS). Columns: FLOW | RECIPIENTS | DELIVERED | OPEN RATE | CLICK RATE | CTOR | CVR | REVENUE | RPR
   open_rate×100 = X.X%, click_rate×100 = X.X%, ctor×100 = X.X%, conversion_rate×100 = X.X%
   Revenue: £X,XXX.XX (or "—" if zero). RPR (rpr field): £X.XX (or "—" if zero).
   Flow name: DM Sans 13px #0a0a0a weight 500; below it trigger in #999 11px.
@@ -405,11 +405,12 @@ Table (same CSS). Columns: FLOW | RECIPIENTS | DELIVERED | OPEN | CLICK | CTOR |
 
 TABLE CSS (apply to both tables):
 Wrap each table in: <div style="overflow-x:auto;margin-bottom:24px">
-table{width:100%;border-collapse:collapse;font-size:12px;min-width:600px}
+table{width:100%;border-collapse:collapse;font-size:12px;min-width:700px}
 thead th{font-size:10px;font-weight:500;letter-spacing:0.08em;text-transform:uppercase;color:#999;padding:8px 10px;text-align:right;border-bottom:1px solid #e0e0da;white-space:nowrap}
-thead th:first-child{text-align:left;min-width:160px}
+thead th:first-child{text-align:left;width:30%;min-width:180px}
+thead th:not(:first-child){width:10%}
 tbody td{padding:10px;border-bottom:0.5px solid #f0f0ec;color:#1a1a1a;text-align:right;white-space:nowrap}
-tbody td:first-child{text-align:left;white-space:normal;min-width:160px}
+tbody td:first-child{text-align:left;white-space:normal;width:30%;min-width:180px}
 tfoot td{padding:10px;font-size:11px;font-weight:600;background:#f7f6f3;border-top:1px solid #e0e0da;color:#0a0a0a;text-align:right;white-space:nowrap}
 tfoot td:first-child{text-align:left}
 Revenue cells: font-family:'Ovo',serif;font-size:14px;font-weight:600
