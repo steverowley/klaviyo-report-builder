@@ -338,35 +338,10 @@ Line chart: { data: aggregates.orders.counts, borderColor:'#555', backgroundColo
 Same scale options as bar chart.
 
 ━━━ CHART EVENT ANNOTATIONS ━━━
-At the top of the DOMContentLoaded script, define an EVENTS array using the ecommerce event data from the user message:
-var EVENTS = [{label:"14 Feb",name:"Valentine's Day"}, ...]; // populate all events from the list
-
-Do NOT add any canvas plugin for event markers. Instead, after each chart is created, call addEventMarkers(chart, EVENTS).
-
-Define this function once before the chart creations:
-function addEventMarkers(chart,events){
-  try{
-    var wrapper=chart.canvas.parentNode;
-    wrapper.style.position='relative';
-    events.forEach(function(ev){
-      var idx=chart.data.labels.indexOf(ev.label);
-      if(idx===-1)return;
-      var x=Math.round(chart.scales.x.getPixelForValue(idx));
-      var col=document.createElement('div');
-      col.style.cssText='position:absolute;top:0;bottom:0;left:'+x+'px;width:0;z-index:5;pointer-events:none';
-      var rule=document.createElement('div');
-      rule.style.cssText='position:absolute;inset:0;border-left:1px dashed rgba(10,10,10,0.15)';
-      var pin=document.createElement('div');
-      pin.style.cssText='position:absolute;top:3px;left:-4px;width:8px;height:8px;background:#fff;border:1px solid #0a0a0a;transform:rotate(45deg);pointer-events:auto;transition:background 0.1s;z-index:6';
-      var tip=document.createElement('div');
-      tip.style.cssText='display:none;position:absolute;top:18px;left:0;transform:translateX(-50%);background:#0a0a0a;color:#fff;font-size:10px;font-family:"DM Sans",sans-serif;font-weight:400;letter-spacing:0.08em;padding:5px 10px;white-space:nowrap;pointer-events:none;z-index:20';
-      tip.textContent=ev.name;
-      pin.addEventListener('mouseenter',function(){tip.style.display='block';pin.style.background='#0a0a0a';});
-      pin.addEventListener('mouseleave',function(){tip.style.display='none';pin.style.background='#fff';});
-      pin.appendChild(tip);col.appendChild(rule);col.appendChild(pin);wrapper.appendChild(col);
-    });
-  }catch(e){}
-}
+The addEventMarkers function and CHART_EVENTS data are pre-injected into the page — do NOT define them yourself.
+After subChart is created, add exactly: try{addEventMarkers(subChart,window.CHART_EVENTS||[]);}catch(e){}
+After orderChart is created, add exactly: try{addEventMarkers(orderChart,window.CHART_EVENTS||[]);}catch(e){}
+Do NOT define var EVENTS, do NOT define function addEventMarkers — only call them as shown above.
 
 **6. CAMPAIGN PERFORMANCE**
 <h2>Campaign Performance</h2>
@@ -674,6 +649,37 @@ ${JSON.stringify(klaviyoData)}`;
       const htmlEnd = rawHtml.search(/<\/html\s*>/i);
       if (htmlEnd > 0) rawHtml = rawHtml.slice(0, htmlEnd + "</html>".length);
       rawHtml = rawHtml.trim();
+
+      // Inject event markers script — using JSON.stringify avoids all apostrophe/quote syntax errors
+      const eventsForChart = getEcommerceEvents(range.start, range.end)
+        .map(e => ({ label: e.chartLabel, name: e.name }));
+      const annotationScript = `<script>
+window.CHART_EVENTS=${JSON.stringify(eventsForChart)};
+function addEventMarkers(chart,events){
+  try{
+    var wrapper=chart.canvas.parentNode;
+    wrapper.style.position='relative';
+    events.forEach(function(ev){
+      var idx=chart.data.labels.indexOf(ev.label);
+      if(idx===-1)return;
+      var x=Math.round(chart.scales.x.getPixelForValue(idx));
+      var col=document.createElement('div');
+      col.style.cssText='position:absolute;top:0;bottom:0;left:'+x+'px;width:0;z-index:5;pointer-events:none';
+      var rule=document.createElement('div');
+      rule.style.cssText='position:absolute;inset:0;border-left:1px dashed rgba(10,10,10,0.15)';
+      var pin=document.createElement('div');
+      pin.style.cssText='position:absolute;top:3px;left:-4px;width:8px;height:8px;background:#fff;border:1px solid #0a0a0a;transform:rotate(45deg);pointer-events:auto;transition:background 0.1s;z-index:6;cursor:default';
+      var tip=document.createElement('div');
+      tip.style.cssText='display:none;position:absolute;top:18px;left:0;transform:translateX(-50%);background:#0a0a0a;color:#fff;font-size:10px;font-family:"DM Sans",sans-serif;font-weight:400;letter-spacing:0.08em;padding:5px 10px;white-space:nowrap;pointer-events:none;z-index:20';
+      tip.textContent=ev.name;
+      pin.addEventListener('mouseenter',function(){tip.style.display='block';pin.style.background='#0a0a0a';});
+      pin.addEventListener('mouseleave',function(){tip.style.display='none';pin.style.background='#fff';});
+      pin.appendChild(tip);col.appendChild(rule);col.appendChild(pin);wrapper.appendChild(col);
+    });
+  }catch(e){}
+}
+<\/script>`;
+      rawHtml = rawHtml.replace(/<\/head>/i, annotationScript + '</head>');
 
       const u = data.usage || {};
       const costUsd =
