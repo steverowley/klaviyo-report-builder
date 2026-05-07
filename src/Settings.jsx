@@ -47,7 +47,8 @@ export default function Settings({ onSave }) {
     localStorage.removeItem(ANTHROPIC_KEY);
     localStorage.removeItem(WORKER_URL);
     localStorage.removeItem(ADMIN_PASSWORD);
-    localStorage.removeItem("swanky_klaviyo_key"); // legacy cleanup
+    localStorage.removeItem("swanky_klaviyo_key"); // legacy
+    localStorage.removeItem("swanky_report_cache"); // legacy
     setAnthropicKey("");
     setWorkerUrl("");
     setAdminPassword("");

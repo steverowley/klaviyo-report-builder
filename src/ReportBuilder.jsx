@@ -971,10 +971,16 @@ function addEventMarkers(chart,events){
   };
 
   useEffect(() => {
+    // One-time cleanup: remove old localStorage report cache (superseded by KV)
+    localStorage.removeItem("swanky_report_cache");
     return () => clearTimers();
   }, []);
 
-  // Refresh past-reports list from worker whenever report mode becomes visible.
+  // Refresh past-reports list when a client is selected or report mode becomes visible.
+  useEffect(() => {
+    if (selectedClientId) refreshSavedReports();
+  }, [selectedClientId]);
+
   useEffect(() => {
     if (reportHtml && !isGenerating) refreshSavedReports();
   }, [reportHtml, isGenerating]);
@@ -1605,6 +1611,42 @@ ${reportHtml}`,
         <Field label="Additional context">
           <ContextTextarea value={additionalContext} onChange={setAdditionalContext} />
         </Field>
+
+        {selectedClientId && savedReports.filter(r => r.clientId === selectedClientId).length > 0 && (
+          <>
+            <div style={{ height: "1px", background: "#ededed", margin: "8px 0 14px" }} />
+            <div style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.16em", color: "#6b6b6b", marginBottom: "8px", fontWeight: 500 }}>
+              Past reports
+            </div>
+            <div style={{ overflowY: "auto", maxHeight: "180px", marginRight: "-8px", paddingRight: "8px", marginBottom: "8px" }}>
+              {savedReports.filter(r => r.clientId === selectedClientId).map(entry => (
+                <button
+                  key={entry.key}
+                  onClick={() => loadSavedReport(entry.key)}
+                  style={{
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                    width: "100%", textAlign: "left", padding: "7px 10px",
+                    background: "transparent", border: "none",
+                    borderBottom: "0.5px solid #f0f0ec",
+                    cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = "#fafaf8"}
+                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                >
+                  <div>
+                    <div style={{ fontSize: "11px", fontWeight: 500, color: "#0a0a0a", marginBottom: "1px" }}>
+                      {entry.reportType}{entry.dateStart ? ` · ${fmtDateDisplay(entry.dateStart)}–${fmtDateDisplay(entry.dateEnd)}` : ""}
+                    </div>
+                    <div style={{ fontSize: "10px", color: "#b8b8b8" }}>{relativeTime(entry.generatedAt)}</div>
+                  </div>
+                  <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="#b8b8b8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                    <polyline points="1,4 7,4" /><polyline points="4,1 7,4 4,7" />
+                  </svg>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
 
         <div style={{ flex: 1 }} />
 
