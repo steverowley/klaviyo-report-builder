@@ -390,12 +390,13 @@ Table (same CSS). Columns: FLOW | RECIPIENTS | DELIVERED | OPEN | CLICK | CTOR |
   tfoot "Totals / Weighted Avg" — recalculate from raw fields.
 
 TABLE CSS (apply to both tables):
-table{width:100%;border-collapse:collapse;margin-bottom:24px;font-size:12px}
-thead th{font-size:10px;font-weight:500;letter-spacing:0.08em;text-transform:uppercase;color:#999;padding:8px 10px;text-align:right;border-bottom:1px solid #e0e0da}
-thead th:first-child{text-align:left}
-tbody td{padding:10px;border-bottom:0.5px solid #f0f0ec;color:#1a1a1a;text-align:right}
-tbody td:first-child{text-align:left}
-tfoot td{padding:10px;font-size:11px;font-weight:600;background:#f7f6f3;border-top:1px solid #e0e0da;color:#0a0a0a;text-align:right}
+Wrap each table in: <div style="overflow-x:auto;margin-bottom:24px">
+table{width:100%;border-collapse:collapse;font-size:12px;min-width:600px}
+thead th{font-size:10px;font-weight:500;letter-spacing:0.08em;text-transform:uppercase;color:#999;padding:8px 10px;text-align:right;border-bottom:1px solid #e0e0da;white-space:nowrap}
+thead th:first-child{text-align:left;min-width:160px}
+tbody td{padding:10px;border-bottom:0.5px solid #f0f0ec;color:#1a1a1a;text-align:right;white-space:nowrap}
+tbody td:first-child{text-align:left;white-space:normal;min-width:160px}
+tfoot td{padding:10px;font-size:11px;font-weight:600;background:#f7f6f3;border-top:1px solid #e0e0da;color:#0a0a0a;text-align:right;white-space:nowrap}
 tfoot td:first-child{text-align:left}
 Revenue cells: font-family:'Ovo',serif;font-size:14px;font-weight:600
 
@@ -734,7 +735,7 @@ Return ONLY a JSON array of the index numbers for events that are commercially r
       const annotationScript = `<script>
 window.CHART_EVENTS=${JSON.stringify(eventsForChart)};
 function addEventMarkers(chart,events){
-  requestAnimationFrame(function(){
+  setTimeout(function(){
     try{
       var wrapper=chart.canvas.parentNode;
       wrapper.style.position='relative';
@@ -756,7 +757,7 @@ function addEventMarkers(chart,events){
         pin.appendChild(tip);col.appendChild(rule);col.appendChild(pin);wrapper.appendChild(col);
       });
     }catch(e){}
-  });
+  },200);
 }
 <\/script>`;
       rawHtml = rawHtml.replace(/<\/head>/i, annotationScript + '</head>');
