@@ -1257,21 +1257,7 @@ ${reportHtml}`,
         </Field>
 
         <Field label="Additional context">
-          <textarea
-            value={additionalContext}
-            onChange={(e) => setAdditionalContext(e.target.value)}
-            placeholder={"e.g. 'Ran a 20% Easter sale — code EASTER20 sent 1st April'\ne.g. 'Launched new schoolwear range in March'\ne.g. 'Email list migrated from Mailchimp in Jan — deliverability was lower'"}
-            rows={4}
-            style={{
-              ...inputStyle,
-              resize: "vertical",
-              lineHeight: "1.6",
-              fontFamily: "'DM Sans', sans-serif",
-              fontSize: "11px",
-              color: "#1a1a1a",
-              height: "auto",
-            }}
-          />
+          <ContextTextarea value={additionalContext} onChange={setAdditionalContext} />
         </Field>
 
         <div style={{ flex: 1 }} />
@@ -1790,6 +1776,75 @@ const inputStyle = {
   boxSizing: "border-box",
   borderRadius: 0,
 };
+
+const CONTEXT_EXAMPLES = [
+  "e.g. 'Ran a 20% Easter sale — code EASTER20 sent 1st April'",
+  "e.g. 'Launched new schoolwear range in March'",
+  "e.g. 'Email list migrated from Mailchimp in Jan — deliverability was lower'",
+  "e.g. 'Promoted free delivery throughout December'",
+  "e.g. 'Rebranded in February — new templates from the 14th'",
+  "e.g. 'Back to school campaign ran across August'",
+];
+
+function ContextTextarea({ value, onChange }) {
+  const [exIdx, setExIdx] = React.useState(0);
+  const [visible, setVisible] = React.useState(true);
+  const [focused, setFocused] = React.useState(false);
+
+  React.useEffect(() => {
+    if (value || focused) return;
+    const id = setInterval(() => {
+      setVisible(false);
+      setTimeout(() => {
+        setExIdx(i => (i + 1) % CONTEXT_EXAMPLES.length);
+        setVisible(true);
+      }, 400);
+    }, 3200);
+    return () => clearInterval(id);
+  }, [value, focused]);
+
+  return (
+    <div style={{ position: "relative" }}>
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        rows={4}
+        style={{
+          ...inputStyle,
+          resize: "vertical",
+          lineHeight: "1.6",
+          fontFamily: "'DM Sans', sans-serif",
+          fontSize: "11px",
+          color: "#1a1a1a",
+          height: "auto",
+          background: "transparent",
+          position: "relative",
+          zIndex: 1,
+        }}
+      />
+      {!value && !focused && (
+        <div style={{
+          position: "absolute",
+          top: "10px",
+          left: "12px",
+          right: "12px",
+          pointerEvents: "none",
+          fontFamily: "'DM Sans', sans-serif",
+          fontSize: "11px",
+          color: "#b8b8b8",
+          lineHeight: "1.6",
+          zIndex: 0,
+          opacity: visible ? 1 : 0,
+          transition: "opacity 0.35s ease",
+        }}>
+          {CONTEXT_EXAMPLES[exIdx]}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function Field({ label, children }) {
   return (
