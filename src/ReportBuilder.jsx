@@ -212,15 +212,15 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion }
     { range: [60, 68], text: "Setting the table in Ovo" },
     { range: [68, 76], text: "Polishing the numerals until they gleam" },
     { range: [76, 84], text: "Composing the executive summary" },
-    { range: [84, 92], text: "Drafting recommendations, considered" },
-    { range: [92, 100], text: "A final, careful proofread", hold: true },
-    { range: [92, 100], text: "Adjusting the kerning, by hand", hold: true },
-    { range: [92, 100], text: "Triple-checking the conversion rate", hold: true },
-    { range: [92, 100], text: "Considering, at length, the comma", hold: true },
-    { range: [92, 100], text: "A second opinion on the line break", hold: true },
-    { range: [92, 100], text: "Folding the corners of the page", hold: true },
-    { range: [92, 100], text: "Letting the ink dry properly", hold: true },
-    { range: [92, 100], text: "One more pass for good measure", hold: true },
+    { range: [84, 90], text: "Drafting recommendations, considered" },
+    { range: [90, 98], text: "A final, careful proofread", hold: true },
+    { range: [90, 98], text: "Adjusting the kerning, by hand", hold: true },
+    { range: [90, 98], text: "Triple-checking the conversion rate", hold: true },
+    { range: [90, 98], text: "Considering, at length, the comma", hold: true },
+    { range: [90, 98], text: "A second opinion on the line break", hold: true },
+    { range: [90, 98], text: "Folding the corners of the page", hold: true },
+    { range: [90, 98], text: "Letting the ink dry properly", hold: true },
+    { range: [90, 98], text: "One more pass for good measure", hold: true },
   ];
 
   const lineForProgress = (p) => {
@@ -651,24 +651,21 @@ Return ONLY a JSON array of the index numbers for events that are commercially r
       setLoadingLine("Locating the campaign ledger");
 
       const anthropicStartedAt = Date.now();
-      const ceiling = 92;
-      const expectedAnthropicMs = 115000;
+      // Asymptotic curve — always moving, approaches 98 but never stops there.
+      // tau=65s means ~69% at 65s, ~86% at 130s, ~95% at 195s.
+      const TAU_MS = 65000;
 
       progressTimerRef.current = setInterval(() => {
         const elapsed = Date.now() - anthropicStartedAt;
-        const t = Math.min(elapsed / expectedAnthropicMs, 1);
-        const eased = 1 - Math.pow(1 - t, 2.2);
-        const next = Math.min(ceiling, 20 + eased * (ceiling - 20));
+        const next = Math.min(98, 20 + 78 * (1 - Math.exp(-elapsed / TAU_MS)));
         setProgress(next);
-        if (next < ceiling) {
-          const line = lineForProgress(next);
-          if (line) setLoadingLine(line);
-        }
+        const line = lineForProgress(next);
+        if (line) setLoadingLine(line);
       }, 150);
 
       lineTimerRef.current = setInterval(() => {
         const elapsed = Date.now() - anthropicStartedAt;
-        if (elapsed >= expectedAnthropicMs * 0.85) {
+        if (elapsed >= TAU_MS * 0.85) {
           setLoadingLine(holdingLines[holdingLineIndex % holdingLines.length].text);
           holdingLineIndex += 1;
         }
@@ -686,7 +683,7 @@ Return ONLY a JSON array of the index numbers for events that are commercially r
         },
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
-          max_tokens: 32000,
+          max_tokens: 80000,
           system: [
             {
               type: "text",
