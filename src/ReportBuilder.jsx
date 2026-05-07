@@ -606,13 +606,13 @@ ${JSON.stringify(klaviyoData)}`;
         headers: {
           "x-api-key": anthropicKey,
           "anthropic-version": "2023-06-01",
-          "anthropic-beta": "prompt-caching-2024-07-31",
+          "anthropic-beta": "prompt-caching-2024-07-31,output-128k-2025-02-19",
           "anthropic-dangerous-direct-browser-access": "true",
           "content-type": "application/json",
         },
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
-          max_tokens: 16000,
+          max_tokens: 32000,
           system: [
             {
               type: "text",
@@ -643,6 +643,9 @@ ${JSON.stringify(klaviyoData)}`;
       const textBlock = data.content?.find((b) => b.type === "text");
       if (!textBlock?.text) {
         throw new Error("The model returned no report content. The prompt may have exceeded the context limit — try a shorter date range.");
+      }
+      if (data.stop_reason === "max_tokens") {
+        throw new Error("The report was too long and got cut off (max tokens reached). Try a shorter date range or contact Rowley to increase the output limit.");
       }
 
       let rawHtml = textBlock.text;
