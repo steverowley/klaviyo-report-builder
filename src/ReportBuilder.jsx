@@ -683,11 +683,31 @@ Return ONLY a JSON array of the index numbers for events that are commercially r
 
       if (myRequestId !== requestIdRef.current) return;
 
-      // Hand off: clear pre-phase timer — streaming drives progress from here.
+      // Hand off: clear pre-phase timer. Start a fallback asymptotic timer so progress
+      // never freezes even if SSE updates stall. Streaming overrides it via setProgress.
       clearInterval(progressTimerRef.current);
-      progressTimerRef.current = null;
       const preElapsed = Date.now() - startedAt;
       const handoffPct = Math.min(19, 19 * (1 - Math.exp(-preElapsed / PRE_TAU_MS)));
+      const anthropicStartedAt = Date.now();
+      const TAU_MS = 65000;
+
+      progressTimerRef.current = setInterval(() => {
+        const el = Date.now() - anthropicStartedAt;
+        const fb = Math.min(96, handoffPct + (96 - handoffPct) * (1 - Math.exp(-el / TAU_MS)));
+        setProgress(p => Math.max(p, fb));
+        const fl = lineForProgress(fb);
+        if (!fl) {
+          setLoadingLine(holdingLines[holdingLineIndex % holdingLines.length].text);
+        }
+      }, 300);
+
+      lineTimerRef.current = setInterval(() => {
+        const el = Date.now() - anthropicStartedAt;
+        if (el >= TAU_MS * 0.5) {
+          setLoadingLine(holdingLines[holdingLineIndex % holdingLines.length].text);
+          holdingLineIndex++;
+        }
+      }, 4000);
 
       // ── Phase 2: stream HTML from Anthropic ─────────────────────────────────
       const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
@@ -725,7 +745,7 @@ Return ONLY a JSON array of the index numbers for events that are commercially r
       let outputTokens = 0;
       let stopReason = null;
       let inputUsage = {};
-      // Typical report ~20-28k output tokens; use 24k as denominator for progress 20→96%
+      // Typical report ~20-28k output tokens; use 24k as denominator for progress handoff→96%
       const EST_OUTPUT = 24000;
 
       outer: while (true) {
@@ -748,10 +768,10 @@ Return ONLY a JSON array of the index numbers for events that are commercially r
             } else if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
               rawHtml += ev.delta.text;
               outputTokens++;
-              // Update progress every 100 tokens to avoid thrashing React
-              if (outputTokens % 100 === 0) {
+              // Update every 50 tokens — more responsive than 100
+              if (outputTokens % 50 === 0) {
                 const pct = Math.min(96, handoffPct + (96 - handoffPct) * Math.min(1, outputTokens / EST_OUTPUT));
-                setProgress(pct);
+                setProgress(p => Math.max(p, pct));
                 const line2 = lineForProgress(pct);
                 if (line2) setLoadingLine(line2);
                 else {
