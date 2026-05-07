@@ -566,6 +566,18 @@ ${JSON.stringify(klaviyoData)}`;
       setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
     }, 1000);
 
+    // Single smooth timer running from t=0 through all phases.
+    // Phase 1+1b target: 0→20% (τ=5s — moves visibly during the Klaviyo/Haiku fetches).
+    // Hands off to the Anthropic timer once that starts.
+    const PRE_TAU_MS = 5000;
+    progressTimerRef.current = setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      const next = Math.min(19, 19 * (1 - Math.exp(-elapsed / PRE_TAU_MS)));
+      setProgress(next);
+      const line = lineForProgress(next);
+      if (line) setLoadingLine(line);
+    }, 100);
+
     abortControllerRef.current = new AbortController();
     const { signal } = abortControllerRef.current;
 
@@ -573,9 +585,6 @@ ${JSON.stringify(klaviyoData)}`;
       // ── Phase 1: fetch Klaviyo data via the Worker ──────────────────────────
       const range = computeDateRange();
       const comparison = computeComparisonRange(range.start, range.end);
-
-      setLoadingLine("Producing credentials, removing hat");
-      setProgress(5);
 
       const workerRes = await fetch(workerUrl, {
         method: "POST",
@@ -601,7 +610,6 @@ ${JSON.stringify(klaviyoData)}`;
       if (myRequestId !== requestIdRef.current) return;
 
       // ── Phase 1b: ask Haiku which events are relevant for this brand ───────────
-      setProgress(12);
       setLoadingLine("Consulting the almanac");
       const allEvents = getEcommerceEvents(range.start, range.end, accountName, additionalContext);
       let relevantEvents = allEvents;
@@ -646,18 +654,20 @@ Return ONLY a JSON array of the index numbers for events that are commercially r
 
       if (myRequestId !== requestIdRef.current) return;
 
-      // Worker succeeded — jump to 20% and start the composing phase timers
-      setProgress(20);
-      setLoadingLine("Locating the campaign ledger");
-
+      // Hand off from pre-phase timer to the main Anthropic timer.
+      // Capture wherever the progress currently sits so the curve starts there.
+      clearInterval(progressTimerRef.current);
       const anthropicStartedAt = Date.now();
-      // Asymptotic curve — always moving, approaches 98 but never stops there.
-      // tau=65s means ~69% at 65s, ~86% at 130s, ~95% at 195s.
       const TAU_MS = 65000;
+      // Read latest progress value via a one-shot setState callback pattern using a ref.
+      // We estimate it from elapsed time to avoid stale closure issues.
+      const preElapsed = Date.now() - startedAt;
+      const handoffPct = Math.min(19, 19 * (1 - Math.exp(-preElapsed / PRE_TAU_MS)));
+      const remaining = 98 - handoffPct;
 
       progressTimerRef.current = setInterval(() => {
         const elapsed = Date.now() - anthropicStartedAt;
-        const next = Math.min(98, 20 + 78 * (1 - Math.exp(-elapsed / TAU_MS)));
+        const next = Math.min(98, handoffPct + remaining * (1 - Math.exp(-elapsed / TAU_MS)));
         setProgress(next);
         const line = lineForProgress(next);
         if (line) setLoadingLine(line);
