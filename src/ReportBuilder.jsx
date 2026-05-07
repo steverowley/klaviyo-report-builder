@@ -1813,7 +1813,7 @@ function LoadingState({ progress, line, elapsed, justFinished, onDismissCompleti
     return () => { el.removeEventListener('mousemove', onMove); el.removeEventListener('mouseleave', onLeave); };
   }, []);
 
-  // Click → precise ink mark
+  // Click → crosshair registration mark
   const handleClick = (e) => {
     if (justFinished) return;
     const rect = containerRef.current.getBoundingClientRect();
@@ -1821,7 +1821,7 @@ function LoadingState({ progress, line, elapsed, justFinished, onDismissCompleti
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
     setRipples(r => [...r, { id, x, y }]);
-    setTimeout(() => setRipples(r => r.filter(rip => rip.id !== id)), 900);
+    setTimeout(() => setRipples(r => r.filter(rip => rip.id !== id)), 700);
   };
 
   return (
@@ -1844,14 +1844,18 @@ function LoadingState({ progress, line, elapsed, justFinished, onDismissCompleti
     >
       <FloatingNumerals />
 
-      {/* Precise ink marks — SVG layer, pointer-events none */}
+      {/* Crosshair registration marks — SVG layer, pointer-events none */}
       <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 4, overflow: "visible" }}>
         {ripples.map(r => (
-          <g key={r.id} transform={`translate(${r.x},${r.y})`}>
-            <circle cx="0" cy="0" r="1" fill="none" stroke="#0a0a0a" strokeWidth="0.5"
-              style={{ animation: "rippleOut 0.75s cubic-bezier(0.15,0.5,0.3,1) forwards" }} />
-            <circle cx="0" cy="0" r="1" fill="none" stroke="#0a0a0a" strokeWidth="0.3"
-              style={{ animation: "rippleOut 0.9s cubic-bezier(0.15,0.5,0.3,1) 0.1s forwards", opacity: 0 }} />
+          <g key={r.id} transform={`translate(${r.x},${r.y})`} style={{ animation: "crossFade 0.6s ease-out forwards" }}>
+            {/* Centre dot */}
+            <circle cx="0" cy="0" r="1" fill="#0a0a0a" />
+            {/* Vertical arm — draws from centre outward */}
+            <line x1="0" y1="-16" x2="0" y2="16" stroke="#0a0a0a" strokeWidth="0.5"
+              style={{ transformOrigin: "0px 0px", animation: "armV 0.18s ease-out forwards" }} />
+            {/* Horizontal arm — draws from centre outward */}
+            <line x1="-16" y1="0" x2="16" y2="0" stroke="#0a0a0a" strokeWidth="0.5"
+              style={{ transformOrigin: "0px 0px", animation: "armH 0.18s ease-out forwards" }} />
           </g>
         ))}
       </svg>
@@ -1986,9 +1990,19 @@ function LoadingState({ progress, line, elapsed, justFinished, onDismissCompleti
           from { height: 3px; opacity: 0.2; }
           to { height: var(--bar-max); opacity: 0.85; }
         }
-        @keyframes rippleOut {
-          0%   { transform: scale(0);  opacity: 0.5; }
-          100% { transform: scale(50); opacity: 0; }
+        @keyframes armV {
+          from { transform: scaleY(0); }
+          to   { transform: scaleY(1); }
+        }
+        @keyframes armH {
+          from { transform: scaleX(0); }
+          to   { transform: scaleX(1); }
+        }
+        @keyframes crossFade {
+          0%   { opacity: 0; }
+          15%  { opacity: 0.65; }
+          55%  { opacity: 0.65; }
+          100% { opacity: 0; }
         }
         @keyframes shimmer {
           0%   { transform: translateX(-100%); }
