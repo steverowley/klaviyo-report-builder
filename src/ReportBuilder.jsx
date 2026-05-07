@@ -732,15 +732,18 @@ Return ONLY a JSON array of the index numbers for events that are commercially r
       const annotationScript = `<script>
 window.CHART_EVENTS=${JSON.stringify(eventsForChart)};
 function addEventMarkers(chart,events){
-  setTimeout(function(){
+  if(!events||!events.length)return;
+  var wrapper=chart.canvas.parentNode;
+  wrapper.style.position='relative';
+  function place(){
     try{
-      var wrapper=chart.canvas.parentNode;
-      wrapper.style.position='relative';
+      wrapper.querySelectorAll('.evt-marker').forEach(function(el){el.remove();});
       events.forEach(function(ev){
         var idx=chart.data.labels.indexOf(ev.label);
         if(idx===-1)return;
         var x=Math.round(chart.scales.x.getPixelForValue(idx));
         var col=document.createElement('div');
+        col.className='evt-marker';
         col.style.cssText='position:absolute;top:0;bottom:0;left:'+x+'px;width:0;z-index:5;pointer-events:none';
         var rule=document.createElement('div');
         rule.style.cssText='position:absolute;inset:0;border-left:1px dashed rgba(10,10,10,0.15)';
@@ -754,7 +757,12 @@ function addEventMarkers(chart,events){
         pin.appendChild(tip);col.appendChild(rule);col.appendChild(pin);wrapper.appendChild(col);
       });
     }catch(e){}
-  },200);
+  }
+  place();
+  if(typeof ResizeObserver!=='undefined'){
+    var ro=new ResizeObserver(function(){place();});
+    ro.observe(chart.canvas);
+  }
 }
 <\/script>`;
       rawHtml = rawHtml.replace(/<\/head>/i, annotationScript + '</head>');
