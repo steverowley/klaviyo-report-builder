@@ -321,7 +321,7 @@ export default {
     }
 
     // POST /?action=save-report — persist a generated report to KV ────────────
-    if (action === 'save-report') {
+    if (request.method === 'POST' && action === 'save-report') {
       if (!env.CLIENTS_KV) {
         return new Response(JSON.stringify({ error: 'KV not configured' }), {
           status: 503, headers: { 'Content-Type': 'application/json', ...cors(origin) },
@@ -367,6 +367,20 @@ export default {
         .map(k => ({ key: k.name, ...k.metadata }))
         .sort((a, b) => new Date(b.generatedAt) - new Date(a.generatedAt));
       return new Response(JSON.stringify(entries), {
+        headers: { 'Content-Type': 'application/json', ...cors(origin) },
+      });
+    }
+
+    // POST /?action=delete-report&key=<key> — delete a saved report from KV ───
+    if (request.method === 'POST' && action === 'delete-report') {
+      const key = url.searchParams.get('key');
+      if (!key || !env.CLIENTS_KV) {
+        return new Response(JSON.stringify({ error: 'key required and KV must be configured' }), {
+          status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) },
+        });
+      }
+      await env.CLIENTS_KV.delete(key);
+      return new Response(JSON.stringify({ deleted: true, key }), {
         headers: { 'Content-Type': 'application/json', ...cors(origin) },
       });
     }

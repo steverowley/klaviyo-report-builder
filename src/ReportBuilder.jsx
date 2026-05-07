@@ -967,6 +967,24 @@ function addEventMarkers(chart,events){
     }).catch(() => {});
   };
 
+  // Delete a report from KV and localStorage, refresh the list.
+  const deleteReport = async (key, e) => {
+    e.stopPropagation();
+    const workerUrl = localStorage.getItem(WORKER_URL);
+    if (key.startsWith("report_") && workerUrl) {
+      try {
+        await fetch(`${workerUrl}?action=delete-report&key=${encodeURIComponent(key)}`, { method: "POST" });
+      } catch {}
+    }
+    try {
+      const store = JSON.parse(localStorage.getItem(REPORT_CACHE_KEY) || "{}");
+      delete store[key];
+      localStorage.setItem(REPORT_CACHE_KEY, JSON.stringify(store));
+    } catch {}
+    if (currentReportMeta?.key === key) handleNewReport();
+    await refreshSavedReports();
+  };
+
   // Load a past report: fetch HTML from worker (key prefix "report_") or localStorage.
   const loadSavedReport = async (key) => {
     setLoadingSavedReport(true);
@@ -1473,27 +1491,47 @@ ${reportHtml}`,
                     const entryName = entry.accountName || clients.find(c => c.id === entry.clientId)?.name || "Unknown";
                     const isCurrent = entry.key === currentReportMeta?.key;
                     return (
-                      <button
+                      <div
                         key={entry.key}
-                        onClick={() => loadSavedReport(entry.key)}
                         style={{
-                          display: "block", width: "100%", textAlign: "left",
-                          padding: "8px 10px",
+                          display: "flex", alignItems: "stretch",
+                          borderBottom: "0.5px solid #f0f0ec",
                           background: isCurrent ? "#f8f6f2" : "transparent",
-                          border: "none", borderBottom: "0.5px solid #f0f0ec",
-                          cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
                         }}
                         onMouseEnter={e => { if (!isCurrent) e.currentTarget.style.background = "#fafaf8"; }}
                         onMouseLeave={e => { if (!isCurrent) e.currentTarget.style.background = "transparent"; }}
                       >
-                        <div style={{ fontSize: "11px", fontWeight: 500, color: "#0a0a0a", marginBottom: "2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {entryName}
-                        </div>
-                        <div style={{ fontSize: "10px", color: "#6b6b6b", display: "flex", justifyContent: "space-between" }}>
-                          <span style={{ textTransform: "uppercase", letterSpacing: "0.08em" }}>{entry.reportType}</span>
-                          <span>{relativeTime(entry.generatedAt)}</span>
-                        </div>
-                      </button>
+                        <button
+                          onClick={() => loadSavedReport(entry.key)}
+                          style={{
+                            flex: 1, textAlign: "left", padding: "8px 10px",
+                            background: "transparent", border: "none",
+                            cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
+                          }}
+                        >
+                          <div style={{ fontSize: "11px", fontWeight: 500, color: "#0a0a0a", marginBottom: "2px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {entryName}
+                          </div>
+                          <div style={{ fontSize: "10px", color: "#6b6b6b", display: "flex", justifyContent: "space-between" }}>
+                            <span style={{ textTransform: "uppercase", letterSpacing: "0.08em" }}>{entry.reportType}</span>
+                            <span>{relativeTime(entry.generatedAt)}</span>
+                          </div>
+                        </button>
+                        <button
+                          onClick={(e) => deleteReport(entry.key, e)}
+                          title="Delete report"
+                          style={{
+                            background: "transparent", border: "none",
+                            cursor: "pointer", color: "#d0d0d0",
+                            padding: "0 8px", flexShrink: 0,
+                            fontSize: "14px", lineHeight: 1,
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.color = "#0a0a0a"}
+                          onMouseLeave={e => e.currentTarget.style.color = "#d0d0d0"}
+                        >
+                          ×
+                        </button>
+                      </div>
                     );
                   })}
                 </div>
