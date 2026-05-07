@@ -971,6 +971,8 @@ function addEventMarkers(chart,events){
   };
 
   useEffect(() => {
+    // One-time cleanup: remove old localStorage report cache (superseded by KV)
+    localStorage.removeItem("swanky_report_cache");
     return () => clearTimers();
   }, []);
 
