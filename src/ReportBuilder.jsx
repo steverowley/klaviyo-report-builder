@@ -2,6 +2,27 @@ import React, { useState, useRef, useEffect } from "react";
 
 const ANTHROPIC_KEY = "swanky_anthropic_key";
 const WORKER_URL = "swanky_worker_url";
+const MODEL_KEY = "swanky_model";
+const DEFAULT_MODEL = "claude-sonnet-4-6";
+
+// Model registry. Pricing in USD per million tokens.
+const MODELS = {
+  "claude-haiku-4-5-20251001": {
+    label: "Haiku 4.5",
+    blurb: "Fastest, lowest cost",
+    pricing: { input: 1, cacheWrite: 1.25, cacheRead: 0.10, output: 5 },
+  },
+  "claude-sonnet-4-6": {
+    label: "Sonnet 4.6",
+    blurb: "Balanced — recommended",
+    pricing: { input: 3, cacheWrite: 3.75, cacheRead: 0.30, output: 15 },
+  },
+  "claude-opus-4-7": {
+    label: "Opus 4.7",
+    blurb: "Highest quality, slowest",
+    pricing: { input: 15, cacheWrite: 18.75, cacheRead: 1.50, output: 75 },
+  },
+};
 
 // ── Ecommerce event calendar ─────────────────────────────────────────────────
 
@@ -145,6 +166,9 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion }
   const [clientsError, setClientsError] = useState("");
   const [reportType, setReportType] = useState("Monthly");
   const [comparisonMode, setComparisonMode] = useState("Previous Period");
+  const [selectedModel, setSelectedModel] = useState(
+    () => (MODELS[localStorage.getItem(MODEL_KEY)] ? localStorage.getItem(MODEL_KEY) : DEFAULT_MODEL)
+  );
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
   const [additionalContext, setAdditionalContext] = useState("");
@@ -216,12 +240,16 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion }
   const reportTypes = ["Weekly", "Fortnightly", "Monthly", "Quarterly", "YTD", "Custom"];
   const comparisonModes = ["None", "Previous Period", "Year on Year"];
 
+  // Scale max output tokens to the length of the reporting period.
+  // ~450 tokens per day of data + 8k boilerplate floor, clamped between 14k and 64k.
+  // Reports auto-grow for Custom/YTD ranges that previously hit a 40k ceiling.
   const maxTokensForReport = () => {
-    if (reportType === "Weekly") return 14000;
-    if (reportType === "Fortnightly") return 20000;
-    if (reportType === "Monthly") return 28000;
-    if (reportType === "Quarterly") return 36000;
-    return 40000; // YTD, Custom
+    const { start, end } = computeDateRange();
+    const days = Math.max(
+      1,
+      Math.round((new Date(end) - new Date(start)) / 86400000) + 1
+    );
+    return Math.min(64000, Math.max(14000, 8000 + days * 450));
   };
 
   const computeDateRange = () => {
@@ -608,38 +636,36 @@ ${JSON.stringify(trimData(klaviyoData))}`;
     const { signal } = abortControllerRef.current;
 
     try {
-      // ── Phase 1: fetch Klaviyo data via the Worker ──────────────────────────
+      // ── Phase 1: fetch Klaviyo data + filter ecommerce events in PARALLEL ──
+      // The Haiku almanac call doesn't depend on the Klaviyo data — only on the
+      // date range, brand name and context — so both round-trips overlap.
       const range = computeDateRange();
       const comparison = computeComparisonRange(range.start, range.end);
-
-      const workerRes = await fetch(workerUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          clientId: selectedClientId,
-          startDate: range.start,
-          endDate: range.end,
-          ...(comparison ? { comparisonStart: comparison.start, comparisonEnd: comparison.end } : {}),
-        }),
-        signal,
-      });
-
-      if (myRequestId !== requestIdRef.current) return;
-
-      if (!workerRes.ok) {
-        const errData = await workerRes.json().catch(() => ({}));
-        throw new Error(`Klaviyo data fetch failed: ${errData.error || `HTTP ${workerRes.status}`}`);
-      }
-
-      const klaviyoData = await workerRes.json();
-
-      if (myRequestId !== requestIdRef.current) return;
-
-      // ── Phase 1b: ask Haiku which events are relevant for this brand ───────────
-      setLoadingLine("Consulting the almanac");
       const allEvents = getEcommerceEvents(range.start, range.end, accountName, additionalContext);
-      let relevantEvents = allEvents;
-      if (allEvents.length > 0) {
+
+      setLoadingLine("Consulting the almanac");
+
+      const klaviyoPromise = (async () => {
+        const workerRes = await fetch(workerUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            clientId: selectedClientId,
+            startDate: range.start,
+            endDate: range.end,
+            ...(comparison ? { comparisonStart: comparison.start, comparisonEnd: comparison.end } : {}),
+          }),
+          signal,
+        });
+        if (!workerRes.ok) {
+          const errData = await workerRes.json().catch(() => ({}));
+          throw new Error(`Klaviyo data fetch failed: ${errData.error || `HTTP ${workerRes.status}`}`);
+        }
+        return workerRes.json();
+      })();
+
+      const eventsPromise = (async () => {
+        if (allEvents.length === 0) return allEvents;
         try {
           const filterRes = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST",
@@ -670,13 +696,17 @@ Return ONLY a JSON array of the index numbers for events that are commercially r
             const match = text.match(/\[[\d,\s]*\]/);
             if (match) {
               const indices = JSON.parse(match[0]);
-              relevantEvents = indices.map(i => allEvents[i]).filter(Boolean);
+              const picked = indices.map(i => allEvents[i]).filter(Boolean);
+              if (picked.length > 0) return picked;
             }
           }
         } catch (_) {
-          // If filtering fails, fall back to all events
+          // Fall through and use all events
         }
-      }
+        return allEvents;
+      })();
+
+      const [klaviyoData, relevantEvents] = await Promise.all([klaviyoPromise, eventsPromise]);
 
       if (myRequestId !== requestIdRef.current) return;
 
@@ -717,7 +747,7 @@ Return ONLY a JSON array of the index numbers for events that are commercially r
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          model: "claude-sonnet-4-6",
+          model: selectedModel,
           max_tokens: maxTokensForReport(),
           stream: true,
           system: [{ type: "text", text: buildSystemPrompt(), cache_control: { type: "ephemeral" } }],
@@ -742,8 +772,10 @@ Return ONLY a JSON array of the index numbers for events that are commercially r
       let outputTokens = 0;
       let stopReason = null;
       let inputUsage = {};
-      // Typical report ~20-28k output tokens; use 24k as denominator for progress handoff→96%
-      const EST_OUTPUT = 24000;
+      // Scale progress denominator to the report's actual token budget so the bar
+      // doesn't peg early on long ranges or crawl on short ones. Reports typically
+      // emit ~70% of max_tokens, with a 10k floor for the bar to feel responsive.
+      const EST_OUTPUT = Math.max(10000, Math.round(maxTokensForReport() * 0.7));
 
       outer: while (true) {
         const { done, value } = await reader.read();
@@ -848,11 +880,12 @@ function addEventMarkers(chart,events){
       rawHtml = rawHtml.replace(/<\/head>/i, annotationScript + '</head>');
 
       const u = streamUsage;
+      const pricing = (MODELS[selectedModel] || MODELS[DEFAULT_MODEL]).pricing;
       const costUsd =
-        (u.input_tokens || 0) * 3 / 1_000_000 +
-        (u.cache_creation_input_tokens || 0) * 3.75 / 1_000_000 +
-        (u.cache_read_input_tokens || 0) * 0.30 / 1_000_000 +
-        (u.output_tokens || 0) * 15 / 1_000_000;
+        (u.input_tokens || 0) * pricing.input / 1_000_000 +
+        (u.cache_creation_input_tokens || 0) * pricing.cacheWrite / 1_000_000 +
+        (u.cache_read_input_tokens || 0) * pricing.cacheRead / 1_000_000 +
+        (u.output_tokens || 0) * pricing.output / 1_000_000;
       setLastUsage({
         inputTokens: u.input_tokens || 0,
         cacheCreationTokens: u.cache_creation_input_tokens || 0,
@@ -1605,6 +1638,24 @@ ${reportHtml}`,
                 {c}
               </SegmentButton>
             ))}
+          </div>
+        </Field>
+
+        <Field label="Model">
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            {Object.entries(MODELS).map(([id, m]) => (
+              <SegmentButton
+                key={id}
+                active={selectedModel === id}
+                onClick={() => { setSelectedModel(id); localStorage.setItem(MODEL_KEY, id); }}
+                fullWidth
+              >
+                {m.label}
+              </SegmentButton>
+            ))}
+          </div>
+          <div style={{ marginTop: "8px", fontSize: "10px", color: "#6b6b6b", fontFamily: "'Ovo', serif", fontStyle: "italic", lineHeight: 1.4 }}>
+            {MODELS[selectedModel]?.blurb}
           </div>
         </Field>
 
