@@ -302,66 +302,14 @@ export default function App() {
     <>
       <CursorDot />
 
-      {/* Top-right user controls */}
-      <div style={{
-        position: "fixed",
-        top: "20px",
-        right: "24px",
-        zIndex: 200,
-        display: "flex",
-        alignItems: "center",
-        gap: "16px",
-      }}>
-        {session.admin && (
-          <button
-            onClick={() => setShowAdmin(v => !v)}
-            title="User management"
-            style={{
-              background: "none",
-              border: "none",
-              padding: 0,
-              fontFamily: "'Inter', sans-serif",
-              fontSize: "9px",
-              fontWeight: 500,
-              letterSpacing: "0.18em",
-              textTransform: "uppercase",
-              color: showAdmin ? "#0a0a0a" : "#b8b8b8",
-              cursor: "pointer",
-              transition: "color 0.15s ease",
-            }}
-            onMouseEnter={e => e.currentTarget.style.color = "#6b6b6b"}
-            onMouseLeave={e => e.currentTarget.style.color = showAdmin ? "#0a0a0a" : "#b8b8b8"}
-          >
-            Users
-          </button>
-        )}
-        <div style={{ width: "1px", height: "12px", background: "#ededed" }} />
-        <button
-          onClick={handleSignOut}
-          style={{
-            background: "none",
-            border: "none",
-            padding: 0,
-            fontFamily: "'Inter', sans-serif",
-            fontSize: "9px",
-            fontWeight: 500,
-            letterSpacing: "0.18em",
-            textTransform: "uppercase",
-            color: "#b8b8b8",
-            cursor: "pointer",
-            transition: "color 0.15s ease",
-          }}
-          onMouseEnter={e => e.currentTarget.style.color = "#6b6b6b"}
-          onMouseLeave={e => e.currentTarget.style.color = "#b8b8b8"}
-        >
-          Sign out
-        </button>
-      </div>
-
       <ReportBuilder
-        onOpenSettings={() => setShowSettings(true)}
+        onOpenSettings={session.admin ? () => setShowSettings(true) : undefined}
         settingsVersion={settingsVersion}
         sessionToken={session.token}
+        session={session}
+        onSignOut={handleSignOut}
+        onOpenAdmin={session.admin ? () => setShowAdmin(v => !v) : undefined}
+        adminPanelOpen={showAdmin}
       />
       {showSettings && (
         <div style={{ position: "fixed", inset: 0, zIndex: 1000 }}>

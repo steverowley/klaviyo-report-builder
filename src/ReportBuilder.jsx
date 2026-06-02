@@ -164,7 +164,7 @@ function authHeaders(token) {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, sessionToken }) {
+export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, sessionToken, session, onSignOut, onOpenAdmin, adminPanelOpen }) {
   const [clients, setClients] = useState([]);
   const [selectedClientId, setSelectedClientId] = useState("");
   const [clientsError, setClientsError] = useState("");
@@ -1303,31 +1303,62 @@ ${reportHtml}`,
             </div>
           </div>
 
-          {/* Gear icon — opens Settings */}
-          <button
-            onClick={onOpenSettings}
-            title="API key settings"
-            style={{
-              background: "transparent",
-              border: "none",
-              cursor: "pointer",
-              padding: "4px",
-              color: "#b8b8b8",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-              marginTop: "2px",
-              transition: "color 0.15s ease",
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = "#6b6b6b")}
-            onMouseLeave={(e) => (e.currentTarget.style.color = "#b8b8b8")}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-          </button>
+          {/* Right-side controls: session links + gear */}
+          <div style={{ display: "flex", alignItems: "center", gap: "16px", marginTop: "2px", flexShrink: 0 }}>
+            {session?.admin && onOpenAdmin && (
+              <button
+                onClick={onOpenAdmin}
+                style={{
+                  background: "none", border: "none", padding: 0,
+                  fontFamily: "'Inter', sans-serif", fontSize: "9px", fontWeight: 500,
+                  letterSpacing: "0.18em", textTransform: "uppercase",
+                  color: adminPanelOpen ? "#0a0a0a" : "#b8b8b8",
+                  cursor: "pointer", transition: "color 0.15s ease",
+                }}
+                onMouseEnter={e => e.currentTarget.style.color = "#6b6b6b"}
+                onMouseLeave={e => e.currentTarget.style.color = adminPanelOpen ? "#0a0a0a" : "#b8b8b8"}
+              >
+                Users
+              </button>
+            )}
+            {onSignOut && (
+              <>
+                <div style={{ width: "1px", height: "12px", background: "#ededed" }} />
+                <button
+                  onClick={onSignOut}
+                  style={{
+                    background: "none", border: "none", padding: 0,
+                    fontFamily: "'Inter', sans-serif", fontSize: "9px", fontWeight: 500,
+                    letterSpacing: "0.18em", textTransform: "uppercase",
+                    color: "#b8b8b8", cursor: "pointer", transition: "color 0.15s ease",
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.color = "#6b6b6b"}
+                  onMouseLeave={e => e.currentTarget.style.color = "#b8b8b8"}
+                >
+                  Sign out
+                </button>
+                <div style={{ width: "1px", height: "12px", background: "#ededed" }} />
+              </>
+            )}
+            {onOpenSettings && (
+              <button
+                onClick={onOpenSettings}
+                title="API key settings"
+                style={{
+                  background: "transparent", border: "none", cursor: "pointer", padding: "4px",
+                  color: "#b8b8b8", display: "flex", alignItems: "center", justifyContent: "center",
+                  transition: "color 0.15s ease",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = "#6b6b6b")}
+                onMouseLeave={(e) => (e.currentTarget.style.color = "#b8b8b8")}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
 
         <div style={{ height: "1px", background: "#ededed", margin: "0 0 24px" }} />
