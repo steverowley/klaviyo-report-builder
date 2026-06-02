@@ -1616,12 +1616,12 @@ ${reportHtml}`,
 
         {reportType === "Custom" && (
           <Field label="Date range">
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
               <input
                 type="date"
                 value={customStart}
                 onChange={(e) => setCustomStart(e.target.value)}
-                style={{ ...inputStyle, flex: 1 }}
+                style={{ ...inputStyle, flex: "1 1 120px", minWidth: 0 }}
               />
               <span style={{ color: "#b8b8b8", fontSize: "11px", flexShrink: 0 }}>→</span>
               <input
@@ -1629,7 +1629,7 @@ ${reportHtml}`,
                 value={customEnd}
                 min={customStart || undefined}
                 onChange={(e) => setCustomEnd(e.target.value)}
-                style={{ ...inputStyle, flex: 1 }}
+                style={{ ...inputStyle, flex: "1 1 120px", minWidth: 0 }}
               />
             </div>
           </Field>
