@@ -98,7 +98,7 @@ export default function Settings({ onSave }) {
           <img
             src="https://swankyagency.com/wp-content/uploads/2022/05/swanky-2020-black.png"
             alt="Swanky"
-            style={{ height: "22px", opacity: 0.9, display: "block", margin: "0 auto 28px" }}
+            style={{ height: "22px", opacity: 1, display: "block", margin: "0 auto 28px" }}
           />
           <div
             style={{

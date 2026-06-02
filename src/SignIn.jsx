@@ -112,7 +112,7 @@ export default function SignIn({ onSignIn, onOpenSettings }) {
             <img
               src="https://swankyagency.com/wp-content/uploads/2022/05/swanky-2020-black.png"
               alt="Swanky"
-              style={{ height: "28px", objectFit: "contain" }}
+              style={{ height: "28px", objectFit: "contain", opacity: 1 }}
             />
           </div>
           <div style={{ height: "1px", background: "#ededed", marginBottom: "40px" }} />

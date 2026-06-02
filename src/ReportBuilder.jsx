@@ -1276,7 +1276,7 @@ ${reportHtml}`,
             <img
               src="https://swankyagency.com/wp-content/uploads/2022/05/swanky-2020-black.png"
               alt="Swanky"
-              style={{ height: "24px", opacity: 0.9 }}
+              style={{ height: "24px", opacity: 1 }}
             />
             <div
               style={{
