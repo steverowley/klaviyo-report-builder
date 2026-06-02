@@ -305,12 +305,12 @@ export default function App() {
       {/* Top-right user controls */}
       <div style={{
         position: "fixed",
-        top: "16px",
-        right: "20px",
+        top: "20px",
+        right: "24px",
         zIndex: 200,
         display: "flex",
         alignItems: "center",
-        gap: "8px",
+        gap: "16px",
       }}>
         {session.admin && (
           <button
@@ -318,34 +318,41 @@ export default function App() {
             title="User management"
             style={{
               background: "none",
-              border: "1px solid #ededed",
-              padding: "5px 10px",
+              border: "none",
+              padding: 0,
               fontFamily: "'Inter', sans-serif",
               fontSize: "9px",
               fontWeight: 500,
-              letterSpacing: "0.16em",
+              letterSpacing: "0.18em",
               textTransform: "uppercase",
-              color: "#6b6b6b",
+              color: showAdmin ? "#0a0a0a" : "#b8b8b8",
               cursor: "pointer",
+              transition: "color 0.15s ease",
             }}
+            onMouseEnter={e => e.currentTarget.style.color = "#6b6b6b"}
+            onMouseLeave={e => e.currentTarget.style.color = showAdmin ? "#0a0a0a" : "#b8b8b8"}
           >
             Users
           </button>
         )}
+        <div style={{ width: "1px", height: "12px", background: "#ededed" }} />
         <button
           onClick={handleSignOut}
           style={{
             background: "none",
-            border: "1px solid #ededed",
-            padding: "5px 10px",
+            border: "none",
+            padding: 0,
             fontFamily: "'Inter', sans-serif",
             fontSize: "9px",
             fontWeight: 500,
-            letterSpacing: "0.16em",
+            letterSpacing: "0.18em",
             textTransform: "uppercase",
-            color: "#6b6b6b",
+            color: "#b8b8b8",
             cursor: "pointer",
+            transition: "color 0.15s ease",
           }}
+          onMouseEnter={e => e.currentTarget.style.color = "#6b6b6b"}
+          onMouseLeave={e => e.currentTarget.style.color = "#b8b8b8"}
         >
           Sign out
         </button>
