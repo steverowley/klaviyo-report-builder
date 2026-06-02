@@ -7,3 +7,7 @@ workers_dev = true
 [[kv_namespaces]]
 binding = "CLIENTS_KV"
 id = "4b9a981938ac4fc6bebea9ba1f5c8290"
+
+[[kv_namespaces]]
+binding = "USERS"
+id = "06fd92e3b6a7407f86113278b31e02b2"
