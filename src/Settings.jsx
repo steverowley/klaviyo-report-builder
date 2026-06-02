@@ -26,9 +26,7 @@ export default function Settings({ onSave }) {
     setAdminPassword(localStorage.getItem(ADMIN_PASSWORD) || "");
   }, []);
 
-  const canSave =
-    anthropicKey.trim().length > 0 &&
-    workerUrl.trim().startsWith("http");
+  const canSave = workerUrl.trim().startsWith("http");
 
   const handleSave = () => {
     if (!canSave) return;
