@@ -602,9 +602,44 @@ export default {
         keyInKv: env.CLIENTS_KV ? !!(await env.CLIENTS_KV.get('key_' + c.id)) : false,
         keyInSecrets: !!env[`KLAVIYO_KEY_${c.id}`],
       })));
+
+      // Test USERS KV binding with a write + read + delete
+      let usersKvTest = 'not bound';
+      if (env.USERS) {
+        try {
+          const testKey = '__diag_test__';
+          await env.USERS.put(testKey, 'ok');
+          const val = await env.USERS.get(testKey);
+          await env.USERS.delete(testKey);
+          usersKvTest = val === 'ok' ? 'write+read+delete OK' : `read mismatch: ${val}`;
+        } catch (e) {
+          usersKvTest = `error: ${e.message}`;
+        }
+      }
+
+      // Count registered users
+      let userCount = 0;
+      let pendingCount = 0;
+      if (env.USERS) {
+        try {
+          const list = await env.USERS.list({ prefix: 'user_' });
+          userCount = list.keys.length;
+          const users = await Promise.all(list.keys.map(async k => {
+            const raw = await env.USERS.get(k.name);
+            return raw ? JSON.parse(raw) : null;
+          }));
+          pendingCount = users.filter(u => u && !u.approved).length;
+        } catch {}
+      }
+
       return new Response(JSON.stringify({
         kvAvailable: !!env.CLIENTS_KV,
         CLIENTS_JSON_set: !!env.CLIENTS_JSON,
+        TOKEN_SECRET_set: !!env.TOKEN_SECRET,
+        USERS_bound: !!env.USERS,
+        usersKvTest,
+        userCount,
+        pendingCount,
         clients: keyStatus,
       }, null, 2), {
         headers: { 'Content-Type': 'application/json', ...cors(origin) },
