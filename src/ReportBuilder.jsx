@@ -1271,8 +1271,8 @@ ${reportHtml}`,
         }}
       >
         {/* Header row: logo/title + gear icon */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "32px" }}>
-          <div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "32px", gap: "16px" }}>
+          <div style={{ minWidth: 0 }}>
             <img
               src="https://swankyagency.com/wp-content/uploads/2022/05/swanky-2020-black.png"
               alt="Swanky"
@@ -1286,6 +1286,7 @@ ${reportHtml}`,
                 marginTop: "20px",
                 lineHeight: 1.15,
                 letterSpacing: "-0.01em",
+                whiteSpace: "nowrap",
               }}
             >
               Klaviyo Report Builder
