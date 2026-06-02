@@ -970,14 +970,15 @@ function addEventMarkers(chart,events){
   // Delete a report from KV, refresh the list.
   const deleteReport = async (key, e) => {
     e.stopPropagation();
+    // Optimistically remove from state immediately
+    setSavedReports(prev => prev.filter(r => r.key !== key));
+    if (currentReportMeta?.key === key) handleNewReport();
     const workerUrl = localStorage.getItem(WORKER_URL);
     if (workerUrl) {
       try {
         await fetch(`${workerUrl}?action=delete-report&key=${encodeURIComponent(key)}`, { method: "POST", headers: authHeaders(sessionToken) });
       } catch {}
     }
-    if (currentReportMeta?.key === key) handleNewReport();
-    await refreshSavedReports();
   };
 
   // Load a past report from worker KV.
