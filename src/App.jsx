@@ -262,11 +262,7 @@ export default function App() {
     };
   });
 
-  const [showSettings, setShowSettings] = useState(() => {
-    const ak = localStorage.getItem("swanky_anthropic_key");
-    const wu = localStorage.getItem("swanky_worker_url");
-    return !ak || !wu;
-  });
+  const [showSettings, setShowSettings] = useState(false);
 
   const [settingsVersion, setSettingsVersion] = useState(0);
   const [showAdmin, setShowAdmin] = useState(false);
@@ -292,7 +288,7 @@ export default function App() {
     return (
       <>
         <CursorDot />
-        <SignIn onSignIn={handleSignIn} />
+        <SignIn onSignIn={handleSignIn} onOpenSettings={() => setShowSettings(true)} />
         {showSettings && (
           <div style={{ position: "fixed", inset: 0, zIndex: 1000 }}>
             <Settings onSave={handleSettingsSaved} />
