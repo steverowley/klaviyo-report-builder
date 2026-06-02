@@ -303,7 +303,7 @@ export default function App() {
       <CursorDot />
 
       <ReportBuilder
-        onOpenSettings={() => setShowSettings(true)}
+        onOpenSettings={session.admin ? () => setShowSettings(true) : undefined}
         settingsVersion={settingsVersion}
         sessionToken={session.token}
         session={session}

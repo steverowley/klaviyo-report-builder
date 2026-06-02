@@ -41,6 +41,13 @@ export default function SignIn({ onSignIn, onOpenSettings }) {
         sessionStorage.setItem("swanky_session", data.token);
         sessionStorage.setItem("swanky_session_user", data.username);
         sessionStorage.setItem("swanky_session_admin", String(data.admin));
+        // Auto-configure localStorage for non-admin users who haven't set keys
+        if (data.workerUrl && !localStorage.getItem("swanky_worker_url")) {
+          localStorage.setItem("swanky_worker_url", data.workerUrl);
+        }
+        if (data.anthropicKey && !localStorage.getItem("swanky_anthropic_key")) {
+          localStorage.setItem("swanky_anthropic_key", data.anthropicKey);
+        }
         onSignIn({ token: data.token, username: data.username, admin: data.admin });
       }
     } catch {

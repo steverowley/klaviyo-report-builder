@@ -345,12 +345,15 @@ export default {
       if (!username || !password) {
         return new Response(JSON.stringify({ error: 'Username and password required.' }), { status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
       }
+      const workerUrl = new URL(request.url).origin;
+      const sharedAnthropicKey = env.SHARED_ANTHROPIC_KEY || null;
+
       // Check admin credentials first
       if (env.ADMIN_USERNAME && env.ADMIN_PASSWORD &&
           username.toLowerCase() === env.ADMIN_USERNAME.toLowerCase() &&
           password === env.ADMIN_PASSWORD) {
         const token = await makeToken(username.toLowerCase(), true, env.TOKEN_SECRET);
-        return new Response(JSON.stringify({ token, username: username.toLowerCase(), admin: true }), { headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+        return new Response(JSON.stringify({ token, username: username.toLowerCase(), admin: true, workerUrl, anthropicKey: sharedAnthropicKey }), { headers: { 'Content-Type': 'application/json', ...cors(origin) } });
       }
       if (!env.USERS) {
         return new Response(JSON.stringify({ error: 'Invalid credentials.' }), { status: 401, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
@@ -370,7 +373,7 @@ export default {
         return new Response(JSON.stringify({ error: 'pending' }), { status: 403, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
       }
       const token = await makeToken(user.username, false, env.TOKEN_SECRET);
-      return new Response(JSON.stringify({ token, username: user.username, admin: false }), { headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+      return new Response(JSON.stringify({ token, username: user.username, admin: false, workerUrl, anthropicKey: sharedAnthropicKey }), { headers: { 'Content-Type': 'application/json', ...cors(origin) } });
     }
 
     // ── GET /?action=admin-users ──────────────────────────────────────────────
