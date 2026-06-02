@@ -13,7 +13,7 @@ function cors(origin) {
   return {
     'Access-Control-Allow-Origin': origin || '*',
     'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Max-Age': '86400',
   };
 }
@@ -237,6 +237,67 @@ function aggregateFlowRows(report, flowNames = {}) {
   }));
 }
 
+// ── Auth helpers ─────────────────────────────────────────────────────────────
+
+async function pbkdf2Hash(password) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const keyMat = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 200000, hash: 'SHA-256' }, keyMat, 256);
+  const saltB64 = btoa(String.fromCharCode(...salt));
+  const hashB64 = btoa(String.fromCharCode(...new Uint8Array(bits)));
+  return `pbkdf2:${saltB64}:${hashB64}`;
+}
+
+async function pbkdf2Verify(password, stored) {
+  const parts = stored.split(':');
+  if (parts[0] !== 'pbkdf2') return false;
+  const [, saltB64, hashB64] = parts;
+  const salt = Uint8Array.from(atob(saltB64), c => c.charCodeAt(0));
+  const keyMat = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 200000, hash: 'SHA-256' }, keyMat, 256);
+  const derived = btoa(String.fromCharCode(...new Uint8Array(bits)));
+  if (derived.length !== hashB64.length) return false;
+  let diff = 0;
+  for (let i = 0; i < derived.length; i++) diff |= derived.charCodeAt(i) ^ hashB64.charCodeAt(i);
+  return diff === 0;
+}
+
+function toB64url(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf instanceof ArrayBuffer ? buf : buf)))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+async function makeToken(username, isAdmin, secret) {
+  const payload = btoa(JSON.stringify({ sub: username, admin: isAdmin, exp: Date.now() + 7 * 24 * 3600 * 1000 }))
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sigBuf = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload));
+  const sig = toB64url(new Uint8Array(sigBuf));
+  return `${payload}.${sig}`;
+}
+
+async function verifyToken(token, secret) {
+  if (!token || typeof token !== 'string') return null;
+  const dot = token.lastIndexOf('.');
+  if (dot < 0) return null;
+  const payload = token.slice(0, dot);
+  const sig = token.slice(dot + 1);
+  try {
+    const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']);
+    const sigBytes = Uint8Array.from(atob(sig.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+    const valid = await crypto.subtle.verify('HMAC', key, sigBytes, new TextEncoder().encode(payload));
+    if (!valid) return null;
+    const data = JSON.parse(atob(payload.replace(/-/g, '+').replace(/_/g, '/')));
+    if (!data.exp || data.exp < Date.now()) return null;
+    return data;
+  } catch { return null; }
+}
+
+function getBearerToken(request) {
+  const auth = request.headers.get('Authorization') || '';
+  return auth.startsWith('Bearer ') ? auth.slice(7).trim() : null;
+}
+
 export default {
   async fetch(request, env) {
     const origin = request.headers.get('Origin') || '*';
@@ -247,6 +308,127 @@ export default {
 
     const url = new URL(request.url);
     const action = url.searchParams.get('action');
+
+    // ── POST /?action=register ────────────────────────────────────────────────
+    if (request.method === 'POST' && action === 'register') {
+      let body;
+      try { body = await request.json(); } catch {
+        return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+      }
+      const { username, password } = body;
+      if (!username || !password || username.length < 3 || password.length < 8) {
+        return new Response(JSON.stringify({ error: 'Username (min 3 chars) and password (min 8 chars) required.' }), { status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+      }
+      if (!env.USERS) {
+        return new Response(JSON.stringify({ error: 'User store not configured.' }), { status: 503, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+      }
+      const existing = await env.USERS.get('user_' + username.toLowerCase());
+      if (existing) {
+        return new Response(JSON.stringify({ error: 'Username already taken.' }), { status: 409, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+      }
+      const passwordHash = await pbkdf2Hash(password);
+      const user = { username: username.toLowerCase(), passwordHash, approved: false, createdAt: new Date().toISOString() };
+      await env.USERS.put('user_' + username.toLowerCase(), JSON.stringify(user));
+      return new Response(JSON.stringify({ registered: true }), { headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+    }
+
+    // ── POST /?action=login ───────────────────────────────────────────────────
+    if (request.method === 'POST' && action === 'login') {
+      if (!env.TOKEN_SECRET) {
+        return new Response(JSON.stringify({ error: 'Auth not configured (TOKEN_SECRET missing).' }), { status: 503, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+      }
+      let body;
+      try { body = await request.json(); } catch {
+        return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+      }
+      const { username, password } = body;
+      if (!username || !password) {
+        return new Response(JSON.stringify({ error: 'Username and password required.' }), { status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+      }
+      // Check admin credentials first
+      if (env.ADMIN_USERNAME && env.ADMIN_PASSWORD &&
+          username.toLowerCase() === env.ADMIN_USERNAME.toLowerCase() &&
+          password === env.ADMIN_PASSWORD) {
+        const token = await makeToken(username.toLowerCase(), true, env.TOKEN_SECRET);
+        return new Response(JSON.stringify({ token, username: username.toLowerCase(), admin: true }), { headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+      }
+      if (!env.USERS) {
+        return new Response(JSON.stringify({ error: 'Invalid credentials.' }), { status: 401, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+      }
+      const raw = await env.USERS.get('user_' + username.toLowerCase());
+      if (!raw) {
+        // Run a dummy hash to prevent timing attacks
+        await pbkdf2Hash('dummy_password_to_prevent_timing_attacks');
+        return new Response(JSON.stringify({ error: 'Invalid credentials.' }), { status: 401, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+      }
+      const user = JSON.parse(raw);
+      const ok = await pbkdf2Verify(password, user.passwordHash);
+      if (!ok) {
+        return new Response(JSON.stringify({ error: 'Invalid credentials.' }), { status: 401, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+      }
+      if (!user.approved) {
+        return new Response(JSON.stringify({ error: 'pending' }), { status: 403, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+      }
+      const token = await makeToken(user.username, false, env.TOKEN_SECRET);
+      return new Response(JSON.stringify({ token, username: user.username, admin: false }), { headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+    }
+
+    // ── GET /?action=admin-users ──────────────────────────────────────────────
+    if (request.method === 'GET' && action === 'admin-users') {
+      const session = await verifyToken(getBearerToken(request), env.TOKEN_SECRET);
+      if (!session?.admin) {
+        return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+      }
+      if (!env.USERS) return new Response(JSON.stringify([]), { headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+      const list = await env.USERS.list({ prefix: 'user_' });
+      const users = await Promise.all(list.keys.map(async k => {
+        const raw = await env.USERS.get(k.name);
+        if (!raw) return null;
+        const u = JSON.parse(raw);
+        return { username: u.username, approved: u.approved, createdAt: u.createdAt };
+      }));
+      return new Response(JSON.stringify(users.filter(Boolean)), { headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+    }
+
+    // ── POST /?action=admin-approve ───────────────────────────────────────────
+    if (request.method === 'POST' && action === 'admin-approve') {
+      const session = await verifyToken(getBearerToken(request), env.TOKEN_SECRET);
+      if (!session?.admin) {
+        return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+      }
+      let body;
+      try { body = await request.json(); } catch {
+        return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+      }
+      const { username } = body;
+      if (!username || !env.USERS) {
+        return new Response(JSON.stringify({ error: 'username required' }), { status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+      }
+      const raw = await env.USERS.get('user_' + username.toLowerCase());
+      if (!raw) return new Response(JSON.stringify({ error: 'User not found' }), { status: 404, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+      const user = JSON.parse(raw);
+      user.approved = true;
+      await env.USERS.put('user_' + username.toLowerCase(), JSON.stringify(user));
+      return new Response(JSON.stringify({ approved: true }), { headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+    }
+
+    // ── POST /?action=admin-delete ────────────────────────────────────────────
+    if (request.method === 'POST' && action === 'admin-delete') {
+      const session = await verifyToken(getBearerToken(request), env.TOKEN_SECRET);
+      if (!session?.admin) {
+        return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+      }
+      let body;
+      try { body = await request.json(); } catch {
+        return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+      }
+      const { username } = body;
+      if (!username || !env.USERS) {
+        return new Response(JSON.stringify({ error: 'username required' }), { status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+      }
+      await env.USERS.delete('user_' + username.toLowerCase());
+      return new Response(JSON.stringify({ deleted: true }), { headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+    }
 
     // ── POST /?action=add-client — add a new client via UI ──────────────────
     if (request.method === 'POST' && action === 'add-client') {
@@ -265,7 +447,11 @@ export default {
 
       const { adminPassword, name, klaviyoKey } = body;
 
-      if (!env.ADMIN_PASSWORD || adminPassword !== env.ADMIN_PASSWORD) {
+      // accept either admin session token OR legacy adminPassword (for backward compat)
+      const session = await verifyToken(getBearerToken(request), env.TOKEN_SECRET);
+      const hasAdminToken = session?.admin === true;
+      const hasLegacyPassword = env.ADMIN_PASSWORD && adminPassword === env.ADMIN_PASSWORD;
+      if (!hasAdminToken && !hasLegacyPassword) {
         return new Response(JSON.stringify({ error: 'Invalid admin password.' }), {
           status: 401, headers: { 'Content-Type': 'application/json', ...cors(origin) },
         });
@@ -434,6 +620,14 @@ export default {
       return new Response(JSON.stringify({ error: 'Method not allowed' }), {
         status: 405, headers: { 'Content-Type': 'application/json', ...cors(origin) },
       });
+    }
+
+    // Require valid session token for data access
+    if (env.TOKEN_SECRET) {
+      const session = await verifyToken(getBearerToken(request), env.TOKEN_SECRET);
+      if (!session) {
+        return new Response(JSON.stringify({ error: 'Unauthorised' }), { status: 401, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+      }
     }
 
     let body;

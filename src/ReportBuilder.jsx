@@ -160,7 +160,11 @@ function fmtDateDisplay(iso) {
 }
 
 
-export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion }) {
+function authHeaders(token) {
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, sessionToken }) {
   const [clients, setClients] = useState([]);
   const [selectedClientId, setSelectedClientId] = useState("");
   const [clientsError, setClientsError] = useState("");
@@ -648,7 +652,7 @@ ${JSON.stringify(trimData(klaviyoData))}`;
       const klaviyoPromise = (async () => {
         const workerRes = await fetch(workerUrl, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...authHeaders(sessionToken) },
           body: JSON.stringify({
             clientId: selectedClientId,
             startDate: range.start,
@@ -941,7 +945,7 @@ function addEventMarkers(chart,events){
     const workerUrl = localStorage.getItem(WORKER_URL);
     if (!workerUrl) return;
     try {
-      const res = await fetch(`${workerUrl}?action=list-reports`);
+      const res = await fetch(`${workerUrl}?action=list-reports`, { headers: authHeaders(sessionToken) });
       if (res.ok) {
         const entries = await res.json();
         if (Array.isArray(entries)) setSavedReports(entries);
@@ -955,7 +959,7 @@ function addEventMarkers(chart,events){
     if (!workerUrl) return;
     fetch(`${workerUrl}?action=save-report`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders(sessionToken) },
       body: JSON.stringify({ html, metadata }),
     }).catch(() => {});
   };
@@ -966,7 +970,7 @@ function addEventMarkers(chart,events){
     const workerUrl = localStorage.getItem(WORKER_URL);
     if (workerUrl) {
       try {
-        await fetch(`${workerUrl}?action=delete-report&key=${encodeURIComponent(key)}`, { method: "POST" });
+        await fetch(`${workerUrl}?action=delete-report&key=${encodeURIComponent(key)}`, { method: "POST", headers: authHeaders(sessionToken) });
       } catch {}
     }
     if (currentReportMeta?.key === key) handleNewReport();
@@ -981,7 +985,7 @@ function addEventMarkers(chart,events){
       if (!workerUrl) return;
       let html, meta;
       try {
-        const res = await fetch(`${workerUrl}?action=get-report&key=${encodeURIComponent(key)}`);
+        const res = await fetch(`${workerUrl}?action=get-report&key=${encodeURIComponent(key)}`, { headers: authHeaders(sessionToken) });
         if (res.ok) { const d = await res.json(); html = d.html; meta = d.metadata; }
       } catch {}
       if (!html) return;
@@ -1097,7 +1101,7 @@ function addEventMarkers(chart,events){
     const workerUrl = localStorage.getItem(WORKER_URL);
     if (!workerUrl) return;
     setClientsError("");
-    fetch(workerUrl)
+    fetch(workerUrl, { headers: authHeaders(sessionToken) })
       .then(r => r.json())
       .then(data => {
         setClients(Array.isArray(data) ? data : []);
@@ -2000,6 +2004,7 @@ ${reportHtml}`,
       {showAddClientModal && (
         <AddClientModal
           onClose={() => setShowAddClientModal(false)}
+          sessionToken={sessionToken}
           onAdded={(newClients) => {
             setClients(newClients);
             setShowAddClientModal(false);
@@ -2812,16 +2817,14 @@ function FloatingNumerals() {
   );
 }
 
-function AddClientModal({ onClose, onAdded }) {
+function AddClientModal({ onClose, onAdded, sessionToken }) {
   const [name, setName] = useState("");
   const [klaviyoKey, setKlaviyoKey] = useState("");
-  const [adminPassword, setAdminPassword] = useState(() => localStorage.getItem("swanky_admin_password") || "");
   const [showKey, setShowKey] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
   const [status, setStatus] = useState(null); // null | "loading" | "success" | "error"
   const [errorMsg, setErrorMsg] = useState("");
 
-  const canSubmit = name.trim() && klaviyoKey.trim() && adminPassword.trim() && status !== "loading";
+  const canSubmit = name.trim() && klaviyoKey.trim() && status !== "loading";
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -2836,8 +2839,8 @@ function AddClientModal({ onClose, onAdded }) {
     try {
       const res = await fetch(workerUrl + "?action=add-client", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), klaviyoKey: klaviyoKey.trim(), adminPassword: adminPassword.trim() }),
+        headers: { "Content-Type": "application/json", ...authHeaders(sessionToken) },
+        body: JSON.stringify({ name: name.trim(), klaviyoKey: klaviyoKey.trim() }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -2925,26 +2928,6 @@ function AddClientModal({ onClose, onAdded }) {
               </div>
               <div style={modalHintStyle}>
                 Klaviyo → Settings → API Keys → Create Private API Key. Needs read access to campaigns, flows and metrics.
-              </div>
-            </div>
-
-            <div style={{ marginBottom: "28px" }}>
-              <div style={modalLabelStyle}>Admin password</div>
-              <div style={{ position: "relative" }}>
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={adminPassword}
-                  onChange={e => setAdminPassword(e.target.value)}
-                  placeholder="Set in Cloudflare Worker secrets"
-                  autoComplete="off"
-                  style={{ ...modalInputStyle, paddingRight: "48px" }}
-                />
-                <button onClick={() => setShowPassword(v => !v)} tabIndex={-1} style={modalToggleStyle}>
-                  {showPassword ? "hide" : "show"}
-                </button>
-              </div>
-              <div style={modalHintStyle}>
-                The ADMIN_PASSWORD secret set in your Cloudflare Worker. Save it in Settings to avoid re-entering each time.
               </div>
             </div>
 
