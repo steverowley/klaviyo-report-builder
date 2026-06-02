@@ -26,12 +26,18 @@ export default function Settings({ onSave }) {
     setAdminPassword(localStorage.getItem(ADMIN_PASSWORD) || "");
   }, []);
 
-  const canSave = workerUrl.trim().startsWith("http");
+  const normalizedWorkerUrl = () => {
+    const u = workerUrl.trim();
+    if (!u) return u;
+    return u.startsWith("http") ? u : `https://${u}`;
+  };
+
+  const canSave = workerUrl.trim().length > 0;
 
   const handleSave = () => {
     if (!canSave) return;
     localStorage.setItem(ANTHROPIC_KEY, anthropicKey.trim());
-    localStorage.setItem(WORKER_URL, workerUrl.trim());
+    localStorage.setItem(WORKER_URL, normalizedWorkerUrl());
     if (adminPassword.trim()) {
       localStorage.setItem(ADMIN_PASSWORD, adminPassword.trim());
     } else {
