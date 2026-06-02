@@ -339,13 +339,16 @@ h2 { font-family:'Ovo',serif; font-size:22px; font-weight:400; color:#0a0a0a; ma
 
 **1. HEADER**
 White bg, border-bottom:2px solid #0a0a0a, padding-bottom:32px, margin-bottom:36px.
-Top row flex space-between:
-  Left: <img src="https://swankyagency.com/wp-content/uploads/2022/05/swanky-2020-black.png" style="height:40px;display:block">
+Top row flex align-items:center justify-content:space-between gap:24px:
+  Left side: flex align-items:center gap:24px
+    Logo: <img src="https://swankyagency.com/wp-content/uploads/2022/05/swanky-2020-black.png" style="height:36px;display:block;flex-shrink:0">
+    Divider: <div style="width:1px;height:40px;background:#e0e0da;flex-shrink:0"></div>
+    Text block (flex-column):
+      "Email Marketing Report" — DM Sans 10px weight 500 letter-spacing:0.14em uppercase #888 margin-bottom:6px
+      Title: Ovo 36px weight 400 #0a0a0a line-height:1.1 — "Klaviyo ${reportType} Performance Report" (single line, no <br>)
+      Client: DM Sans 12px weight 300 #888 margin-top:4px — "${accountName}"
   Right: <button onclick="window.print()" style="position:fixed;top:16px;right:16px;background:#0a0a0a;color:#fff;border:none;padding:8px 18px;font-family:'DM Sans',sans-serif;font-size:10px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;cursor:pointer;z-index:100">Print / Save PDF</button>
-Then: "Email Marketing Report" — DM Sans 10px weight 500 letter-spacing:0.14em uppercase #888 margin-bottom:10px
-Title: Ovo 40px weight 400 #0a0a0a line-height:1.15 margin-bottom:6px — "Klaviyo ${reportType}<br>Performance Report"
-Client: DM Sans 12px weight 300 #888 margin-bottom:20px — "${accountName}"
-Meta bar: border-top:0.5px solid #e0e0da padding-top:10px flex space-between —
+Meta bar: border-top:0.5px solid #e0e0da margin-top:20px padding-top:10px flex space-between —
   Left: "Generated [D MMM YYYY]" DM Sans 11px #aaa
   Right: "[start D MMM YYYY] to [end D MMM YYYY]" DM Sans 12px #555
 
@@ -1298,6 +1301,7 @@ ${reportHtml}`,
                 letterSpacing: "0.18em",
                 color: "#6b6b6b",
                 marginTop: "8px",
+                whiteSpace: "nowrap",
               }}
             >
               Performance, considered
