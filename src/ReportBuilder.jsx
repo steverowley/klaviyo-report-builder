@@ -1276,7 +1276,7 @@ ${reportHtml}`,
             <img
               src="https://swankyagency.com/wp-content/uploads/2022/05/swanky-2020-black.png"
               alt="Swanky"
-              style={{ height: "24px", opacity: 0.9 }}
+              style={{ height: "24px", opacity: 1 }}
             />
             <div
               style={{
@@ -2323,7 +2323,7 @@ function EmptyState() {
       <img
         src="https://swankyagency.com/wp-content/uploads/2022/05/swanky-2020-black.png"
         alt="Swanky"
-        style={{ height: "28px", opacity: 0.5, marginBottom: "32px" }}
+        style={{ height: "28px", opacity: 1, marginBottom: "32px" }}
       />
       <div
         style={{

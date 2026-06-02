@@ -26,12 +26,18 @@ export default function Settings({ onSave }) {
     setAdminPassword(localStorage.getItem(ADMIN_PASSWORD) || "");
   }, []);
 
-  const canSave = workerUrl.trim().startsWith("http");
+  const normalizedWorkerUrl = () => {
+    const u = workerUrl.trim();
+    if (!u) return u;
+    return u.startsWith("http") ? u : `https://${u}`;
+  };
+
+  const canSave = workerUrl.trim().length > 0;
 
   const handleSave = () => {
     if (!canSave) return;
     localStorage.setItem(ANTHROPIC_KEY, anthropicKey.trim());
-    localStorage.setItem(WORKER_URL, workerUrl.trim());
+    localStorage.setItem(WORKER_URL, normalizedWorkerUrl());
     if (adminPassword.trim()) {
       localStorage.setItem(ADMIN_PASSWORD, adminPassword.trim());
     } else {
@@ -92,7 +98,7 @@ export default function Settings({ onSave }) {
           <img
             src="https://swankyagency.com/wp-content/uploads/2022/05/swanky-2020-black.png"
             alt="Swanky"
-            style={{ height: "22px", opacity: 0.9, display: "block", margin: "0 auto 28px" }}
+            style={{ height: "22px", opacity: 1, display: "block", margin: "0 auto 28px" }}
           />
           <div
             style={{
