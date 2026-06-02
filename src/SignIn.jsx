@@ -2,7 +2,7 @@ import React, { useState } from "react";
 
 const WORKER_URL_KEY = "swanky_worker_url";
 
-export default function SignIn({ onSignIn }) {
+export default function SignIn({ onSignIn, onOpenSettings }) {
   const [mode, setMode] = useState("login"); // "login" | "register"
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -144,6 +144,21 @@ export default function SignIn({ onSignIn }) {
           >
             Back to sign in
           </button>
+          {onOpenSettings && (
+            <div style={{ textAlign: "center", marginTop: "16px" }}>
+              <button
+                onClick={onOpenSettings}
+                style={{
+                  background: "none", border: "none",
+                  fontFamily: "'Inter', sans-serif", fontSize: "10px",
+                  fontWeight: 400, letterSpacing: "0.12em", color: "#b8b8b8",
+                  cursor: "pointer", textDecoration: "underline", textUnderlineOffset: "3px",
+                }}
+              >
+                Configure worker URL
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -273,7 +288,7 @@ export default function SignIn({ onSignIn }) {
 
         <div style={{ height: "1px", background: "#ededed", margin: "32px 0" }} />
 
-        <div style={{ textAlign: "center" }}>
+        <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: "12px" }}>
           <button
             onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}
             style={{
@@ -291,6 +306,25 @@ export default function SignIn({ onSignIn }) {
           >
             {mode === "login" ? "Don't have an account? Register" : "Already have an account? Sign in"}
           </button>
+          {onOpenSettings && (
+            <button
+              onClick={onOpenSettings}
+              style={{
+                background: "none",
+                border: "none",
+                fontFamily: "'Inter', sans-serif",
+                fontSize: "10px",
+                fontWeight: 400,
+                letterSpacing: "0.12em",
+                color: "#b8b8b8",
+                cursor: "pointer",
+                textDecoration: "underline",
+                textUnderlineOffset: "3px",
+              }}
+            >
+              Configure worker URL
+            </button>
+          )}
         </div>
       </div>
     </div>
