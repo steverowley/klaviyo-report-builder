@@ -312,6 +312,12 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, 
 
   const accountName = clients.find(c => c.id === selectedClientId)?.name ?? "";
 
+  // Past reports are scoped to the selected client — never show one client's
+  // reports while another is selected. (savedReports holds all clients' reports.)
+  const clientReports = selectedClientId
+    ? savedReports.filter(r => r.clientId === selectedClientId)
+    : [];
+
   const buildSystemPrompt = () => `You are generating a Klaviyo email marketing performance report for "${accountName}".
 Produce a complete, self-contained HTML report. Follow every instruction below exactly.
 Be concise — write tight, editorial prose. Do not pad sections or repeat figures already shown in tables. The whole document should be thorough but not verbose.
@@ -1484,7 +1490,7 @@ ${reportHtml}`,
 
             <div style={{ flex: 1, minHeight: "16px" }} />
 
-            {savedReports.length > 0 && (
+            {clientReports.length > 0 && (
               <>
                 <div style={{ height: "1px", background: "#ededed", marginBottom: "14px" }} />
                 <div style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.16em", color: "#6b6b6b", marginBottom: "10px", fontWeight: 500 }}>
@@ -1495,7 +1501,7 @@ ${reportHtml}`,
                     <div style={{ padding: "10px", fontSize: "10px", color: "#b8b8b8", fontStyle: "italic", fontFamily: "'Ovo', serif" }}>
                       Loading…
                     </div>
-                  ) : savedReports.map(entry => {
+                  ) : clientReports.map(entry => {
                     const entryName = entry.accountName || clients.find(c => c.id === entry.clientId)?.name || "Unknown";
                     const isCurrent = entry.key === currentReportMeta?.key;
                     return (
@@ -1704,14 +1710,14 @@ ${reportHtml}`,
           <ContextTextarea value={additionalContext} onChange={setAdditionalContext} />
         </Field>
 
-        {selectedClientId && savedReports.filter(r => r.clientId === selectedClientId).length > 0 && (
+        {clientReports.length > 0 && (
           <>
             <div style={{ height: "1px", background: "#ededed", margin: "8px 0 14px" }} />
             <div style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.16em", color: "#6b6b6b", marginBottom: "8px", fontWeight: 500 }}>
               Past reports
             </div>
             <div style={{ overflowY: "auto", maxHeight: "180px", marginRight: "-8px", paddingRight: "8px", marginBottom: "8px" }}>
-              {savedReports.filter(r => r.clientId === selectedClientId).map(entry => (
+              {clientReports.map(entry => (
                 <button
                   key={entry.key}
                   onClick={() => loadSavedReport(entry.key)}
