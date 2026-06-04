@@ -306,6 +306,18 @@ export default {
       return new Response(null, { status: 204, headers: cors(origin) });
     }
 
+    try {
+      return await handleRequest(request, env, origin);
+    } catch (err) {
+      return new Response(JSON.stringify({ error: err.message || 'Internal server error' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', ...cors(origin) },
+      });
+    }
+  },
+};
+
+async function handleRequest(request, env, origin) {
     const url = new URL(request.url);
     const action = url.searchParams.get('action');
 
@@ -803,5 +815,4 @@ export default {
         headers: { 'Content-Type': 'application/json', ...cors(origin) },
       });
     }
-  },
-};
+}
