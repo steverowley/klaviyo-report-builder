@@ -1037,6 +1037,8 @@ function addEventMarkers(chart,events){
   // Listen for regenerate-step messages from the report iframe
   useEffect(() => {
     const handler = async (event) => {
+      // Defence-in-depth: only trust messages from our own report iframe.
+      if (!iframeRef.current || event.source !== iframeRef.current.contentWindow) return;
       if (event.data?.type === 'cursor-move') {
         const iframe = iframeRef.current;
         if (iframe) {
@@ -1224,10 +1226,15 @@ ${reportHtml}`,
     // Inject cursor:none and a postMessage relay so the custom cursor works
     // inside the iframe (sandbox without allow-same-origin blocks contentDocument)
     const relayScript = `<script>document.addEventListener('mousemove',function(e){window.parent.postMessage({type:'cursor-move',x:e.clientX,y:e.clientY},'*');});<\/script>`;
-    const injected = reportHtml.replace(
-      /<\/head>/i,
-      `<style>*{cursor:none!important}</style>${relayScript}</head>`
-    );
+    // Block data exfiltration from the sandboxed report (fetch/XHR/WebSocket/beacon)
+    // without affecting how the report renders or its print button.
+    const csp = `<meta http-equiv="Content-Security-Policy" content="connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">`;
+    const headInjection = `${csp}<style>*{cursor:none!important}</style>${relayScript}`;
+    // Always land the CSP inside a <head>; if a report has none, prepend one so the
+    // exfiltration guard can never silently fail open.
+    const injected = /<\/head>/i.test(reportHtml)
+      ? reportHtml.replace(/<\/head>/i, `${headInjection}</head>`)
+      : `<head>${headInjection}</head>${reportHtml}`;
     iframeRef.current.srcdoc = injected;
   }, [reportHtml]);
 
