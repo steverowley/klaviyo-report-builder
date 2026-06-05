@@ -47,9 +47,6 @@ export default function SignIn({ onSignIn, onOpenSettings }) {
       sessionStorage.setItem("swanky_session_user", data.username);
       sessionStorage.setItem("swanky_session_admin", String(data.admin));
       if (data.workerUrl) localStorage.setItem(WORKER_URL_KEY, data.workerUrl);
-      if (data.anthropicKey && !localStorage.getItem("swanky_anthropic_key")) {
-        localStorage.setItem("swanky_anthropic_key", data.anthropicKey);
-      }
       onSignInRef.current({ token: data.token, username: data.username, admin: data.admin });
     } catch {
       setError(`Could not reach the worker at ${url} — verify the URL in Settings.`);
@@ -110,9 +107,6 @@ export default function SignIn({ onSignIn, onOpenSettings }) {
       sessionStorage.setItem("swanky_session_user", data.username);
       sessionStorage.setItem("swanky_session_admin", String(data.admin));
       if (data.workerUrl) localStorage.setItem(WORKER_URL_KEY, data.workerUrl);
-      if (data.anthropicKey && !localStorage.getItem("swanky_anthropic_key")) {
-        localStorage.setItem("swanky_anthropic_key", data.anthropicKey);
-      }
       onSignInRef.current({ token: data.token, username: data.username, admin: data.admin });
     } catch {
       setError("Network error — check the Worker URL.");

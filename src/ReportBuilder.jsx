@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
 
-const ANTHROPIC_KEY = "swanky_anthropic_key";
 const WORKER_URL = "swanky_worker_url";
 const MODEL_KEY = "swanky_model";
 const DEFAULT_MODEL = "claude-sonnet-4-6";
@@ -608,12 +607,11 @@ ${JSON.stringify(trimData(klaviyoData))}`;
       return;
     }
 
-    const anthropicKey = localStorage.getItem(ANTHROPIC_KEY);
     const workerUrl = localStorage.getItem(WORKER_URL) || BAKED_WORKER_URL;
 
-    if (!anthropicKey || !workerUrl) {
+    if (!workerUrl) {
       if (onOpenSettings) onOpenSettings();
-      else setError("API keys not configured — contact your admin.");
+      else setError("Worker URL not configured — contact your admin.");
       return;
     }
 
@@ -682,13 +680,11 @@ ${JSON.stringify(trimData(klaviyoData))}`;
       const eventsPromise = (async () => {
         if (allEvents.length === 0) return allEvents;
         try {
-          const filterRes = await fetch("https://api.anthropic.com/v1/messages", {
+          const filterRes = await fetch(`${workerUrl}?action=anthropic`, {
             method: "POST",
             headers: {
-              "x-api-key": anthropicKey,
-              "anthropic-version": "2023-06-01",
-              "anthropic-dangerous-direct-browser-access": "true",
               "content-type": "application/json",
+              ...authHeaders(sessionToken),
             },
             body: JSON.stringify({
               model: "claude-haiku-4-5-20251001",
@@ -752,14 +748,11 @@ Return ONLY a JSON array of the index numbers for events that are commercially r
       }, 4000);
 
       // ── Phase 2: stream HTML from Anthropic ─────────────────────────────────
-      const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
+      const anthropicRes = await fetch(`${workerUrl}?action=anthropic`, {
         method: "POST",
         headers: {
-          "x-api-key": anthropicKey,
-          "anthropic-version": "2023-06-01",
-          "anthropic-beta": "prompt-caching-2024-07-31,output-128k-2025-02-19",
-          "anthropic-dangerous-direct-browser-access": "true",
           "content-type": "application/json",
+          ...authHeaders(sessionToken),
         },
         body: JSON.stringify({
           model: selectedModel,
@@ -775,7 +768,10 @@ Return ONLY a JSON array of the index numbers for events that are commercially r
 
       if (!anthropicRes.ok) {
         let message = `Anthropic API error ${anthropicRes.status}`;
-        try { const errData = await anthropicRes.json(); message = errData.error?.message || message; } catch (_) {}
+        try {
+          const errData = await anthropicRes.json();
+          message = errData.error?.message || (typeof errData.error === "string" ? errData.error : message);
+        } catch (_) {}
         throw new Error(message);
       }
 
@@ -1051,9 +1047,9 @@ function addEventMarkers(chart,events){
       }
       if (event.data?.type !== 'regenerate-step') return;
       const { sid } = event.data;
-      const anthropicKey = localStorage.getItem(ANTHROPIC_KEY);
-      if (!anthropicKey) {
-        setError("Anthropic key missing — open Settings to add it.");
+      const workerUrl = localStorage.getItem(WORKER_URL) || BAKED_WORKER_URL;
+      if (!workerUrl) {
+        setError("Worker URL missing — open Settings to add it.");
         return;
       }
 
@@ -1067,13 +1063,11 @@ function addEventMarkers(chart,events){
       }, 80);
 
       try {
-        const res = await fetch('https://api.anthropic.com/v1/messages', {
+        const res = await fetch(`${workerUrl}?action=anthropic`, {
           method: 'POST',
           headers: {
-            'x-api-key': anthropicKey,
-            'anthropic-version': '2023-06-01',
-            'anthropic-dangerous-direct-browser-access': 'true',
             'content-type': 'application/json',
+            ...authHeaders(sessionToken),
           },
           body: JSON.stringify({
             model: 'claude-haiku-4-5-20251001',
@@ -1148,8 +1142,8 @@ function addEventMarkers(chart,events){
   };
 
   const handleCreateSlidesPrompt = async () => {
-    const anthropicKey = localStorage.getItem(ANTHROPIC_KEY);
-    if (!anthropicKey || !reportHtml) return;
+    const workerUrl = localStorage.getItem(WORKER_URL) || BAKED_WORKER_URL;
+    if (!workerUrl || !reportHtml) return;
     setIsCreatingSlides(true);
     setSlidesProgress(0);
     setSlidesPrompt("");
@@ -1161,13 +1155,11 @@ function addEventMarkers(chart,events){
       setSlidesProgress(Math.min(92, eased * 92));
     }, 100);
     try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const res = await fetch(`${workerUrl}?action=anthropic`, {
         method: "POST",
         headers: {
-          "x-api-key": anthropicKey,
-          "anthropic-version": "2023-06-01",
-          "anthropic-dangerous-direct-browser-access": "true",
           "content-type": "application/json",
+          ...authHeaders(sessionToken),
         },
         body: JSON.stringify({
           model: "claude-haiku-4-5-20251001",
