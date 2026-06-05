@@ -7,6 +7,8 @@ import {
   aggregateFlowRows,
   reportBody,
   aggregateBody,
+  pickMetric,
+  countMetricMatches,
   pbkdf2Hash,
   pbkdf2Verify,
   makeToken,
@@ -130,6 +132,40 @@ describe('aggregateBody', () => {
     expect(body.data.attributes.timezone).toBe('UTC');
     expect(body.data.attributes.filter).toContain('2024-01-01T00:00:00+00:00');
     expect(body.data.attributes.filter).toContain('2024-01-31T23:59:59+00:00');
+  });
+});
+
+describe('pickMetric', () => {
+  const list = [
+    { id: '1', attributes: { name: 'Placed Order' } },
+    { id: '2', attributes: { name: 'Placed Order (Test Store)' } },
+    { id: '3', attributes: { name: 'Subscribed to List' } },
+  ];
+  it('prefers an exact canonical-name match over a substring match', () => {
+    expect(pickMetric(list, { exact: ['placed order'], includes: ['placed order'] }).id).toBe('1');
+  });
+  it('falls back to a substring match when no exact name exists', () => {
+    const l = [{ id: '9', attributes: { name: 'Custom Placed Order Event' } }];
+    expect(pickMetric(l, { exact: ['placed order'], includes: ['placed order'] }).id).toBe('9');
+  });
+  it('honours the exclude list', () => {
+    const l = [{ id: '1', attributes: { name: 'Unsubscribed from SMS' } }];
+    expect(pickMetric(l, { exact: [], includes: ['unsubscribed'], exclude: ['sms'] })).toBeNull();
+  });
+  it('returns null when nothing matches', () => {
+    expect(pickMetric(list, { exact: ['nope'], includes: ['nope'] })).toBeNull();
+  });
+});
+
+describe('countMetricMatches', () => {
+  const list = [
+    { attributes: { name: 'Placed Order' } },
+    { attributes: { name: 'Placed Order (Test)' } },
+    { attributes: { name: 'Subscribed to List' } },
+  ];
+  it('counts fuzzy matches and honours excludes', () => {
+    expect(countMetricMatches(list, { includes: ['placed order'] })).toBe(2);
+    expect(countMetricMatches(list, { includes: ['placed order'], exclude: ['test'] })).toBe(1);
   });
 });
 
