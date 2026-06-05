@@ -238,15 +238,4 @@ Claude can take 60–120 seconds for a full report — this is normal. If it nev
 
 ---
 
-## Contributing
-
-1. Fork and create a feature branch.
-2. Follow the design system rules in `CLAUDE.md` — no new colours, no new fonts.
-3. Never commit API keys or `.env` files.
-4. Open a PR with a [Conventional Commits](https://www.conventionalcommits.org/) title.
-
----
-
-## License
-
-MIT
+> **Internal tool — Swanky Agency only. Not publicly released. Version 1 (not yet live).**
