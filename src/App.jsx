@@ -116,7 +116,7 @@ function AdminPanel({ session, onClose }) {
   const approved = users.filter(u => u.approved);
 
   const labelStyle = {
-    fontFamily: "'Inter', sans-serif",
+    fontFamily: "'DM Sans', sans-serif",
     fontSize: "9px",
     fontWeight: 500,
     letterSpacing: "0.2em",
@@ -139,7 +139,7 @@ function AdminPanel({ session, onClose }) {
     background: dark ? "#0a0a0a" : "transparent",
     color: dark ? "#ffffff" : "#6b6b6b",
     border: dark ? "none" : "1px solid #ededed",
-    fontFamily: "'Inter', sans-serif",
+    fontFamily: "'DM Sans', sans-serif",
     fontSize: "9px",
     fontWeight: 500,
     letterSpacing: "0.14em",
@@ -166,16 +166,17 @@ function AdminPanel({ session, onClose }) {
       }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "32px" }}>
           <div style={{
-            fontFamily: "'Cormorant Garamond', serif",
-            fontSize: "24px",
-            fontWeight: 300,
+            fontFamily: "'Ovo', serif",
+            fontSize: "28px",
+            fontWeight: 400,
             color: "#0a0a0a",
+            letterSpacing: "-0.01em",
           }}>
             User Management
           </div>
           <button onClick={onClose} style={{
             background: "none", border: "none", color: "#6b6b6b",
-            fontFamily: "'Inter', sans-serif", fontSize: "18px", cursor: "pointer", lineHeight: 1,
+            fontFamily: "'DM Sans', sans-serif", fontSize: "18px", cursor: "pointer", lineHeight: 1,
           }}>
             ×
           </button>
@@ -184,12 +185,12 @@ function AdminPanel({ session, onClose }) {
         <div style={{ height: "1px", background: "#ededed", marginBottom: "32px" }} />
 
         {loading && (
-          <div style={{ fontFamily: "'Inter', sans-serif", fontSize: "11px", color: "#6b6b6b" }}>
+          <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "11px", color: "#6b6b6b" }}>
             Loading…
           </div>
         )}
         {error && (
-          <div style={{ fontFamily: "'Inter', sans-serif", fontSize: "11px", color: "#2a2a2a", padding: "10px 14px", border: "1px solid #ededed", background: "#f8f6f2" }}>
+          <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "11px", color: "#2a2a2a", padding: "10px 14px", border: "1px solid #ededed", background: "#f8f6f2" }}>
             {error}
           </div>
         )}
@@ -199,17 +200,17 @@ function AdminPanel({ session, onClose }) {
             <div style={{ marginBottom: "32px" }}>
               <span style={labelStyle}>Pending approval ({pending.length})</span>
               {pending.length === 0 && (
-                <div style={{ fontFamily: "'Inter', sans-serif", fontSize: "11px", fontWeight: 300, color: "#b8b8b8" }}>
+                <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "11px", fontWeight: 300, color: "#b8b8b8" }}>
                   No pending users
                 </div>
               )}
               {pending.map(u => (
                 <div key={u.username} style={userRowStyle}>
                   <div>
-                    <div style={{ fontFamily: "'Inter', sans-serif", fontSize: "12px", fontWeight: 400, color: "#0a0a0a" }}>
+                    <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "12px", fontWeight: 400, color: "#0a0a0a" }}>
                       {u.username}
                     </div>
-                    <div style={{ fontFamily: "'Inter', sans-serif", fontSize: "10px", fontWeight: 300, color: "#b8b8b8", marginTop: "2px" }}>
+                    <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "10px", fontWeight: 300, color: "#b8b8b8", marginTop: "2px" }}>
                       {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : ""}
                     </div>
                   </div>
@@ -224,17 +225,17 @@ function AdminPanel({ session, onClose }) {
             <div>
               <span style={labelStyle}>Approved ({approved.length})</span>
               {approved.length === 0 && (
-                <div style={{ fontFamily: "'Inter', sans-serif", fontSize: "11px", fontWeight: 300, color: "#b8b8b8" }}>
+                <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "11px", fontWeight: 300, color: "#b8b8b8" }}>
                   No approved users
                 </div>
               )}
               {approved.map(u => (
                 <div key={u.username} style={userRowStyle}>
                   <div>
-                    <div style={{ fontFamily: "'Inter', sans-serif", fontSize: "12px", fontWeight: 400, color: "#0a0a0a" }}>
+                    <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "12px", fontWeight: 400, color: "#0a0a0a" }}>
                       {u.username}
                     </div>
-                    <div style={{ fontFamily: "'Inter', sans-serif", fontSize: "10px", fontWeight: 300, color: "#b8b8b8", marginTop: "2px" }}>
+                    <div style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "10px", fontWeight: 300, color: "#b8b8b8", marginTop: "2px" }}>
                       {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : ""}
                     </div>
                   </div>

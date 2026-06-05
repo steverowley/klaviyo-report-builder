@@ -41,7 +41,6 @@ export default function SignIn({ onSignIn, onOpenSettings }) {
         sessionStorage.setItem("swanky_session", data.token);
         sessionStorage.setItem("swanky_session_user", data.username);
         sessionStorage.setItem("swanky_session_admin", String(data.admin));
-        // Auto-configure localStorage for non-admin users who haven't set keys
         if (data.workerUrl && !localStorage.getItem("swanky_worker_url")) {
           localStorage.setItem("swanky_worker_url", data.workerUrl);
         }
@@ -63,13 +62,14 @@ export default function SignIn({ onSignIn, onOpenSettings }) {
     padding: "56px 48px",
     width: "min(440px, 100%)",
     boxSizing: "border-box",
+    fontFamily: "'DM Sans', -apple-system, sans-serif",
   };
 
   const labelStyle = {
-    fontFamily: "'Inter', sans-serif",
-    fontSize: "9px",
+    fontFamily: "'DM Sans', sans-serif",
+    fontSize: "10px",
     fontWeight: 500,
-    letterSpacing: "0.2em",
+    letterSpacing: "0.16em",
     textTransform: "uppercase",
     color: "#6b6b6b",
     display: "block",
@@ -79,14 +79,15 @@ export default function SignIn({ onSignIn, onOpenSettings }) {
   const inputStyle = {
     width: "100%",
     boxSizing: "border-box",
-    padding: "11px 14px",
-    border: "1px solid #ededed",
-    background: "#f8f6f2",
-    fontFamily: "'Inter', sans-serif",
+    padding: "10px 12px",
+    border: "1px solid #b8b8b8",
+    background: "#ffffff",
+    fontFamily: "'DM Sans', sans-serif",
     fontSize: "13px",
     fontWeight: 300,
     color: "#0a0a0a",
     outline: "none",
+    borderRadius: 0,
   };
 
   const btnStyle = (active) => ({
@@ -95,7 +96,7 @@ export default function SignIn({ onSignIn, onOpenSettings }) {
     background: active ? "#0a0a0a" : "#b8b8b8",
     color: "#ffffff",
     border: "none",
-    fontFamily: "'Inter', sans-serif",
+    fontFamily: "'DM Sans', sans-serif",
     fontSize: "10px",
     fontWeight: 500,
     letterSpacing: "0.2em",
@@ -114,36 +115,38 @@ export default function SignIn({ onSignIn, onOpenSettings }) {
         justifyContent: "center",
         padding: "32px",
       }}>
+        <link href="https://fonts.googleapis.com/css2?family=Ovo&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300;1,9..40,400&display=swap" rel="stylesheet" />
         <div style={cardStyle}>
           <div style={{ textAlign: "center", marginBottom: "40px" }}>
             <img
               src="https://swankyagency.com/wp-content/uploads/2022/05/swanky-2020-black.png"
               alt="Swanky"
-              style={{ height: "28px", objectFit: "contain", opacity: 1 }}
+              style={{ height: "22px", objectFit: "contain", display: "block", margin: "0 auto" }}
             />
           </div>
           <div style={{ height: "1px", background: "#ededed", marginBottom: "40px" }} />
           <div style={{
-            fontFamily: "'Cormorant Garamond', serif",
-            fontSize: "28px",
-            fontWeight: 300,
+            fontFamily: "'Ovo', serif",
+            fontSize: "32px",
+            fontWeight: 400,
             color: "#0a0a0a",
             marginBottom: "16px",
-            lineHeight: 1.2,
+            lineHeight: 1.15,
             textAlign: "center",
+            letterSpacing: "-0.01em",
           }}>
             Account created
           </div>
           <p style={{
-            fontFamily: "'Inter', sans-serif",
+            fontFamily: "'DM Sans', sans-serif",
             fontSize: "13px",
             fontWeight: 300,
             color: "#6b6b6b",
             textAlign: "center",
-            lineHeight: 1.6,
+            lineHeight: 1.7,
             marginBottom: "32px",
           }}>
-            Your account is awaiting admin approval. You will be able to sign in once it has been reviewed.
+            Your account is awaiting admin approval. You'll be able to sign in once it's been reviewed.
           </p>
           <button
             onClick={() => { setRegistered(false); setMode("login"); setUsername(""); setPassword(""); }}
@@ -157,7 +160,7 @@ export default function SignIn({ onSignIn, onOpenSettings }) {
                 onClick={onOpenSettings}
                 style={{
                   background: "none", border: "none",
-                  fontFamily: "'Inter', sans-serif", fontSize: "10px",
+                  fontFamily: "'DM Sans', sans-serif", fontSize: "10px",
                   fontWeight: 400, letterSpacing: "0.12em", color: "#b8b8b8",
                   cursor: "pointer", textDecoration: "underline", textUnderlineOffset: "3px",
                 }}
@@ -181,12 +184,13 @@ export default function SignIn({ onSignIn, onOpenSettings }) {
       justifyContent: "center",
       padding: "32px",
     }}>
+      <link href="https://fonts.googleapis.com/css2?family=Ovo&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300;1,9..40,400&display=swap" rel="stylesheet" />
       <div style={cardStyle}>
         <div style={{ textAlign: "center", marginBottom: "40px" }}>
           <img
             src="https://swankyagency.com/wp-content/uploads/2022/05/swanky-2020-black.png"
             alt="Swanky"
-            style={{ height: "28px", objectFit: "contain" }}
+            style={{ height: "22px", objectFit: "contain", display: "block", margin: "0 auto" }}
           />
         </div>
 
@@ -194,20 +198,21 @@ export default function SignIn({ onSignIn, onOpenSettings }) {
 
         <div style={{ marginBottom: "32px", textAlign: "center" }}>
           <div style={{
-            fontFamily: "'Cormorant Garamond', serif",
-            fontSize: "32px",
-            fontWeight: 300,
+            fontFamily: "'Ovo', serif",
+            fontSize: "34px",
+            fontWeight: 400,
             color: "#0a0a0a",
             marginBottom: "8px",
             lineHeight: 1.1,
+            letterSpacing: "-0.01em",
           }}>
             Klaviyo Report Builder
           </div>
           <div style={{
-            fontFamily: "'Inter', sans-serif",
-            fontSize: "9px",
+            fontFamily: "'DM Sans', sans-serif",
+            fontSize: "10px",
             fontWeight: 500,
-            letterSpacing: "0.22em",
+            letterSpacing: "0.2em",
             textTransform: "uppercase",
             color: "#b8b8b8",
           }}>
@@ -241,11 +246,12 @@ export default function SignIn({ onSignIn, onOpenSettings }) {
             />
             {mode === "register" && (
               <div style={{
-                fontFamily: "'Inter', sans-serif",
+                fontFamily: "'DM Sans', sans-serif",
                 fontSize: "10px",
                 fontWeight: 300,
                 color: "#b8b8b8",
                 marginTop: "6px",
+                fontStyle: "italic",
               }}>
                 Minimum 8 characters
               </div>
@@ -257,7 +263,7 @@ export default function SignIn({ onSignIn, onOpenSettings }) {
               padding: "10px 14px",
               border: "1px solid #ededed",
               background: "#f8f6f2",
-              fontFamily: "'Inter', sans-serif",
+              fontFamily: "'DM Sans', sans-serif",
               fontSize: "11px",
               fontWeight: 300,
               color: "#2a2a2a",
@@ -273,7 +279,7 @@ export default function SignIn({ onSignIn, onOpenSettings }) {
               padding: "10px 14px",
               border: "1px solid #ededed",
               background: "#f8f6f2",
-              fontFamily: "'Inter', sans-serif",
+              fontFamily: "'DM Sans', sans-serif",
               fontSize: "11px",
               fontWeight: 300,
               color: "#2a2a2a",
@@ -301,7 +307,7 @@ export default function SignIn({ onSignIn, onOpenSettings }) {
             style={{
               background: "none",
               border: "none",
-              fontFamily: "'Inter', sans-serif",
+              fontFamily: "'DM Sans', sans-serif",
               fontSize: "10px",
               fontWeight: 400,
               letterSpacing: "0.12em",
@@ -319,7 +325,7 @@ export default function SignIn({ onSignIn, onOpenSettings }) {
               style={{
                 background: "none",
                 border: "none",
-                fontFamily: "'Inter', sans-serif",
+                fontFamily: "'DM Sans', sans-serif",
                 fontSize: "10px",
                 fontWeight: 400,
                 letterSpacing: "0.12em",
