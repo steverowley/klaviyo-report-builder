@@ -296,6 +296,8 @@ export default function App() {
     sessionStorage.removeItem("swanky_session");
     sessionStorage.removeItem("swanky_session_user");
     sessionStorage.removeItem("swanky_session_admin");
+    // Don't leave the shared Anthropic key behind on shared/kiosk machines.
+    localStorage.removeItem("swanky_anthropic_key");
     setSession(null);
     setShowAdmin(false);
   };
