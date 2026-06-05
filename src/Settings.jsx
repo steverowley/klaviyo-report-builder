@@ -165,6 +165,8 @@ export default function Settings({ onSave }) {
             marginBottom: "10px",
             transition: "background 0.2s ease",
           }}
+          onMouseEnter={e => { if (canSave && !saved) e.currentTarget.style.background = "#2a2a2a"; }}
+          onMouseLeave={e => { if (canSave && !saved) e.currentTarget.style.background = "#0a0a0a"; }}
         >
           {saved ? "Saved  ✓" : "Save keys"}
         </button>
@@ -184,7 +186,10 @@ export default function Settings({ onSave }) {
             textTransform: "uppercase",
             cursor: "pointer",
             marginBottom: "10px",
+            transition: "background 0.15s ease",
           }}
+          onMouseEnter={e => e.currentTarget.style.background = "#f8f6f2"}
+          onMouseLeave={e => e.currentTarget.style.background = "transparent"}
         >
           Cancel
         </button>
@@ -247,7 +252,10 @@ function KeyField({ label, value, onChange, onKeyDown, show, onToggleShow, place
             letterSpacing: "0.1em",
             fontFamily: "'DM Sans', sans-serif",
             padding: "2px 4px",
+            transition: "color 0.15s ease",
           }}
+          onMouseEnter={e => e.currentTarget.style.color = "#0a0a0a"}
+          onMouseLeave={e => e.currentTarget.style.color = "#6b6b6b"}
         >
           {show ? "hide" : "show"}
         </button>

@@ -1448,7 +1448,10 @@ ${reportHtml}`,
                 fontFamily: "'DM Sans', sans-serif", fontSize: "11px",
                 fontWeight: 500, letterSpacing: "0.16em", textTransform: "uppercase",
                 cursor: isCreatingSlides ? "wait" : "pointer", marginBottom: "8px",
+                transition: "background 0.15s ease",
               }}
+              onMouseEnter={e => { if (!isCreatingSlides) e.currentTarget.style.background = "#f8f6f2"; }}
+              onMouseLeave={e => { if (!isCreatingSlides) e.currentTarget.style.background = "transparent"; }}
             >
               {isCreatingSlides ? "Generating…" : slidesPrompt ? "View Speedy Slides prompt" : "Speedy Slides prompt"}
             </button>
@@ -1574,7 +1577,10 @@ ${reportHtml}`,
                 alignItems: "center",
                 justifyContent: "space-between",
                 background: "#fff",
+                transition: "background 0.15s ease",
               }}
+              onMouseEnter={e => e.currentTarget.style.background = "#f8f6f2"}
+              onMouseLeave={e => e.currentTarget.style.background = "#fff"}
             >
               <span style={{ color: selectedClientId ? "#0a0a0a" : "#b8b8b8" }}>
                 {selectedClientId ? (clients.find(c => c.id === selectedClientId)?.name ?? "—") : (clients.length === 0 ? "— no clients yet —" : "— select client —")}
@@ -1603,8 +1609,10 @@ ${reportHtml}`,
                       padding: "9px 12px", background: selectedClientId === "" ? "#f8f6f2" : "transparent",
                       border: "none", borderBottom: "1px solid #f4f4f4",
                       fontFamily: "'DM Sans', sans-serif", fontSize: "12px",
-                      color: "#b8b8b8", fontWeight: 400,
+                      color: "#b8b8b8", fontWeight: 400, transition: "background 0.15s ease",
                     }}
+                    onMouseEnter={e => e.currentTarget.style.background = "#f8f6f2"}
+                    onMouseLeave={e => e.currentTarget.style.background = selectedClientId === "" ? "#f8f6f2" : "transparent"}
                   >
                     — select client —
                   </button>
@@ -1619,7 +1627,10 @@ ${reportHtml}`,
                       border: "none", borderBottom: "1px solid #f4f4f4",
                       fontFamily: "'DM Sans', sans-serif", fontSize: "12px",
                       color: "#0a0a0a", fontWeight: selectedClientId === c.id ? 500 : 400,
+                      transition: "background 0.15s ease",
                     }}
+                    onMouseEnter={e => e.currentTarget.style.background = "#f8f6f2"}
+                    onMouseLeave={e => e.currentTarget.style.background = selectedClientId === c.id ? "#f8f6f2" : "transparent"}
                   >
                     {c.name}
                   </button>
@@ -1829,7 +1840,10 @@ ${reportHtml}`,
                 letterSpacing: "0.18em",
                 textTransform: "uppercase",
                 cursor: "pointer",
+                transition: "background 0.15s ease",
               }}
+              onMouseEnter={e => e.currentTarget.style.background = "#f8f6f2"}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
             >
               Cancel request
             </button>
@@ -1870,7 +1884,10 @@ ${reportHtml}`,
                 textTransform: "uppercase",
                 cursor: "pointer",
                 marginTop: "10px",
+                transition: "background 0.15s ease",
               }}
+              onMouseEnter={e => e.currentTarget.style.background = "#f8f6f2"}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
             >
               Download HTML
             </button>
@@ -1890,7 +1907,10 @@ ${reportHtml}`,
                 textTransform: "uppercase",
                 cursor: isCreatingSlides ? "wait" : "pointer",
                 marginTop: "6px",
+                transition: "background 0.15s ease",
               }}
+              onMouseEnter={e => { if (!isCreatingSlides) e.currentTarget.style.background = "#f8f6f2"; }}
+              onMouseLeave={e => { if (!isCreatingSlides) e.currentTarget.style.background = "transparent"; }}
             >
               {isCreatingSlides ? "Generating…" : slidesPrompt ? "View Speedy Slides prompt" : "Speedy Slides prompt"}
             </button>
@@ -2111,7 +2131,10 @@ ${reportHtml}`,
                     letterSpacing: "0.16em",
                     textTransform: "uppercase",
                     cursor: "pointer",
+                    transition: "background 0.15s ease",
                   }}
+                  onMouseEnter={e => e.currentTarget.style.background = "#f8f6f2"}
+                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}
                 >
                   Regenerate
                 </button>
@@ -2135,6 +2158,8 @@ ${reportHtml}`,
                     cursor: "pointer",
                     transition: "background 0.2s",
                   }}
+                  onMouseEnter={e => { if (!slidesCopied) e.currentTarget.style.background = "#2a2a2a"; }}
+                  onMouseLeave={e => { if (!slidesCopied) e.currentTarget.style.background = "#0a0a0a"; }}
                 >
                   {slidesCopied ? "Copied" : "Copy"}
                 </button>
@@ -2151,7 +2176,10 @@ ${reportHtml}`,
                     letterSpacing: "0.16em",
                     textTransform: "uppercase",
                     cursor: "pointer",
+                    transition: "background 0.15s ease",
                   }}
+                  onMouseEnter={e => e.currentTarget.style.background = "#f8f6f2"}
+                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}
                 >
                   Close
                 </button>
@@ -2344,6 +2372,8 @@ function SegmentButton({ active, onClick, children, fullWidth }) {
         width: fullWidth ? "100%" : "auto",
         textAlign: "center",
       }}
+      onMouseEnter={e => { if (!active) { e.currentTarget.style.background = "#f8f6f2"; e.currentTarget.style.borderColor = "#6b6b6b"; } }}
+      onMouseLeave={e => { if (!active) { e.currentTarget.style.background = "#ffffff"; e.currentTarget.style.borderColor = "#b8b8b8"; } }}
     >
       {children}
     </button>
@@ -2935,7 +2965,10 @@ function AddClientModal({ onClose, onAdded, sessionToken }) {
                 padding: "12px 32px", background: "#0a0a0a", color: "#fff",
                 border: "none", fontFamily: "'DM Sans', sans-serif", fontSize: "11px",
                 fontWeight: 500, letterSpacing: "0.16em", textTransform: "uppercase", cursor: "pointer",
+                transition: "background 0.15s ease",
               }}
+              onMouseEnter={e => e.currentTarget.style.background = "#2a2a2a"}
+              onMouseLeave={e => e.currentTarget.style.background = "#0a0a0a"}
             >
               Done
             </button>
@@ -2966,7 +2999,10 @@ function AddClientModal({ onClose, onAdded, sessionToken }) {
                   spellCheck={false}
                   style={{ ...modalInputStyle, paddingRight: "48px" }}
                 />
-                <button onClick={() => setShowKey(v => !v)} tabIndex={-1} style={modalToggleStyle}>
+                <button onClick={() => setShowKey(v => !v)} tabIndex={-1} style={modalToggleStyle}
+                  onMouseEnter={e => e.currentTarget.style.color = "#0a0a0a"}
+                  onMouseLeave={e => e.currentTarget.style.color = "#6b6b6b"}
+                >
                   {showKey ? "hide" : "show"}
                 </button>
               </div>
@@ -2998,6 +3034,8 @@ function AddClientModal({ onClose, onAdded, sessionToken }) {
                   cursor: canSubmit ? "pointer" : "default",
                   transition: "background 0.15s ease",
                 }}
+                onMouseEnter={e => { if (canSubmit) e.currentTarget.style.background = "#2a2a2a"; }}
+                onMouseLeave={e => { if (canSubmit) e.currentTarget.style.background = "#0a0a0a"; }}
               >
                 {status === "loading" ? "Adding…" : "Add client"}
               </button>
@@ -3009,7 +3047,10 @@ function AddClientModal({ onClose, onAdded, sessionToken }) {
                   fontFamily: "'DM Sans', sans-serif", fontSize: "11px",
                   fontWeight: 500, letterSpacing: "0.16em", textTransform: "uppercase",
                   cursor: "pointer",
+                  transition: "background 0.15s ease",
                 }}
+                onMouseEnter={e => e.currentTarget.style.background = "#f8f6f2"}
+                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
               >
                 Cancel
               </button>
