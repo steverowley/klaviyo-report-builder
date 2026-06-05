@@ -456,12 +456,23 @@ async function handleRequest(request, env, origin) {
       if (!emailVerified || !email.endsWith('@swankyagency.com')) {
         return new Response(JSON.stringify({ error: 'Access restricted to verified @swankyagency.com accounts' }), { status: 403, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
       }
-      if (env.USERS) {
-        const userKey = 'user_' + email;
-        const existing = await env.USERS.get(userKey);
-        if (!existing) {
-          await env.USERS.put(userKey, JSON.stringify({ username: email, approved: true, createdAt: new Date().toISOString(), authMethod: 'google' }));
-        }
+      if (!env.USERS) {
+        return new Response(JSON.stringify({ error: 'User store not configured.' }), { status: 503, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+      }
+      const userKey = 'user_' + email;
+      const existing = await env.USERS.get(userKey);
+      let user;
+      if (!existing) {
+        // First sign-in creates a PENDING account that an admin must approve.
+        // (Deleting a user therefore revokes access: their next sign-in lands
+        // back in the pending queue rather than silently re-provisioning.)
+        user = { username: email, approved: false, createdAt: new Date().toISOString(), authMethod: 'google' };
+        await env.USERS.put(userKey, JSON.stringify(user));
+      } else {
+        user = JSON.parse(existing);
+      }
+      if (!user.approved) {
+        return new Response(JSON.stringify({ error: 'pending' }), { status: 403, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
       }
       const workerUrl = new URL(request.url).origin;
       const token = await makeToken(email, false, env.TOKEN_SECRET);

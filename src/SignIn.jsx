@@ -4,6 +4,13 @@ const WORKER_URL_KEY = "swanky_worker_url";
 const GOOGLE_CLIENT_ID = "603699639407-kufvngv1tcjbr38bp2bi7i7f21o3rvbb.apps.googleusercontent.com";
 const DEFAULT_WORKER_URL = import.meta.env.VITE_WORKER_URL || "";
 
+function signInErrorMessage(data, status) {
+  if (data?.error === "pending") {
+    return "Your account is awaiting approval. Ask a Swanky admin to approve you in the Users panel, then sign in again.";
+  }
+  return data?.error || `Sign-in failed (${status}).`;
+}
+
 export default function SignIn({ onSignIn, onOpenSettings }) {
   // Build-time URL always wins; localStorage is only a fallback for local dev
   const [workerUrl, setWorkerUrl] = useState(
@@ -42,7 +49,7 @@ export default function SignIn({ onSignIn, onOpenSettings }) {
         setError(`Worker returned an unexpected response (${res.status}). Check the Worker URL in Settings.`);
         return;
       }
-      if (!res.ok) { setError(data.error || `Sign-in failed (${res.status}).`); return; }
+      if (!res.ok) { setError(signInErrorMessage(data, res.status)); return; }
       sessionStorage.setItem("swanky_session", data.token);
       sessionStorage.setItem("swanky_session_user", data.username);
       sessionStorage.setItem("swanky_session_admin", String(data.admin));
@@ -102,7 +109,7 @@ export default function SignIn({ onSignIn, onOpenSettings }) {
         setError(`Worker returned an unexpected response (${res.status}). Check the Worker URL in Settings.`);
         return;
       }
-      if (!res.ok) { setError(data.error || `Sign-in failed (${res.status}).`); return; }
+      if (!res.ok) { setError(signInErrorMessage(data, res.status)); return; }
       sessionStorage.setItem("swanky_session", data.token);
       sessionStorage.setItem("swanky_session_user", data.username);
       sessionStorage.setItem("swanky_session_admin", String(data.admin));
