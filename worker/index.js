@@ -372,14 +372,13 @@ async function handleRequest(request, env, origin) {
         return new Response(JSON.stringify({ error: 'Username and password required.' }), { status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
       }
       const workerUrl = new URL(request.url).origin;
-      const sharedAnthropicKey = env.SHARED_ANTHROPIC_KEY || null;
 
       // Check admin credentials first
       if (env.ADMIN_USERNAME && env.ADMIN_PASSWORD &&
           username.toLowerCase() === env.ADMIN_USERNAME.toLowerCase() &&
           password === env.ADMIN_PASSWORD) {
         const token = await makeToken(username.toLowerCase(), true, env.TOKEN_SECRET);
-        return new Response(JSON.stringify({ token, username: username.toLowerCase(), admin: true, workerUrl, anthropicKey: sharedAnthropicKey }), { headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+        return new Response(JSON.stringify({ token, username: username.toLowerCase(), admin: true, workerUrl }), { headers: { 'Content-Type': 'application/json', ...cors(origin) } });
       }
       if (!env.USERS) {
         return new Response(JSON.stringify({ error: 'Invalid credentials.' }), { status: 401, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
@@ -399,7 +398,7 @@ async function handleRequest(request, env, origin) {
         return new Response(JSON.stringify({ error: 'pending' }), { status: 403, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
       }
       const token = await makeToken(user.username, false, env.TOKEN_SECRET);
-      return new Response(JSON.stringify({ token, username: user.username, admin: false, workerUrl, anthropicKey: sharedAnthropicKey }), { headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+      return new Response(JSON.stringify({ token, username: user.username, admin: false, workerUrl }), { headers: { 'Content-Type': 'application/json', ...cors(origin) } });
     }
 
     // ── POST /?action=login-google ────────────────────────────────────────────
@@ -442,9 +441,50 @@ async function handleRequest(request, env, origin) {
         }
       }
       const workerUrl = new URL(request.url).origin;
-      const sharedAnthropicKey = env.SHARED_ANTHROPIC_KEY || null;
       const token = await makeToken(email, false, env.TOKEN_SECRET);
-      return new Response(JSON.stringify({ token, username: email, admin: false, workerUrl, anthropicKey: sharedAnthropicKey }), { headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+      return new Response(JSON.stringify({ token, username: email, admin: false, workerUrl }), { headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+    }
+
+    // ── POST /?action=anthropic — authenticated proxy to the Anthropic API ────
+    // Keeps SHARED_ANTHROPIC_KEY server-side; the browser sends a session token
+    // and the prompt, and never sees the key.
+    if (request.method === 'POST' && action === 'anthropic') {
+      const authFail = await requireSession(request, env, origin);
+      if (authFail) return authFail;
+      if (!env.SHARED_ANTHROPIC_KEY) {
+        return new Response(JSON.stringify({ error: 'Anthropic key not configured on the worker.' }), {
+          status: 503, headers: { 'Content-Type': 'application/json', ...cors(origin) },
+        });
+      }
+      let payload;
+      try { payload = await request.json(); }
+      catch {
+        return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
+          status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) },
+        });
+      }
+      // Only the streaming report call needs the prompt-caching / extended-output betas.
+      const betaHeaders = payload.stream
+        ? { 'anthropic-beta': 'prompt-caching-2024-07-31,output-128k-2025-02-19' }
+        : {};
+      const upstream = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': env.SHARED_ANTHROPIC_KEY,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json',
+          ...betaHeaders,
+        },
+        body: JSON.stringify(payload),
+      });
+      // Stream the response straight back: text/event-stream for stream:true, JSON otherwise.
+      return new Response(upstream.body, {
+        status: upstream.status,
+        headers: {
+          'Content-Type': upstream.headers.get('Content-Type') || 'application/json',
+          ...cors(origin),
+        },
+      });
     }
 
     // ── GET /?action=admin-users ──────────────────────────────────────────────
