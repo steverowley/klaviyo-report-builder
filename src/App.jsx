@@ -56,6 +56,7 @@ function CursorDot() {
         mixBlendMode: "difference",
         willChange: "transform, width, height",
         transition: "width 0.15s ease, height 0.15s ease, opacity 0.15s ease",
+        transform: "translate(-100px, -100px)",
       }} />
       <style>{`
         * { cursor: none !important; }

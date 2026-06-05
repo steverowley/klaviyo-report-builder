@@ -5,8 +5,9 @@ const GOOGLE_CLIENT_ID = "603699639407-kufvngv1tcjbr38bp2bi7i7f21o3rvbb.apps.goo
 const DEFAULT_WORKER_URL = import.meta.env.VITE_WORKER_URL || "";
 
 export default function SignIn({ onSignIn, onOpenSettings }) {
+  // Build-time URL always wins; localStorage is only a fallback for local dev
   const [workerUrl, setWorkerUrl] = useState(
-    () => localStorage.getItem(WORKER_URL_KEY) || DEFAULT_WORKER_URL
+    () => DEFAULT_WORKER_URL || localStorage.getItem(WORKER_URL_KEY) || ""
   );
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
