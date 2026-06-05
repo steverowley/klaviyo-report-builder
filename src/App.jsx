@@ -282,6 +282,7 @@ export default function App() {
 
   const [settingsVersion, setSettingsVersion] = useState(0);
   const [showAdmin, setShowAdmin] = useState(false);
+  const [authNotice, setAuthNotice] = useState("");
 
   const handleSettingsSaved = () => {
     setShowSettings(false);
@@ -289,15 +290,20 @@ export default function App() {
   };
 
   const handleSignIn = (sessionData) => {
+    setAuthNotice("");
     setSession(sessionData);
   };
 
-  const handleSignOut = () => {
+  // `reason` is an optional message shown on the sign-in screen (e.g. on session
+  // expiry). The plain "Sign out" button calls this with the click event, which
+  // isn't a string, so no notice is shown in that case.
+  const handleSignOut = (reason) => {
     sessionStorage.removeItem("swanky_session");
     sessionStorage.removeItem("swanky_session_user");
     sessionStorage.removeItem("swanky_session_admin");
     // Don't leave the shared Anthropic key behind on shared/kiosk machines.
     localStorage.removeItem("swanky_anthropic_key");
+    setAuthNotice(typeof reason === "string" ? reason : "");
     setSession(null);
     setShowAdmin(false);
   };
@@ -306,7 +312,7 @@ export default function App() {
     return (
       <>
         <CursorDot />
-        <SignIn onSignIn={handleSignIn} onOpenSettings={() => setShowSettings(true)} />
+        <SignIn onSignIn={handleSignIn} onOpenSettings={() => setShowSettings(true)} notice={authNotice} />
         {showSettings && (
           <div style={{ position: "fixed", inset: 0, zIndex: 1000 }}>
             <Settings onSave={handleSettingsSaved} />

@@ -674,7 +674,9 @@ ${JSON.stringify(trimData(klaviyoData))}`;
         });
         if (!workerRes.ok) {
           const errData = await workerRes.json().catch(() => ({}));
-          throw new Error(`Klaviyo data fetch failed: ${errData.error || `HTTP ${workerRes.status}`}`);
+          const err = new Error(`Klaviyo data fetch failed: ${errData.error || `HTTP ${workerRes.status}`}`);
+          err.status = workerRes.status;
+          throw err;
         }
         return workerRes.json();
       })();
@@ -927,6 +929,10 @@ function addEventMarkers(chart,events){
       if (e.name === "AbortError") return;
 
       clearTimers();
+      if ((e.status === 401 || e.status === 403) && onSignOut) {
+        onSignOut("Your session has expired — please sign in again.");
+        return;
+      }
       setError(e.message || "Something went wrong. Check your settings and try again.");
       setProgress(0);
       setJustFinished(false);
@@ -1116,8 +1122,16 @@ function addEventMarkers(chart,events){
     if (!workerUrl) return;
     setClientsError("");
     fetch(workerUrl, { headers: authHeaders(sessionToken) })
-      .then(r => r.json())
+      .then(r => {
+        if ((r.status === 401 || r.status === 403) && onSignOut) {
+          onSignOut("Your session has expired — please sign in again.");
+          return null;
+        }
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then(data => {
+        if (!data) return;
         setClients(Array.isArray(data) ? data : []);
         // Auto-select if only one client
         if (Array.isArray(data) && data.length === 1) {
