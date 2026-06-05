@@ -35,7 +35,7 @@ async function kFetch(path, apiKey, init = {}, retries = 4) {
   return res.json();
 }
 
-function slugify(name) {
+export function slugify(name) {
   return name.toLowerCase()
     .replace(/\s+/g, '_')
     .replace(/[^a-z0-9_]/g, '')
@@ -67,7 +67,7 @@ async function readKlaviyoKey(env, clientId) {
   return env[`KLAVIYO_KEY_${clientId}`] || null;
 }
 
-function reportBody(type, startDate, endDate, conversionMetricId) {
+export function reportBody(type, startDate, endDate, conversionMetricId) {
   const attributes = {
     timeframe: {
       start: `${startDate}T00:00:00+00:00`,
@@ -82,7 +82,7 @@ function reportBody(type, startDate, endDate, conversionMetricId) {
   return JSON.stringify({ data: { type, attributes } });
 }
 
-function aggregateBody(metricId, startDate, endDate, measurements) {
+export function aggregateBody(metricId, startDate, endDate, measurements) {
   return JSON.stringify({
     data: {
       type: 'metric-aggregate',
@@ -98,7 +98,7 @@ function aggregateBody(metricId, startDate, endDate, measurements) {
   });
 }
 
-function extractResults(report) {
+export function extractResults(report) {
   const results = report?.data?.attributes?.results;
   if (Array.isArray(results)) return results;
   if (Array.isArray(report?.data)) return report.data;
@@ -143,7 +143,7 @@ async function getCampaignNames(klaviyoKey) {
   return { names, errMsg };
 }
 
-function processAggregate(agg, measurement = 'count') {
+export function processAggregate(agg, measurement = 'count') {
   try {
     const attrs = agg?.data?.attributes;
     if (!attrs) return null;
@@ -177,7 +177,7 @@ function processAggregate(agg, measurement = 'count') {
   }
 }
 
-function normaliseCampaigns(report, campaignNames = {}) {
+export function normaliseCampaigns(report, campaignNames = {}) {
   return extractResults(report).map(row => {
     const g = row.groupings ?? {};
     const s = row.statistics ?? {};
@@ -197,7 +197,7 @@ function normaliseCampaigns(report, campaignNames = {}) {
   });
 }
 
-function aggregateFlowRows(report, flowNames = {}) {
+export function aggregateFlowRows(report, flowNames = {}) {
   const rows = extractResults(report);
   const byFlow = {};
 
@@ -239,7 +239,7 @@ function aggregateFlowRows(report, flowNames = {}) {
 
 // ── Auth helpers ─────────────────────────────────────────────────────────────
 
-async function pbkdf2Hash(password) {
+export async function pbkdf2Hash(password) {
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const keyMat = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']);
   const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: 200000, hash: 'SHA-256' }, keyMat, 256);
@@ -248,7 +248,7 @@ async function pbkdf2Hash(password) {
   return `pbkdf2:${saltB64}:${hashB64}`;
 }
 
-async function pbkdf2Verify(password, stored) {
+export async function pbkdf2Verify(password, stored) {
   const parts = stored.split(':');
   if (parts[0] !== 'pbkdf2') return false;
   const [, saltB64, hashB64] = parts;
@@ -267,7 +267,7 @@ function toB64url(buf) {
     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
 
-async function makeToken(username, isAdmin, secret) {
+export async function makeToken(username, isAdmin, secret) {
   const payload = btoa(JSON.stringify({ sub: username, admin: isAdmin, exp: Date.now() + 7 * 24 * 3600 * 1000 }))
     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
@@ -276,7 +276,7 @@ async function makeToken(username, isAdmin, secret) {
   return `${payload}.${sig}`;
 }
 
-async function verifyToken(token, secret) {
+export async function verifyToken(token, secret) {
   if (!token || typeof token !== 'string') return null;
   const dot = token.lastIndexOf('.');
   if (dot < 0) return null;
