@@ -67,11 +67,11 @@ async function readKlaviyoKey(env, clientId) {
   return env[`KLAVIYO_KEY_${clientId}`] || null;
 }
 
-export function reportBody(type, startDate, endDate, conversionMetricId) {
+export function reportBody(type, startDate, endDate, conversionMetricId, startOffset = '+00:00', endOffset = '+00:00') {
   const attributes = {
     timeframe: {
-      start: `${startDate}T00:00:00+00:00`,
-      end: `${endDate}T23:59:59+00:00`,
+      start: `${startDate}T00:00:00${startOffset}`,
+      end: `${endDate}T23:59:59${endOffset}`,
     },
     statistics: [
       'recipients', 'delivered', 'open_rate', 'click_rate',
@@ -82,7 +82,7 @@ export function reportBody(type, startDate, endDate, conversionMetricId) {
   return JSON.stringify({ data: { type, attributes } });
 }
 
-export function aggregateBody(metricId, startDate, endDate, measurements) {
+export function aggregateBody(metricId, startDate, endDate, measurements, timezone = 'UTC', startOffset = '+00:00', endOffset = '+00:00') {
   return JSON.stringify({
     data: {
       type: 'metric-aggregate',
@@ -90,12 +90,33 @@ export function aggregateBody(metricId, startDate, endDate, measurements) {
         metric_id: metricId,
         interval: 'day',
         measurements,
-        filter: `greater-or-equal(datetime,${startDate}T00:00:00+00:00),less-than(datetime,${endDate}T23:59:59+00:00)`,
-        timezone: 'UTC',
+        filter: `greater-or-equal(datetime,${startDate}T00:00:00${startOffset}),less-than(datetime,${endDate}T23:59:59${endOffset})`,
+        timezone,
         page_size: 500,
       },
     },
   });
+}
+
+// Return the UTC offset (e.g. "-05:00") for an IANA timezone on a given YYYY-MM-DD.
+// Computed numerically so it's robust to DST and engine formatting differences.
+export function tzOffset(timeZone, dateStr) {
+  if (!timeZone || timeZone === 'UTC') return '+00:00';
+  try {
+    const instant = new Date(`${dateStr}T12:00:00Z`);
+    const p = new Intl.DateTimeFormat('en-US', {
+      timeZone, hour12: false,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+    }).formatToParts(instant).reduce((acc, x) => (acc[x.type] = x.value, acc), {});
+    const asUTC = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
+    const diffMin = Math.round((asUTC - instant.getTime()) / 60000);
+    const sign = diffMin >= 0 ? '+' : '-';
+    const abs = Math.abs(diffMin);
+    return `${sign}${String(Math.floor(abs / 60)).padStart(2, '0')}:${String(abs % 60).padStart(2, '0')}`;
+  } catch {
+    return '+00:00';
+  }
 }
 
 export function extractResults(report) {
@@ -847,6 +868,12 @@ async function handleRequest(request, env, origin) {
       const campaignNames = campaignResult.names;
       const metricList    = metrics.data ?? [];
 
+      // Use the client's Klaviyo account timezone for day boundaries + bucketing,
+      // so daily charts line up with what they see in their own dashboard.
+      const accountTimezone = accounts.data?.[0]?.attributes?.timezone || 'UTC';
+      const startOffset = tzOffset(accountTimezone, startDate);
+      const endOffset   = tzOffset(accountTimezone, endDate);
+
       const ORDER_MATCH = { exact: ['placed order'], includes: ['placed order', 'place order'] };
       const SUBSCRIBE_MATCH = {
         exact: ['subscribed to list'],
@@ -867,20 +894,20 @@ async function handleRequest(request, env, origin) {
       const subscribedMetricId   = subscribedMetric?.id   ?? null;
       const unsubscribedMetricId = unsubscribedMetric?.id ?? null;
 
-      const safeAgg = (metricId, measurements, start = startDate, end = endDate) =>
+      const safeAgg = (metricId, measurements, start = startDate, end = endDate, sOff = startOffset, eOff = endOffset) =>
         metricId
           ? kFetch('/metric-aggregates/', klaviyoKey, {
               method: 'POST',
-              body: aggregateBody(metricId, start, end, measurements),
+              body: aggregateBody(metricId, start, end, measurements, accountTimezone, sOff, eOff),
             }).catch(e => ({ _error: e.message }))
           : Promise.resolve(null);
 
       const [campaignReport, flowReport, orderAgg, subscriberAgg, unsubAgg] = await Promise.all([
         kFetch('/campaign-values-reports/', klaviyoKey, {
-          method: 'POST', body: reportBody('campaign-values-report', startDate, endDate, conversionMetricId),
+          method: 'POST', body: reportBody('campaign-values-report', startDate, endDate, conversionMetricId, startOffset, endOffset),
         }),
         kFetch('/flow-values-reports/', klaviyoKey, {
-          method: 'POST', body: reportBody('flow-values-report', startDate, endDate, conversionMetricId),
+          method: 'POST', body: reportBody('flow-values-report', startDate, endDate, conversionMetricId, startOffset, endOffset),
         }),
         safeAgg(conversionMetricId,   ['count', 'sum_value']),
         safeAgg(subscribedMetricId,   ['count']),
@@ -890,16 +917,18 @@ async function handleRequest(request, env, origin) {
       let comparison = null;
       let comparisonHadError = false;
       if (comparisonStart && comparisonEnd) {
+        const compStartOffset = tzOffset(accountTimezone, comparisonStart);
+        const compEndOffset   = tzOffset(accountTimezone, comparisonEnd);
         const [compCampaigns, compFlows, compSubAgg, compUnsubAgg, compOrderAgg] = await Promise.all([
           kFetch('/campaign-values-reports/', klaviyoKey, {
-            method: 'POST', body: reportBody('campaign-values-report', comparisonStart, comparisonEnd, conversionMetricId),
+            method: 'POST', body: reportBody('campaign-values-report', comparisonStart, comparisonEnd, conversionMetricId, compStartOffset, compEndOffset),
           }),
           kFetch('/flow-values-reports/', klaviyoKey, {
-            method: 'POST', body: reportBody('flow-values-report', comparisonStart, comparisonEnd, conversionMetricId),
+            method: 'POST', body: reportBody('flow-values-report', comparisonStart, comparisonEnd, conversionMetricId, compStartOffset, compEndOffset),
           }),
-          safeAgg(subscribedMetricId,   ['count'], comparisonStart, comparisonEnd),
-          safeAgg(unsubscribedMetricId, ['count'], comparisonStart, comparisonEnd),
-          safeAgg(conversionMetricId,   ['count', 'sum_value'], comparisonStart, comparisonEnd),
+          safeAgg(subscribedMetricId,   ['count'], comparisonStart, comparisonEnd, compStartOffset, compEndOffset),
+          safeAgg(unsubscribedMetricId, ['count'], comparisonStart, comparisonEnd, compStartOffset, compEndOffset),
+          safeAgg(conversionMetricId,   ['count', 'sum_value'], comparisonStart, comparisonEnd, compStartOffset, compEndOffset),
         ]);
         if (compOrderAgg?._error || compSubAgg?._error || compUnsubAgg?._error) comparisonHadError = true;
         comparison = {
