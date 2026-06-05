@@ -36,8 +36,12 @@ export default function SignIn({ onSignIn, onOpenSettings }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ credential: googleResponse.credential }),
       });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error || "Sign-in failed."); return; }
+      let data;
+      try { data = await res.json(); } catch {
+        setError(`Worker returned an unexpected response (${res.status}). Check the Worker URL in Settings.`);
+        return;
+      }
+      if (!res.ok) { setError(data.error || `Sign-in failed (${res.status}).`); return; }
       sessionStorage.setItem("swanky_session", data.token);
       sessionStorage.setItem("swanky_session_user", data.username);
       sessionStorage.setItem("swanky_session_admin", String(data.admin));
@@ -47,7 +51,7 @@ export default function SignIn({ onSignIn, onOpenSettings }) {
       }
       onSignInRef.current({ token: data.token, username: data.username, admin: data.admin });
     } catch {
-      setError("Network error — check the Worker URL.");
+      setError(`Could not reach the worker at ${url} — verify the URL in Settings.`);
     } finally {
       setLoading(false);
     }
@@ -95,8 +99,12 @@ export default function SignIn({ onSignIn, onOpenSettings }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: adminUsername.trim(), password: adminPassword }),
       });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error || "Sign-in failed."); return; }
+      let data;
+      try { data = await res.json(); } catch {
+        setError(`Worker returned an unexpected response (${res.status}). Check the Worker URL in Settings.`);
+        return;
+      }
+      if (!res.ok) { setError(data.error || `Sign-in failed (${res.status}).`); return; }
       sessionStorage.setItem("swanky_session", data.token);
       sessionStorage.setItem("swanky_session_user", data.username);
       sessionStorage.setItem("swanky_session_admin", String(data.admin));
