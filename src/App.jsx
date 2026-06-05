@@ -51,8 +51,9 @@ function CursorDot() {
     <>
       <div ref={dotRef} style={{
         position: "fixed", top: 0, left: 0, width: 5, height: 5,
-        borderRadius: "50%", background: "#0a0a0a",
+        borderRadius: "50%", background: "#ffffff",
         pointerEvents: "none", zIndex: 9999,
+        mixBlendMode: "difference",
         willChange: "transform, width, height",
         transition: "width 0.15s ease, height 0.15s ease, opacity 0.15s ease",
       }} />
