@@ -7,6 +7,7 @@ import {
   aggregateFlowRows,
   reportBody,
   aggregateBody,
+  tzOffset,
   pickMetric,
   countMetricMatches,
   pbkdf2Hash,
@@ -132,6 +133,41 @@ describe('aggregateBody', () => {
     expect(body.data.attributes.timezone).toBe('UTC');
     expect(body.data.attributes.filter).toContain('2024-01-01T00:00:00+00:00');
     expect(body.data.attributes.filter).toContain('2024-01-31T23:59:59+00:00');
+  });
+});
+
+describe('tzOffset', () => {
+  it('returns +00:00 for UTC, empty, or unknown zones', () => {
+    expect(tzOffset('UTC', '2024-01-15')).toBe('+00:00');
+    expect(tzOffset('', '2024-01-15')).toBe('+00:00');
+    expect(tzOffset('Not/AZone', '2024-01-15')).toBe('+00:00');
+  });
+  it('computes US Eastern offset including DST', () => {
+    expect(tzOffset('America/New_York', '2024-01-15')).toBe('-05:00');
+    expect(tzOffset('America/New_York', '2024-07-15')).toBe('-04:00');
+  });
+  it('computes UK offset including BST', () => {
+    expect(tzOffset('Europe/London', '2024-01-15')).toBe('+00:00');
+    expect(tzOffset('Europe/London', '2024-07-15')).toBe('+01:00');
+  });
+});
+
+describe('timezone-aware report bodies', () => {
+  it('reportBody applies the supplied offsets', () => {
+    const b = JSON.parse(reportBody('campaign-values-report', '2024-01-01', '2024-01-31', null, '-05:00', '-05:00'));
+    expect(b.data.attributes.timeframe.start).toBe('2024-01-01T00:00:00-05:00');
+    expect(b.data.attributes.timeframe.end).toBe('2024-01-31T23:59:59-05:00');
+  });
+  it('aggregateBody applies the supplied timezone and offsets', () => {
+    const b = JSON.parse(aggregateBody('m1', '2024-01-01', '2024-01-31', ['count'], 'America/New_York', '-05:00', '-05:00'));
+    expect(b.data.attributes.timezone).toBe('America/New_York');
+    expect(b.data.attributes.filter).toContain('2024-01-01T00:00:00-05:00');
+    expect(b.data.attributes.filter).toContain('2024-01-31T23:59:59-05:00');
+  });
+  it('defaults to UTC / +00:00 when not provided', () => {
+    const b = JSON.parse(aggregateBody('m1', '2024-01-01', '2024-01-31', ['count']));
+    expect(b.data.attributes.timezone).toBe('UTC');
+    expect(b.data.attributes.filter).toContain('+00:00');
   });
 });
 
