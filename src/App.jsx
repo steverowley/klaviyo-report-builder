@@ -178,7 +178,11 @@ function AdminPanel({ session, onClose }) {
           <button onClick={onClose} style={{
             background: "none", border: "none", color: "#6b6b6b",
             fontFamily: "'DM Sans', sans-serif", fontSize: "18px", cursor: "pointer", lineHeight: 1,
-          }}>
+            transition: "color 0.15s ease",
+          }}
+            onMouseEnter={e => e.currentTarget.style.color = "#0a0a0a"}
+            onMouseLeave={e => e.currentTarget.style.color = "#6b6b6b"}
+          >
             ×
           </button>
         </div>
@@ -216,8 +220,14 @@ function AdminPanel({ session, onClose }) {
                     </div>
                   </div>
                   <div>
-                    <button style={smallBtnStyle(true)} onClick={() => approve(u.username)}>Approve</button>
-                    <button style={smallBtnStyle(false)} onClick={() => deleteUser(u.username)}>Delete</button>
+                    <button style={smallBtnStyle(true)} onClick={() => approve(u.username)}
+                      onMouseEnter={e => e.currentTarget.style.background = "#2a2a2a"}
+                      onMouseLeave={e => e.currentTarget.style.background = "#0a0a0a"}
+                    >Approve</button>
+                    <button style={smallBtnStyle(false)} onClick={() => deleteUser(u.username)}
+                      onMouseEnter={e => e.currentTarget.style.background = "#f8f6f2"}
+                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                    >Delete</button>
                   </div>
                 </div>
               ))}
@@ -241,7 +251,10 @@ function AdminPanel({ session, onClose }) {
                     </div>
                   </div>
                   <div>
-                    <button style={smallBtnStyle(false)} onClick={() => deleteUser(u.username)}>Delete</button>
+                    <button style={smallBtnStyle(false)} onClick={() => deleteUser(u.username)}
+                      onMouseEnter={e => e.currentTarget.style.background = "#f8f6f2"}
+                      onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                    >Delete</button>
                   </div>
                 </div>
               ))}

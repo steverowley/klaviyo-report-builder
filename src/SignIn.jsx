@@ -151,6 +151,8 @@ export default function SignIn({ onSignIn, onOpenSettings }) {
           <button
             onClick={() => { setRegistered(false); setMode("login"); setUsername(""); setPassword(""); }}
             style={btnStyle(true)}
+            onMouseEnter={e => e.currentTarget.style.background = "#2a2a2a"}
+            onMouseLeave={e => e.currentTarget.style.background = "#0a0a0a"}
           >
             Back to sign in
           </button>
@@ -163,7 +165,10 @@ export default function SignIn({ onSignIn, onOpenSettings }) {
                   fontFamily: "'DM Sans', sans-serif", fontSize: "10px",
                   fontWeight: 400, letterSpacing: "0.12em", color: "#b8b8b8",
                   cursor: "pointer", textDecoration: "underline", textUnderlineOffset: "3px",
+                  transition: "color 0.15s ease",
                 }}
+                onMouseEnter={e => e.currentTarget.style.color = "#6b6b6b"}
+                onMouseLeave={e => e.currentTarget.style.color = "#b8b8b8"}
               >
                 Configure worker URL
               </button>
@@ -294,6 +299,8 @@ export default function SignIn({ onSignIn, onOpenSettings }) {
             type="submit"
             disabled={loading || !username.trim() || !password}
             style={btnStyle(!loading && username.trim() && password)}
+            onMouseEnter={e => { if (!loading && username.trim() && password) e.currentTarget.style.background = "#2a2a2a"; }}
+            onMouseLeave={e => { if (!loading && username.trim() && password) e.currentTarget.style.background = "#0a0a0a"; }}
           >
             {loading ? "Please wait…" : mode === "login" ? "Sign in" : "Register"}
           </button>
@@ -315,7 +322,10 @@ export default function SignIn({ onSignIn, onOpenSettings }) {
               cursor: "pointer",
               textDecoration: "underline",
               textUnderlineOffset: "3px",
+              transition: "color 0.15s ease",
             }}
+            onMouseEnter={e => e.currentTarget.style.color = "#0a0a0a"}
+            onMouseLeave={e => e.currentTarget.style.color = "#6b6b6b"}
           >
             {mode === "login" ? "Don't have an account? Register" : "Already have an account? Sign in"}
           </button>
@@ -333,7 +343,10 @@ export default function SignIn({ onSignIn, onOpenSettings }) {
                 cursor: "pointer",
                 textDecoration: "underline",
                 textUnderlineOffset: "3px",
+                transition: "color 0.15s ease",
               }}
+              onMouseEnter={e => e.currentTarget.style.color = "#6b6b6b"}
+              onMouseLeave={e => e.currentTarget.style.color = "#b8b8b8"}
             >
               Configure worker URL
             </button>
