@@ -11,26 +11,26 @@
 ## Architecture (do not break)
 
 - Frontend-only static site, hosted on GitHub Pages. **No backend except the Cloudflare Worker proxy.**
-- **Anthropic key** lives in browser `localStorage` (`swanky_anthropic_key`) — entered via Settings.
+- **Anthropic key** is a Worker secret (`SHARED_ANTHROPIC_KEY`) and is **never sent to the browser**. The frontend calls the Worker's authenticated `?action=anthropic` proxy, which injects the key server-side and streams the response back. (`swanky_anthropic_key` in `localStorage` is legacy — cleared on sign-out, no longer used.)
 - **Klaviyo keys** are stored as Cloudflare Worker secrets (`KLAVIYO_KEY_<clientId>`), never in the browser. The browser sends a `clientId`; the worker resolves it to the correct key internally.
 - **Client list** is stored as a Worker secret `CLIENTS_JSON` — a JSON array of `{id, name}` objects. Update it via the Cloudflare dashboard; no redeploy needed.
-- localStorage keys in use: `swanky_anthropic_key`, `swanky_worker_url`. `swanky_klaviyo_key` is legacy — cleared on "Clear all keys" but no longer written.
+- localStorage keys in use: `swanky_worker_url`. `swanky_anthropic_key` and `swanky_klaviyo_key` are legacy — cleared on sign-out / "Clear all keys" but no longer used (the Anthropic key is proxied server-side; Klaviyo keys are Worker secrets).
 - The worker exposes `GET /` (client list) and `POST /` (fetch Klaviyo data). The frontend calls `GET workerUrl` on load to populate the client dropdown.
-- `handleGenerate` POSTs directly from the browser to `https://api.anthropic.com/v1/messages`. The Klaviyo data arrives pre-fetched from the worker and is embedded in the Claude prompt.
+- `handleGenerate` POSTs to the Worker's `?action=anthropic` proxy (with the session token); the Worker forwards to `https://api.anthropic.com/v1/messages` and streams the SSE response back. The Klaviyo data arrives pre-fetched from the worker and is embedded in the Claude prompt.
 - Vite `base` is `/klaviyo-report-builder/` to match the GitHub Pages path. Do not change this without also updating the repo name.
 
 ## Security rules (non-negotiable)
 
 - **Never** write API keys into source files, commit them, log them, or include them in error messages.
 - **Never** add a `.env` file containing secrets. The `.gitignore` already covers `.env`, `.env.*`, `*.key`, `*.pem`, `secrets.*` — keep these entries.
-- The Settings screen is the only component that reads from or writes to the localStorage key entries. Any other component that needs them should accept them as props or read them at request time (as `ReportBuilder.handleGenerate` does).
+- Secrets never live in the browser: Klaviyo keys are Worker secrets, and the Anthropic key is proxied through the Worker. Do not reintroduce any flow that writes an API key to `localStorage` or returns one in a response body.
 - Stop the user immediately if they're about to do something that risks exposing keys (e.g. pasting a key into the chat, committing a `.env` with real values, hardcoding a key for "testing").
 
 ## Design system (non-negotiable)
 
-- Display: Cormorant Garamond (300/400/500). Body/UI: Inter (300/400/500/600). Both via Google Fonts.
+- Display: Ovo. Body/UI: DM Sans (300/400/500/600). Both via Google Fonts (loaded in `index.html`).
 - Strictly monochromatic palette — `#0a0a0a` ink, `#2a2a2a` graphite, `#6b6b6b` ash, `#b8b8b8` silver, `#ededed` bone, `#f8f6f2` paper, `#ffffff` pearl. Never introduce green/red/blue, even for status (deltas use `↑`/`↓` arrows in monochrome).
-- Hairline rules (1px), generous whitespace, editorial magazine feel. Tabular numerals on numbers. Big Cormorant Garamond for hero metrics; Inter uppercase tracked-out (~0.16–0.22em letter-spacing) for labels.
+- Hairline rules (1px), generous whitespace, editorial magazine feel. Tabular numerals on numbers. Big Ovo for hero metrics; DM Sans uppercase tracked-out (~0.16–0.22em letter-spacing) for labels.
 - Logo: `https://swankyagency.com/wp-content/uploads/2022/05/swanky-2020-black.png`.
 
 ## Honesty clause

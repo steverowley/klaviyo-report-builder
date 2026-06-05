@@ -28,17 +28,16 @@ Static frontend on GitHub Pages + a Cloudflare Worker as data proxy and auth bac
 ```
 Browser (React + Vite)
   │
-  ├─▶  Cloudflare Worker  (your deployment at worker/)
-  │       ├─▶  Klaviyo REST API      (fetch campaign / flow data)
-  │       ├─▶  Auth endpoints        (register, login, user management)
-  │       └─▶  Cloudflare KV         (user accounts + saved reports)
-  │
-  └─▶  Anthropic API  (direct browser call, streamed)
-          └─▶  Claude  (generates the report HTML)
+  └─▶  Cloudflare Worker  (your deployment at worker/)
+          ├─▶  Klaviyo REST API   (fetch campaign / flow data)
+          ├─▶  Anthropic API      (proxied + streamed — key stays server-side)
+          │       └─▶  Claude  (generates the report HTML)
+          ├─▶  Auth endpoints     (login, Google SSO, user management)
+          └─▶  Cloudflare KV      (user accounts + saved reports)
 ```
 
 **Why a Worker?**
-Klaviyo's private API requires a server-side key and does not support browser CORS. The Worker fetches, normalises, and aggregates the raw Klaviyo data, handles all authentication, and stores user accounts and saved reports in KV — then returns clean JSON to the browser.
+Klaviyo's private API requires a server-side key and does not support browser CORS. The Worker fetches, normalises, and aggregates the raw Klaviyo data, handles all authentication, proxies the Anthropic call so that key also stays server-side, and stores user accounts and saved reports in KV — then returns clean JSON to the browser.
 
 ---
 
@@ -46,9 +45,10 @@ Klaviyo's private API requires a server-side key and does not support browser CO
 
 The app is gated behind a login screen. Access works as follows:
 
-1. Users **register** with a username and password on the sign-in screen.
-2. A Swanky admin **approves** the account from the Users panel (gear icon in the app header).
-3. The approved user can **sign in** and use the tool immediately — no API key setup required.
+1. Swanky staff **sign in with Google** — access is restricted to verified `@swankyagency.com` accounts, which are provisioned automatically on first sign-in.
+2. **Admins** can also sign in with a username and password (the "Admin sign-in" toggle), bootstrapped from the `ADMIN_USERNAME` / `ADMIN_PASSWORD` worker secrets.
+
+No API key setup is required — the user just signs in and the app is fully configured.
 
 Sessions are HMAC-SHA-256 signed tokens with a 7-day expiry, stored in `sessionStorage`.
 
@@ -65,10 +65,10 @@ All secrets are set via **Workers & Pages → klaviyo-proxy → Settings → Var
 | `TOKEN_SECRET` | Any long random string — signs session tokens |
 | `ADMIN_USERNAME` | Admin login username |
 | `ADMIN_PASSWORD` | Admin login password |
-| `SHARED_ANTHROPIC_KEY` | Anthropic API key — auto-distributed to all users on login |
+| `SHARED_ANTHROPIC_KEY` | Anthropic API key — used server-side by the Worker's Anthropic proxy; never sent to the browser |
 | `KLAVIYO_KEY_<clientId>` | Per-client Klaviyo private API key (one per client) |
 
-`SHARED_ANTHROPIC_KEY` means non-admin users never need to paste any API key — they just log in and the app is fully configured.
+`SHARED_ANTHROPIC_KEY` stays server-side: the browser calls the Worker's authenticated `?action=anthropic` proxy, so users never see or paste an API key.
 
 ---
 
@@ -162,7 +162,7 @@ klaviyo-report-builder/
 
 1. The browser POSTs to the Worker with the selected `clientId` and date range.
 2. The Worker resolves the Klaviyo key from KV (or env secrets), fetches and normalises campaign reports, flow reports, and daily metric aggregates, then returns clean JSON.
-3. The browser calls the Anthropic API directly (streamed) with a detailed system prompt specifying the full HTML layout, and the Klaviyo JSON as data.
+3. The browser calls the Worker's authenticated Anthropic proxy (streamed) with a detailed system prompt specifying the full HTML layout, and the Klaviyo JSON as data. The Worker injects the Anthropic key and streams Claude's response back.
 4. Claude writes the complete HTML document. The browser streams it into an `<iframe srcdoc>` in real time and saves a copy to KV when complete.
 5. Past reports are accessible from the sidebar and persist across devices.
 
@@ -192,7 +192,7 @@ Each generated report contains:
 ## Security
 
 - Klaviyo keys live in Cloudflare Worker secrets — never in the browser.
-- The Anthropic key is stored in `SHARED_ANTHROPIC_KEY` worker secret and auto-distributed to authenticated users via the login response; it is written to `localStorage` but never sent anywhere except the Anthropic API.
+- The Anthropic key is stored in the `SHARED_ANTHROPIC_KEY` worker secret and used **only server-side** by the Worker's `?action=anthropic` proxy — it is never sent to the browser.
 - Passwords are hashed with PBKDF2 (200,000 iterations, SHA-256).
 - Session tokens are HMAC-SHA-256 signed with `TOKEN_SECRET`, expire after 7 days, and are validated on every sensitive Worker endpoint.
 - The `.gitignore` blocks `.env`, `.env.*`, `*.key`, `*.pem`, and `secrets.*` — do not remove these entries.
@@ -205,8 +205,8 @@ Strict editorial magazine aesthetic — strictly monochromatic, never green/red/
 
 | Token | Value |
 |---|---|
-| **Display font** | Cormorant Garamond 300 / 400 / 500 |
-| **Body / UI font** | Inter 300 / 400 / 500 / 600 |
+| **Display font** | Ovo |
+| **Body / UI font** | DM Sans 300 / 400 / 500 / 600 |
 | **Ink** | `#0a0a0a` |
 | **Graphite** | `#2a2a2a` |
 | **Ash** | `#6b6b6b` |
@@ -215,7 +215,7 @@ Strict editorial magazine aesthetic — strictly monochromatic, never green/red/
 | **Paper** | `#f8f6f2` |
 | **Pearl** | `#ffffff` |
 
-Status deltas use `↑`/`↓` arrows in ink. Numbers use tabular figures. Hero metrics in large Cormorant Garamond; labels in Inter uppercase with tracked letter-spacing.
+Status deltas use `↑`/`↓` arrows in ink. Numbers use tabular figures. Hero metrics in large Ovo; labels in DM Sans uppercase with tracked letter-spacing.
 
 ---
 
