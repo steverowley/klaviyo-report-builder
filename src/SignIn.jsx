@@ -11,7 +11,7 @@ function signInErrorMessage(data, status) {
   return data?.error || `Sign-in failed (${status}).`;
 }
 
-export default function SignIn({ onSignIn, onOpenSettings }) {
+export default function SignIn({ onSignIn, onOpenSettings, notice }) {
   // Build-time URL always wins; localStorage is only a fallback for local dev
   const [workerUrl, setWorkerUrl] = useState(
     () => DEFAULT_WORKER_URL || localStorage.getItem(WORKER_URL_KEY) || ""
@@ -214,6 +214,22 @@ export default function SignIn({ onSignIn, onOpenSettings }) {
             Sign in to continue
           </div>
         </div>
+
+        {notice && (
+          <div style={{
+            padding: "10px 14px",
+            borderLeft: "2px solid #0a0a0a",
+            background: "#f8f6f2",
+            fontFamily: "'DM Sans', sans-serif",
+            fontSize: "11px",
+            fontWeight: 300,
+            color: "#2a2a2a",
+            marginBottom: "20px",
+            lineHeight: 1.5,
+          }}>
+            {notice}
+          </div>
+        )}
 
         {/* Google Sign-In button rendered by GSI */}
         <div
