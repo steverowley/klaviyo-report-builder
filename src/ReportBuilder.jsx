@@ -611,7 +611,8 @@ ${JSON.stringify(trimData(klaviyoData))}`;
     const workerUrl = localStorage.getItem(WORKER_URL);
 
     if (!anthropicKey || !workerUrl) {
-      onOpenSettings();
+      if (onOpenSettings) onOpenSettings();
+      else setError("API keys not configured — contact your admin.");
       return;
     }
 

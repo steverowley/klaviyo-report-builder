@@ -2,28 +2,17 @@ import React, { useState, useEffect } from "react";
 
 const ANTHROPIC_KEY = "swanky_anthropic_key";
 const WORKER_URL = "swanky_worker_url";
-const ADMIN_PASSWORD = "swanky_admin_password";
 
 export default function Settings({ onSave }) {
   const [anthropicKey, setAnthropicKey] = useState("");
   const [workerUrl, setWorkerUrl] = useState("");
-  const [adminPassword, setAdminPassword] = useState("");
   const [showAnthropicKey, setShowAnthropicKey] = useState(false);
-  const [showAdminPassword, setShowAdminPassword] = useState(false);
   const [saved, setSaved] = useState(false);
   const [cleared, setCleared] = useState(false);
-
-  const [hadKeysOnOpen] = useState(() =>
-    Boolean(
-      localStorage.getItem(ANTHROPIC_KEY) &&
-      localStorage.getItem(WORKER_URL)
-    )
-  );
 
   useEffect(() => {
     setAnthropicKey(localStorage.getItem(ANTHROPIC_KEY) || "");
     setWorkerUrl(localStorage.getItem(WORKER_URL) || "");
-    setAdminPassword(localStorage.getItem(ADMIN_PASSWORD) || "");
   }, []);
 
   const normalizedWorkerUrl = () => {
@@ -38,11 +27,6 @@ export default function Settings({ onSave }) {
     if (!canSave) return;
     localStorage.setItem(ANTHROPIC_KEY, anthropicKey.trim());
     localStorage.setItem(WORKER_URL, normalizedWorkerUrl());
-    if (adminPassword.trim()) {
-      localStorage.setItem(ADMIN_PASSWORD, adminPassword.trim());
-    } else {
-      localStorage.removeItem(ADMIN_PASSWORD);
-    }
     setSaved(true);
     setTimeout(() => onSave(), 700);
   };
@@ -50,12 +34,11 @@ export default function Settings({ onSave }) {
   const handleClear = () => {
     localStorage.removeItem(ANTHROPIC_KEY);
     localStorage.removeItem(WORKER_URL);
-    localStorage.removeItem(ADMIN_PASSWORD);
+    localStorage.removeItem("swanky_admin_password"); // legacy
     localStorage.removeItem("swanky_klaviyo_key"); // legacy
     localStorage.removeItem("swanky_report_cache"); // legacy
     setAnthropicKey("");
     setWorkerUrl("");
-    setAdminPassword("");
     setCleared(true);
     setTimeout(() => setCleared(false), 2500);
   };
@@ -110,10 +93,10 @@ export default function Settings({ onSave }) {
               letterSpacing: "-0.01em",
             }}
           >
-            {hadKeysOnOpen ? "Settings" : "Welcome"}
+            Admin Settings
           </div>
           <div style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.2em", color: "#6b6b6b" }}>
-            {hadKeysOnOpen ? "Manage your API keys" : "Paste your API keys to begin"}
+            API keys &amp; worker configuration
           </div>
         </div>
 
@@ -147,18 +130,6 @@ export default function Settings({ onSave }) {
             Your Cloudflare Worker URL.
           </div>
         </div>
-
-        <KeyField
-          label="Admin password"
-          value={adminPassword}
-          onChange={setAdminPassword}
-          onKeyDown={handleKeyDown}
-          show={showAdminPassword}
-          onToggleShow={() => setShowAdminPassword(v => !v)}
-          placeholder="Set in Cloudflare Worker secrets"
-          hint="Required to add clients from the app. Set ADMIN_PASSWORD in your Worker's secrets."
-          isPassword
-        />
 
         <div
           style={{
@@ -198,27 +169,25 @@ export default function Settings({ onSave }) {
           {saved ? "Saved  ✓" : "Save keys"}
         </button>
 
-        {hadKeysOnOpen && (
-          <button
-            onClick={onSave}
-            style={{
-              width: "100%",
-              padding: "12px 20px",
-              background: "transparent",
-              color: "#2a2a2a",
-              border: "1px solid #ededed",
-              fontFamily: "'DM Sans', sans-serif",
-              fontSize: "11px",
-              fontWeight: 500,
-              letterSpacing: "0.16em",
-              textTransform: "uppercase",
-              cursor: "pointer",
-              marginBottom: "10px",
-            }}
-          >
-            Cancel
-          </button>
-        )}
+        <button
+          onClick={onSave}
+          style={{
+            width: "100%",
+            padding: "12px 20px",
+            background: "transparent",
+            color: "#2a2a2a",
+            border: "1px solid #ededed",
+            fontFamily: "'DM Sans', sans-serif",
+            fontSize: "11px",
+            fontWeight: 500,
+            letterSpacing: "0.16em",
+            textTransform: "uppercase",
+            cursor: "pointer",
+            marginBottom: "10px",
+          }}
+        >
+          Cancel
+        </button>
 
         <button
           onClick={handleClear}
