@@ -298,6 +298,20 @@ function getBearerToken(request) {
   return auth.startsWith('Bearer ') ? auth.slice(7).trim() : null;
 }
 
+// Require a valid session. Returns a Response (503/401/403) to short-circuit when
+// auth is missing/invalid, or null when the caller holds a valid session.
+// Fails CLOSED: if TOKEN_SECRET is unset, every protected route is denied.
+async function requireSession(request, env, origin, { admin = false } = {}) {
+  const json = (obj, status) => new Response(JSON.stringify(obj), {
+    status, headers: { 'Content-Type': 'application/json', ...cors(origin) },
+  });
+  if (!env.TOKEN_SECRET) return json({ error: 'Auth not configured (TOKEN_SECRET missing).' }, 503);
+  const session = await verifyToken(getBearerToken(request), env.TOKEN_SECRET);
+  if (!session) return json({ error: 'Unauthorised' }, 401);
+  if (admin && !session.admin) return json({ error: 'Forbidden' }, 403);
+  return null;
+}
+
 export default {
   async fetch(request, env) {
     const origin = request.headers.get('Origin') || '*';
@@ -415,9 +429,10 @@ async function handleRequest(request, env, origin) {
       if (tokenInfo.aud !== expectedAud) {
         return new Response(JSON.stringify({ error: 'Token not issued for this application' }), { status: 401, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
       }
+      const emailVerified = tokenInfo.email_verified === true || tokenInfo.email_verified === 'true';
       const email = (tokenInfo.email || '').toLowerCase();
-      if (!email.endsWith('@swankyagency.com')) {
-        return new Response(JSON.stringify({ error: 'Access restricted to @swankyagency.com accounts' }), { status: 403, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+      if (!emailVerified || !email.endsWith('@swankyagency.com')) {
+        return new Response(JSON.stringify({ error: 'Access restricted to verified @swankyagency.com accounts' }), { status: 403, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
       }
       if (env.USERS) {
         const userKey = 'user_' + email;
@@ -491,6 +506,8 @@ async function handleRequest(request, env, origin) {
 
     // ── POST /?action=add-client — add a new client via UI ──────────────────
     if (request.method === 'POST' && action === 'add-client') {
+      const authFail = await requireSession(request, env, origin, { admin: true });
+      if (authFail) return authFail;
       if (!env.CLIENTS_KV) {
         return new Response(JSON.stringify({ error: 'KV namespace not configured. Follow the setup guide to enable client management.' }), {
           status: 503, headers: { 'Content-Type': 'application/json', ...cors(origin) },
@@ -504,17 +521,7 @@ async function handleRequest(request, env, origin) {
         });
       }
 
-      const { adminPassword, name, klaviyoKey } = body;
-
-      // accept either admin session token OR legacy adminPassword (for backward compat)
-      const session = await verifyToken(getBearerToken(request), env.TOKEN_SECRET);
-      const hasAdminToken = session?.admin === true;
-      const hasLegacyPassword = env.ADMIN_PASSWORD && adminPassword === env.ADMIN_PASSWORD;
-      if (!hasAdminToken && !hasLegacyPassword) {
-        return new Response(JSON.stringify({ error: 'Invalid admin password.' }), {
-          status: 401, headers: { 'Content-Type': 'application/json', ...cors(origin) },
-        });
-      }
+      const { name, klaviyoKey } = body;
 
       if (!name || !klaviyoKey) {
         return new Response(JSON.stringify({ error: 'name and klaviyoKey are required.' }), {
@@ -567,6 +574,8 @@ async function handleRequest(request, env, origin) {
 
     // POST /?action=save-report — persist a generated report to KV ────────────
     if (request.method === 'POST' && action === 'save-report') {
+      const authFail = await requireSession(request, env, origin);
+      if (authFail) return authFail;
       if (!env.CLIENTS_KV) {
         return new Response(JSON.stringify({ error: 'KV not configured' }), {
           status: 503, headers: { 'Content-Type': 'application/json', ...cors(origin) },
@@ -602,6 +611,8 @@ async function handleRequest(request, env, origin) {
 
     // GET /?action=list-reports — list saved reports (metadata only) ──────────
     if (request.method === 'GET' && action === 'list-reports') {
+      const authFail = await requireSession(request, env, origin);
+      if (authFail) return authFail;
       if (!env.CLIENTS_KV) {
         return new Response(JSON.stringify([]), {
           headers: { 'Content-Type': 'application/json', ...cors(origin) },
@@ -618,6 +629,8 @@ async function handleRequest(request, env, origin) {
 
     // POST /?action=delete-report&key=<key> — delete a saved report from KV ───
     if (request.method === 'POST' && action === 'delete-report') {
+      const authFail = await requireSession(request, env, origin);
+      if (authFail) return authFail;
       const key = url.searchParams.get('key');
       if (!key || !env.CLIENTS_KV) {
         return new Response(JSON.stringify({ error: 'key required and KV must be configured' }), {
@@ -632,6 +645,8 @@ async function handleRequest(request, env, origin) {
 
     // GET /?action=get-report&key=<key> — fetch full HTML for a saved report ──
     if (request.method === 'GET' && action === 'get-report') {
+      const authFail = await requireSession(request, env, origin);
+      if (authFail) return authFail;
       const key = url.searchParams.get('key');
       if (!key || !env.CLIENTS_KV) {
         return new Response(JSON.stringify({ error: 'key required and KV must be configured' }), {
@@ -651,6 +666,8 @@ async function handleRequest(request, env, origin) {
 
     // GET /?debug — diagnostic check
     if (request.method === 'GET' && url.searchParams.has('debug')) {
+      const debugAuthFail = await requireSession(request, env, origin, { admin: true });
+      if (debugAuthFail) return debugAuthFail;
       const clients = await readClients(env);
       const keyStatus = await Promise.all(clients.map(async c => ({
         id: c.id,
@@ -702,8 +719,10 @@ async function handleRequest(request, env, origin) {
       });
     }
 
-    // GET / — return client list
+    // GET / — return client list (requires a valid session; the client roster is confidential)
     if (request.method === 'GET') {
+      const listAuthFail = await requireSession(request, env, origin);
+      if (listAuthFail) return listAuthFail;
       const clients = await readClients(env);
       return new Response(JSON.stringify(clients), {
         headers: { 'Content-Type': 'application/json', ...cors(origin) },
@@ -716,13 +735,9 @@ async function handleRequest(request, env, origin) {
       });
     }
 
-    // Require valid session token for data access
-    if (env.TOKEN_SECRET) {
-      const session = await verifyToken(getBearerToken(request), env.TOKEN_SECRET);
-      if (!session) {
-        return new Response(JSON.stringify({ error: 'Unauthorised' }), { status: 401, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
-      }
-    }
+    // Require valid session token for data access (fails closed if TOKEN_SECRET is unset)
+    const dataAuthFail = await requireSession(request, env, origin);
+    if (dataAuthFail) return dataAuthFail;
 
     let body;
     try { body = await request.json(); }
