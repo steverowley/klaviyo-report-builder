@@ -802,6 +802,7 @@ async function handleRequest(request, env, origin) {
       ]);
 
       let comparison = null;
+      let comparisonHadError = false;
       if (comparisonStart && comparisonEnd) {
         const [compCampaigns, compFlows, compSubAgg, compUnsubAgg, compOrderAgg] = await Promise.all([
           kFetch('/campaign-values-reports/', klaviyoKey, {
@@ -814,6 +815,7 @@ async function handleRequest(request, env, origin) {
           safeAgg(unsubscribedMetricId, ['count'], comparisonStart, comparisonEnd),
           safeAgg(conversionMetricId,   ['count', 'sum_value'], comparisonStart, comparisonEnd),
         ]);
+        if (compOrderAgg?._error || compSubAgg?._error || compUnsubAgg?._error) comparisonHadError = true;
         comparison = {
           campaigns:  normaliseCampaigns(compCampaigns, campaignNames),
           flows:      aggregateFlowRows(compFlows, flowNames),
@@ -825,8 +827,37 @@ async function handleRequest(request, env, origin) {
         };
       }
 
+      // Human-readable warnings so the UI can flag incomplete data instead of
+      // silently dropping sections. A failed fetch is distinct from a genuine zero.
+      const warnings = [];
+      if (!conversionMetricId) {
+        warnings.push('No "Placed Order" metric was found in this Klaviyo account, so order volume and revenue figures are unavailable.');
+      } else if (orderAgg?._error) {
+        warnings.push('Order and revenue data could not be loaded from Klaviyo (a temporary error or a permissions issue) — the order/revenue figures may be incomplete.');
+      }
+      if (!subscribedMetricId) {
+        warnings.push('No list-subscribe metric was found, so new-subscriber (list growth) figures are unavailable.');
+      } else if (subscriberAgg?._error) {
+        warnings.push('Subscriber (list growth) data could not be loaded from Klaviyo — the new-subscriber figures may be incomplete.');
+      }
+      if (!unsubscribedMetricId) {
+        warnings.push('No list-unsubscribe metric was found, so unsubscribe figures are unavailable.');
+      } else if (unsubAgg?._error) {
+        warnings.push('Unsubscribe data could not be loaded from Klaviyo — the unsubscribe figures may be incomplete.');
+      }
+      if (comparisonHadError) {
+        warnings.push('Some comparison-period data could not be loaded, so the period-over-period changes may be inaccurate.');
+      }
+      if (flowResult.errMsg) {
+        warnings.push('Flow names could not be loaded, so some flows may appear as IDs rather than names.');
+      }
+      if (campaignResult.errMsg) {
+        warnings.push('Campaign names could not be loaded, so some campaigns may appear as IDs rather than names.');
+      }
+
       return new Response(JSON.stringify({
         account: accounts.data?.[0] ?? null,
+        warnings,
         period: {
           campaigns: normaliseCampaigns(campaignReport, campaignNames),
           flows:     aggregateFlowRows(flowReport, flowNames),
