@@ -4,6 +4,7 @@ const ANTHROPIC_KEY = "swanky_anthropic_key";
 const WORKER_URL = "swanky_worker_url";
 const MODEL_KEY = "swanky_model";
 const DEFAULT_MODEL = "claude-sonnet-4-6";
+const BAKED_WORKER_URL = import.meta.env.VITE_WORKER_URL || "";
 
 // Model registry. Pricing in USD per million tokens.
 const MODELS = {
@@ -608,7 +609,7 @@ ${JSON.stringify(trimData(klaviyoData))}`;
     }
 
     const anthropicKey = localStorage.getItem(ANTHROPIC_KEY);
-    const workerUrl = localStorage.getItem(WORKER_URL);
+    const workerUrl = localStorage.getItem(WORKER_URL) || BAKED_WORKER_URL;
 
     if (!anthropicKey || !workerUrl) {
       if (onOpenSettings) onOpenSettings();
