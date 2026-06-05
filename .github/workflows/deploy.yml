@@ -28,6 +28,8 @@ jobs:
 
       - name: Build
         run: npm run build
+        env:
+          VITE_WORKER_URL: ${{ secrets.VITE_WORKER_URL }}
 
       # Pushes ./dist to the gh-pages branch.
       # GitHub Pages must be configured to serve from that branch (see README).

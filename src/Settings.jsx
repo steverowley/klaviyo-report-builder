@@ -63,11 +63,6 @@ export default function Settings({ onSave }) {
         boxSizing: "border-box",
       }}
     >
-      <link
-        href="https://fonts.googleapis.com/css2?family=Ovo&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300;1,9..40,400&display=swap"
-        rel="stylesheet"
-      />
-
       <div
         style={{
           width: "100%",

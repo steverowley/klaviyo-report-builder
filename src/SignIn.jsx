@@ -1,56 +1,112 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
 const WORKER_URL_KEY = "swanky_worker_url";
+const GOOGLE_CLIENT_ID = "603699639407-kufvngv1tcjbr38bp2bi7i7f21o3rvbb.apps.googleusercontent.com";
+const DEFAULT_WORKER_URL = import.meta.env.VITE_WORKER_URL || "";
 
 export default function SignIn({ onSignIn, onOpenSettings }) {
-  const [mode, setMode] = useState("login"); // "login" | "register"
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  const [workerUrl, setWorkerUrl] = useState(
+    () => localStorage.getItem(WORKER_URL_KEY) || DEFAULT_WORKER_URL
+  );
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [registered, setRegistered] = useState(false);
+  const [showAdminForm, setShowAdminForm] = useState(false);
+  const [adminUsername, setAdminUsername] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
 
-  const workerUrl = localStorage.getItem(WORKER_URL_KEY) || "";
+  const workerUrlRef = useRef(workerUrl);
+  useEffect(() => {
+    workerUrlRef.current = workerUrl;
+    if (workerUrl) localStorage.setItem(WORKER_URL_KEY, workerUrl);
+  }, [workerUrl]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    if (!workerUrl) {
-      setError("Worker URL not configured — open Settings first.");
-      return;
-    }
+  const onSignInRef = useRef(onSignIn);
+  useEffect(() => { onSignInRef.current = onSignIn; }, [onSignIn]);
+
+  // Stored in a ref so the stable GSI callback always calls the latest version
+  const credentialHandlerRef = useRef(null);
+  credentialHandlerRef.current = async (googleResponse) => {
+    const url = workerUrlRef.current;
+    if (!url) { setError("Enter the Worker URL below first."); return; }
     setLoading(true);
+    setError("");
     try {
-      const res = await fetch(`${workerUrl}?action=${mode}`, {
+      const res = await fetch(`${url}?action=login-google`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: username.trim(), password }),
+        body: JSON.stringify({ credential: googleResponse.credential }),
       });
       const data = await res.json();
-      if (!res.ok) {
-        if (data.error === "pending") {
-          setError("pending");
-        } else {
-          setError(data.error || "Something went wrong.");
-        }
-        return;
+      if (!res.ok) { setError(data.error || "Sign-in failed."); return; }
+      sessionStorage.setItem("swanky_session", data.token);
+      sessionStorage.setItem("swanky_session_user", data.username);
+      sessionStorage.setItem("swanky_session_admin", String(data.admin));
+      if (data.workerUrl) localStorage.setItem(WORKER_URL_KEY, data.workerUrl);
+      if (data.anthropicKey && !localStorage.getItem("swanky_anthropic_key")) {
+        localStorage.setItem("swanky_anthropic_key", data.anthropicKey);
       }
-      if (mode === "register") {
-        setRegistered(true);
-      } else {
-        sessionStorage.setItem("swanky_session", data.token);
-        sessionStorage.setItem("swanky_session_user", data.username);
-        sessionStorage.setItem("swanky_session_admin", String(data.admin));
-        if (data.workerUrl && !localStorage.getItem("swanky_worker_url")) {
-          localStorage.setItem("swanky_worker_url", data.workerUrl);
-        }
-        if (data.anthropicKey && !localStorage.getItem("swanky_anthropic_key")) {
-          localStorage.setItem("swanky_anthropic_key", data.anthropicKey);
-        }
-        onSignIn({ token: data.token, username: data.username, admin: data.admin });
-      }
+      onSignInRef.current({ token: data.token, username: data.username, admin: data.admin });
     } catch {
-      setError("Network error — check your Worker URL in Settings.");
+      setError("Network error — check the Worker URL.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    function initGsi() {
+      if (!window.google?.accounts?.id) return;
+      window.google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: (r) => credentialHandlerRef.current(r),
+        auto_select: false,
+      });
+      const btn = document.getElementById("g-signin-btn");
+      if (btn && !btn.firstChild) {
+        window.google.accounts.id.renderButton(btn, {
+          theme: "outline",
+          size: "large",
+          width: 344,
+          text: "signin_with",
+        });
+      }
+    }
+    if (window.google?.accounts?.id) {
+      initGsi();
+    } else {
+      const script = document.createElement("script");
+      script.src = "https://accounts.google.com/gsi/client";
+      script.async = true;
+      script.defer = true;
+      script.onload = initGsi;
+      document.head.appendChild(script);
+    }
+  }, []);
+
+  const handleAdminLogin = async (e) => {
+    e.preventDefault();
+    const url = workerUrlRef.current;
+    if (!url) { setError("Worker URL not configured."); return; }
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch(`${url}?action=login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: adminUsername.trim(), password: adminPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || "Sign-in failed."); return; }
+      sessionStorage.setItem("swanky_session", data.token);
+      sessionStorage.setItem("swanky_session_user", data.username);
+      sessionStorage.setItem("swanky_session_admin", String(data.admin));
+      if (data.workerUrl) localStorage.setItem(WORKER_URL_KEY, data.workerUrl);
+      if (data.anthropicKey && !localStorage.getItem("swanky_anthropic_key")) {
+        localStorage.setItem("swanky_anthropic_key", data.anthropicKey);
+      }
+      onSignInRef.current({ token: data.token, username: data.username, admin: data.admin });
+    } catch {
+      setError("Network error — check the Worker URL.");
     } finally {
       setLoading(false);
     }
@@ -90,94 +146,19 @@ export default function SignIn({ onSignIn, onOpenSettings }) {
     borderRadius: 0,
   };
 
-  const btnStyle = (active) => ({
-    width: "100%",
-    padding: "14px",
-    background: active ? "#0a0a0a" : "#b8b8b8",
-    color: "#ffffff",
+  const linkBtnStyle = {
+    background: "none",
     border: "none",
     fontFamily: "'DM Sans', sans-serif",
     fontSize: "10px",
-    fontWeight: 500,
-    letterSpacing: "0.2em",
-    textTransform: "uppercase",
-    cursor: active ? "pointer" : "default",
-  });
-
-  if (registered) {
-    return (
-      <div style={{
-        minHeight: "100vh",
-        background: "#f8f6f2",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "32px",
-      }}>
-        <link href="https://fonts.googleapis.com/css2?family=Ovo&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300;1,9..40,400&display=swap" rel="stylesheet" />
-        <div style={cardStyle}>
-          <div style={{ textAlign: "center", marginBottom: "40px" }}>
-            <img
-              src="https://swankyagency.com/wp-content/uploads/2022/05/swanky-2020-black.png"
-              alt="Swanky"
-              style={{ height: "22px", objectFit: "contain", display: "block", margin: "0 auto" }}
-            />
-          </div>
-          <div style={{ height: "1px", background: "#ededed", marginBottom: "40px" }} />
-          <div style={{
-            fontFamily: "'Ovo', serif",
-            fontSize: "32px",
-            fontWeight: 400,
-            color: "#0a0a0a",
-            marginBottom: "16px",
-            lineHeight: 1.15,
-            textAlign: "center",
-            letterSpacing: "-0.01em",
-          }}>
-            Account created
-          </div>
-          <p style={{
-            fontFamily: "'DM Sans', sans-serif",
-            fontSize: "13px",
-            fontWeight: 300,
-            color: "#6b6b6b",
-            textAlign: "center",
-            lineHeight: 1.7,
-            marginBottom: "32px",
-          }}>
-            Your account is awaiting admin approval. You'll be able to sign in once it's been reviewed.
-          </p>
-          <button
-            onClick={() => { setRegistered(false); setMode("login"); setUsername(""); setPassword(""); }}
-            style={btnStyle(true)}
-            onMouseEnter={e => e.currentTarget.style.background = "#2a2a2a"}
-            onMouseLeave={e => e.currentTarget.style.background = "#0a0a0a"}
-          >
-            Back to sign in
-          </button>
-          {onOpenSettings && (
-            <div style={{ textAlign: "center", marginTop: "16px" }}>
-              <button
-                onClick={onOpenSettings}
-                style={{
-                  background: "none", border: "none",
-                  fontFamily: "'DM Sans', sans-serif", fontSize: "10px",
-                  fontWeight: 400, letterSpacing: "0.12em", color: "#b8b8b8",
-                  cursor: "pointer", textDecoration: "underline", textUnderlineOffset: "3px",
-                  transition: "color 0.15s ease",
-                }}
-                onMouseEnter={e => e.currentTarget.style.color = "#6b6b6b"}
-                onMouseLeave={e => e.currentTarget.style.color = "#b8b8b8"}
-              >
-                Configure worker URL
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
+    fontWeight: 400,
+    letterSpacing: "0.12em",
+    color: "#b8b8b8",
+    cursor: "pointer",
+    textDecoration: "underline",
+    textUnderlineOffset: "3px",
+    transition: "color 0.15s ease",
+  };
 
   return (
     <div style={{
@@ -189,7 +170,6 @@ export default function SignIn({ onSignIn, onOpenSettings }) {
       justifyContent: "center",
       padding: "32px",
     }}>
-      <link href="https://fonts.googleapis.com/css2?family=Ovo&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300;1,9..40,400&display=swap" rel="stylesheet" />
       <div style={cardStyle}>
         <div style={{ textAlign: "center", marginBottom: "40px" }}>
           <img
@@ -201,7 +181,7 @@ export default function SignIn({ onSignIn, onOpenSettings }) {
 
         <div style={{ height: "1px", background: "#ededed", marginBottom: "40px" }} />
 
-        <div style={{ marginBottom: "32px", textAlign: "center" }}>
+        <div style={{ marginBottom: "36px", textAlign: "center" }}>
           <div style={{
             fontFamily: "'Ovo', serif",
             fontSize: "34px",
@@ -221,130 +201,87 @@ export default function SignIn({ onSignIn, onOpenSettings }) {
             textTransform: "uppercase",
             color: "#b8b8b8",
           }}>
-            {mode === "login" ? "Sign in to continue" : "Create your account"}
+            Sign in to continue
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} autoComplete="off">
-          <div style={{ marginBottom: "20px" }}>
-            <label style={labelStyle}>Username</label>
+        {/* Google Sign-In button rendered by GSI */}
+        <div
+          id="g-signin-btn"
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            marginBottom: error ? "20px" : "28px",
+            opacity: loading ? 0.5 : 1,
+            pointerEvents: loading ? "none" : "auto",
+            transition: "opacity 0.15s ease",
+          }}
+        />
+
+        {loading && (
+          <div style={{
+            textAlign: "center",
+            fontFamily: "'DM Sans', sans-serif",
+            fontSize: "11px",
+            fontWeight: 300,
+            color: "#6b6b6b",
+            marginBottom: "20px",
+          }}>
+            Signing in…
+          </div>
+        )}
+
+        {error && (
+          <div style={{
+            padding: "10px 14px",
+            border: "1px solid #ededed",
+            background: "#f8f6f2",
+            fontFamily: "'DM Sans', sans-serif",
+            fontSize: "11px",
+            fontWeight: 300,
+            color: "#2a2a2a",
+            marginBottom: "20px",
+            lineHeight: 1.5,
+          }}>
+            {error}
+          </div>
+        )}
+
+        {/* Worker URL input — shown only when not configured */}
+        {!workerUrl && (
+          <div style={{ marginBottom: "24px" }}>
+            <label style={labelStyle}>Worker URL</label>
             <input
-              type="text"
-              value={username}
-              onChange={e => setUsername(e.target.value)}
-              autoComplete="username"
-              autoFocus
-              required
+              type="url"
+              value={workerUrl}
+              onChange={e => setWorkerUrl(e.target.value.trim())}
+              placeholder="https://your-worker.workers.dev"
+              autoComplete="off"
+              spellCheck={false}
               style={inputStyle}
             />
-          </div>
-
-          <div style={{ marginBottom: "28px" }}>
-            <label style={labelStyle}>Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              autoComplete={mode === "login" ? "current-password" : "new-password"}
-              required
-              style={inputStyle}
-            />
-            {mode === "register" && (
-              <div style={{
-                fontFamily: "'DM Sans', sans-serif",
-                fontSize: "10px",
-                fontWeight: 300,
-                color: "#b8b8b8",
-                marginTop: "6px",
-                fontStyle: "italic",
-              }}>
-                Minimum 8 characters
-              </div>
-            )}
-          </div>
-
-          {error && error !== "pending" && (
-            <div style={{
-              padding: "10px 14px",
-              border: "1px solid #ededed",
-              background: "#f8f6f2",
-              fontFamily: "'DM Sans', sans-serif",
-              fontSize: "11px",
-              fontWeight: 300,
-              color: "#2a2a2a",
-              marginBottom: "20px",
-              lineHeight: 1.5,
-            }}>
-              {error}
+            <div style={{ marginTop: "6px", fontFamily: "'DM Sans', sans-serif", fontSize: "10px", fontWeight: 300, color: "#b8b8b8", fontStyle: "italic" }}>
+              Ask your admin for the worker URL.
             </div>
-          )}
+          </div>
+        )}
 
-          {error === "pending" && (
-            <div style={{
-              padding: "10px 14px",
-              border: "1px solid #ededed",
-              background: "#f8f6f2",
-              fontFamily: "'DM Sans', sans-serif",
-              fontSize: "11px",
-              fontWeight: 300,
-              color: "#2a2a2a",
-              marginBottom: "20px",
-              lineHeight: 1.5,
-            }}>
-              Your account is awaiting admin approval.
-            </div>
-          )}
+        <div style={{ height: "1px", background: "#ededed", margin: "24px 0" }} />
 
-          <button
-            type="submit"
-            disabled={loading || !username.trim() || !password}
-            style={btnStyle(!loading && username.trim() && password)}
-            onMouseEnter={e => { if (!loading && username.trim() && password) e.currentTarget.style.background = "#2a2a2a"; }}
-            onMouseLeave={e => { if (!loading && username.trim() && password) e.currentTarget.style.background = "#0a0a0a"; }}
-          >
-            {loading ? "Please wait…" : mode === "login" ? "Sign in" : "Register"}
-          </button>
-        </form>
-
-        <div style={{ height: "1px", background: "#ededed", margin: "32px 0" }} />
-
+        {/* Admin sign-in toggle */}
         <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: "12px" }}>
           <button
-            onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(""); }}
-            style={{
-              background: "none",
-              border: "none",
-              fontFamily: "'DM Sans', sans-serif",
-              fontSize: "10px",
-              fontWeight: 400,
-              letterSpacing: "0.12em",
-              color: "#6b6b6b",
-              cursor: "pointer",
-              textDecoration: "underline",
-              textUnderlineOffset: "3px",
-              transition: "color 0.15s ease",
-            }}
-            onMouseEnter={e => e.currentTarget.style.color = "#0a0a0a"}
-            onMouseLeave={e => e.currentTarget.style.color = "#6b6b6b"}
+            onClick={() => { setShowAdminForm(v => !v); setError(""); }}
+            style={linkBtnStyle}
+            onMouseEnter={e => e.currentTarget.style.color = "#6b6b6b"}
+            onMouseLeave={e => e.currentTarget.style.color = "#b8b8b8"}
           >
-            {mode === "login" ? "Don't have an account? Register" : "Already have an account? Sign in"}
+            {showAdminForm ? "Cancel" : "Admin sign-in"}
           </button>
           {onOpenSettings && (
             <button
               onClick={onOpenSettings}
-              style={{
-                background: "none",
-                border: "none",
-                fontFamily: "'DM Sans', sans-serif",
-                fontSize: "10px",
-                fontWeight: 400,
-                letterSpacing: "0.12em",
-                color: "#b8b8b8",
-                cursor: "pointer",
-                textDecoration: "underline",
-                textUnderlineOffset: "3px",
-                transition: "color 0.15s ease",
-              }}
+              style={linkBtnStyle}
               onMouseEnter={e => e.currentTarget.style.color = "#6b6b6b"}
               onMouseLeave={e => e.currentTarget.style.color = "#b8b8b8"}
             >
@@ -352,6 +289,55 @@ export default function SignIn({ onSignIn, onOpenSettings }) {
             </button>
           )}
         </div>
+
+        {showAdminForm && (
+          <form onSubmit={handleAdminLogin} autoComplete="off" style={{ marginTop: "28px" }}>
+            <div style={{ height: "1px", background: "#ededed", marginBottom: "24px" }} />
+            <div style={{ marginBottom: "16px" }}>
+              <label style={labelStyle}>Username</label>
+              <input
+                type="text"
+                value={adminUsername}
+                onChange={e => setAdminUsername(e.target.value)}
+                autoComplete="username"
+                required
+                style={inputStyle}
+              />
+            </div>
+            <div style={{ marginBottom: "20px" }}>
+              <label style={labelStyle}>Password</label>
+              <input
+                type="password"
+                value={adminPassword}
+                onChange={e => setAdminPassword(e.target.value)}
+                autoComplete="current-password"
+                required
+                style={inputStyle}
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={loading || !adminUsername.trim() || !adminPassword}
+              style={{
+                width: "100%",
+                padding: "14px",
+                background: loading || !adminUsername.trim() || !adminPassword ? "#b8b8b8" : "#0a0a0a",
+                color: "#ffffff",
+                border: "none",
+                fontFamily: "'DM Sans', sans-serif",
+                fontSize: "10px",
+                fontWeight: 500,
+                letterSpacing: "0.2em",
+                textTransform: "uppercase",
+                cursor: loading || !adminUsername.trim() || !adminPassword ? "default" : "pointer",
+              }}
+              onMouseEnter={e => { if (!loading && adminUsername.trim() && adminPassword) e.currentTarget.style.background = "#2a2a2a"; }}
+              onMouseLeave={e => { if (!loading && adminUsername.trim() && adminPassword) e.currentTarget.style.background = "#0a0a0a"; }}
+            >
+              {loading ? "Please wait…" : "Sign in"}
+            </button>
+          </form>
+        )}
       </div>
     </div>
   );

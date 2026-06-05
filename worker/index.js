@@ -388,6 +388,50 @@ async function handleRequest(request, env, origin) {
       return new Response(JSON.stringify({ token, username: user.username, admin: false, workerUrl, anthropicKey: sharedAnthropicKey }), { headers: { 'Content-Type': 'application/json', ...cors(origin) } });
     }
 
+    // ── POST /?action=login-google ────────────────────────────────────────────
+    if (request.method === 'POST' && action === 'login-google') {
+      if (!env.TOKEN_SECRET) {
+        return new Response(JSON.stringify({ error: 'Auth not configured.' }), { status: 503, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+      }
+      let body;
+      try { body = await request.json(); } catch {
+        return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+      }
+      const { credential } = body;
+      if (!credential) {
+        return new Response(JSON.stringify({ error: 'Missing credential' }), { status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+      }
+      let tokenInfo;
+      try {
+        const r = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`);
+        tokenInfo = await r.json();
+        if (!r.ok || tokenInfo.error_description) {
+          return new Response(JSON.stringify({ error: 'Invalid Google token' }), { status: 401, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+        }
+      } catch {
+        return new Response(JSON.stringify({ error: 'Could not verify token with Google' }), { status: 500, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+      }
+      const expectedAud = env.GOOGLE_CLIENT_ID || '603699639407-kufvngv1tcjbr38bp2bi7i7f21o3rvbb.apps.googleusercontent.com';
+      if (tokenInfo.aud !== expectedAud) {
+        return new Response(JSON.stringify({ error: 'Token not issued for this application' }), { status: 401, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+      }
+      const email = (tokenInfo.email || '').toLowerCase();
+      if (!email.endsWith('@swankyagency.com')) {
+        return new Response(JSON.stringify({ error: 'Access restricted to @swankyagency.com accounts' }), { status: 403, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+      }
+      if (env.USERS) {
+        const userKey = 'user_' + email;
+        const existing = await env.USERS.get(userKey);
+        if (!existing) {
+          await env.USERS.put(userKey, JSON.stringify({ username: email, approved: true, createdAt: new Date().toISOString(), authMethod: 'google' }));
+        }
+      }
+      const workerUrl = new URL(request.url).origin;
+      const sharedAnthropicKey = env.SHARED_ANTHROPIC_KEY || null;
+      const token = await makeToken(email, false, env.TOKEN_SECRET);
+      return new Response(JSON.stringify({ token, username: email, admin: false, workerUrl, anthropicKey: sharedAnthropicKey }), { headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+    }
+
     // ── GET /?action=admin-users ──────────────────────────────────────────────
     if (request.method === 'GET' && action === 'admin-users') {
       const session = await verifyToken(getBearerToken(request), env.TOKEN_SECRET);
