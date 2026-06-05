@@ -198,6 +198,7 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, 
   const [savedReports, setSavedReports] = useState([]);
   const [currentReportMeta, setCurrentReportMeta] = useState(null);
   const [loadingSavedReport, setLoadingSavedReport] = useState(false);
+  const [dataWarnings, setDataWarnings] = useState([]);
   const dropdownRef = useRef(null);
   const [regenProgress, setRegenProgress] = useState(0);
   const slidesProgressTimerRef = useRef(null);
@@ -617,6 +618,7 @@ ${JSON.stringify(trimData(klaviyoData))}`;
 
     setIsGenerating(true);
     setReportHtml("");
+    setDataWarnings([]);
     setProgress(0);
     setLoadingLine("Knocking politely on Klaviyo's door");
     setElapsedSeconds(0);
@@ -720,6 +722,8 @@ Return ONLY a JSON array of the index numbers for events that are commercially r
       const [klaviyoData, relevantEvents] = await Promise.all([klaviyoPromise, eventsPromise]);
 
       if (myRequestId !== requestIdRef.current) return;
+
+      setDataWarnings(Array.isArray(klaviyoData.warnings) ? klaviyoData.warnings : []);
 
       // Hand off: clear pre-phase timer. Start a fallback asymptotic timer so progress
       // never freezes even if SSE updates stall. Streaming overrides it via setProgress.
@@ -941,6 +945,7 @@ function addEventMarkers(chart,events){
     setIsGenerating(false);
     setProgress(0);
     setReportHtml("");
+    setDataWarnings([]);
     setStatusMessage("");
     setError("");
     setLastUsage(null);
@@ -998,6 +1003,7 @@ function addEventMarkers(chart,events){
       } catch {}
       if (!html) return;
       setReportHtml(html);
+      setDataWarnings([]);
       setSlidesPrompt("");
       setCurrentReportMeta({ key, ...meta });
       setCachedInfo({ generatedAt: meta.generatedAt, key });
@@ -2029,6 +2035,47 @@ ${reportHtml}`,
             label={isCreatingSlides ? "Generating Speedy Slides prompt…" : "Regenerating recommendation…"}
             progress={isCreatingSlides ? slidesProgress : regenProgress}
           />
+        )}
+
+        {dataWarnings.length > 0 && (reportHtml || isGenerating) && (
+          <div
+            style={{
+              marginBottom: "12px",
+              border: "1px solid #0a0a0a",
+              background: "#ffffff",
+              padding: "12px 16px",
+            }}
+          >
+            <div
+              style={{
+                fontFamily: "'DM Sans', sans-serif",
+                fontSize: "9px",
+                fontWeight: 600,
+                letterSpacing: "0.2em",
+                textTransform: "uppercase",
+                color: "#0a0a0a",
+                marginBottom: "8px",
+              }}
+            >
+              Incomplete data — review before sending
+            </div>
+            <ul style={{ margin: 0, paddingLeft: "16px" }}>
+              {dataWarnings.map((w, i) => (
+                <li
+                  key={i}
+                  style={{
+                    fontFamily: "'DM Sans', sans-serif",
+                    fontSize: "11px",
+                    fontWeight: 300,
+                    color: "#2a2a2a",
+                    lineHeight: 1.55,
+                  }}
+                >
+                  {w}
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
 
         <div
