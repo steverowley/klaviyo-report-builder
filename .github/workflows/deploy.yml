@@ -12,6 +12,8 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Checkout
@@ -28,6 +30,8 @@ jobs:
 
       - name: Build
         run: npm run build
+        env:
+          VITE_WORKER_URL: ${{ secrets.VITE_WORKER_URL }}
 
       # Pushes ./dist to the gh-pages branch.
       # GitHub Pages must be configured to serve from that branch (see README).
