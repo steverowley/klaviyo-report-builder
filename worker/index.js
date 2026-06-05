@@ -177,6 +177,29 @@ export function processAggregate(agg, measurement = 'count') {
   }
 }
 
+// Pick the metric that best matches a set of names. An exact canonical-name
+// match always wins over a fuzzy substring match, so a duplicate or custom-named
+// metric (e.g. "Placed Order (Test)") can't shadow the real "Placed Order".
+export function pickMetric(metricList = [], { exact = [], includes = [], exclude = [] }) {
+  const nameOf = m => (m.attributes?.name ?? '').toLowerCase();
+  const exactLower = exact.map(s => s.toLowerCase());
+  const exactMatch = metricList.find(m => exactLower.includes(nameOf(m)));
+  if (exactMatch) return exactMatch;
+  return metricList.find(m => {
+    const n = nameOf(m);
+    return includes.some(s => n.includes(s)) && !exclude.some(s => n.includes(s));
+  }) ?? null;
+}
+
+// How many metrics match the fuzzy criteria — used to warn the operator when the
+// choice was ambiguous.
+export function countMetricMatches(metricList = [], { includes = [], exclude = [] }) {
+  return metricList.filter(m => {
+    const n = (m.attributes?.name ?? '').toLowerCase();
+    return includes.some(s => n.includes(s)) && !exclude.some(s => n.includes(s));
+  }).length;
+}
+
 export function normaliseCampaigns(report, campaignNames = {}) {
   return extractResults(report).map(row => {
     const g = row.groupings ?? {};
@@ -813,24 +836,21 @@ async function handleRequest(request, env, origin) {
       const campaignNames = campaignResult.names;
       const metricList    = metrics.data ?? [];
 
-      const conversionMetric = metricList.find(m => {
-        const n = (m.attributes?.name ?? '').toLowerCase();
-        return n.includes('placed order') || n.includes('place order');
-      });
+      const ORDER_MATCH = { exact: ['placed order'], includes: ['placed order', 'place order'] };
+      const SUBSCRIBE_MATCH = {
+        exact: ['subscribed to list'],
+        includes: ['subscribed to list', 'subscribe to list', 'added to list', 'joined list'],
+        exclude: ['back in stock', 'sms'],
+      };
+      const UNSUBSCRIBE_MATCH = {
+        exact: ['unsubscribed from list'],
+        includes: ['unsubscribed from list', 'unsubscribed from email', 'removed from list', 'unsubscribed'],
+        exclude: ['sms'],
+      };
 
-      const subscribedMetric = metricList.find(m => {
-        const n = (m.attributes?.name ?? '').toLowerCase();
-        return (n.includes('subscribed to list') || n.includes('subscribe to list') ||
-                n.includes('added to list') || n.includes('joined list'))
-          && !n.includes('back in stock') && !n.includes('sms');
-      });
-
-      const unsubscribedMetric = metricList.find(m => {
-        const n = (m.attributes?.name ?? '').toLowerCase();
-        return (n.includes('unsubscribed from list') || n.includes('unsubscribed from email') ||
-                n.includes('removed from list') ||
-                (n.includes('unsubscribed') && !n.includes('sms')));
-      });
+      const conversionMetric   = pickMetric(metricList, ORDER_MATCH);
+      const subscribedMetric   = pickMetric(metricList, SUBSCRIBE_MATCH);
+      const unsubscribedMetric = pickMetric(metricList, UNSUBSCRIBE_MATCH);
 
       const conversionMetricId   = conversionMetric?.id   ?? null;
       const subscribedMetricId   = subscribedMetric?.id   ?? null;
@@ -889,6 +909,9 @@ async function handleRequest(request, env, origin) {
         warnings.push('No "Placed Order" metric was found in this Klaviyo account, so order volume and revenue figures are unavailable.');
       } else if (orderAgg?._error) {
         warnings.push('Order and revenue data could not be loaded from Klaviyo (a temporary error or a permissions issue) — the order/revenue figures may be incomplete.');
+      }
+      if (conversionMetric && countMetricMatches(metricList, ORDER_MATCH) > 1) {
+        warnings.push(`More than one order metric matched; using "${conversionMetric.attributes?.name}" — double-check this is the right one for revenue.`);
       }
       if (!subscribedMetricId) {
         warnings.push('No list-subscribe metric was found, so new-subscriber (list growth) figures are unavailable.');
