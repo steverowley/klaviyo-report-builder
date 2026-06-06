@@ -768,6 +768,48 @@ async function handleRequest(request, env, origin) {
       });
     }
 
+    // ── POST /?action=offboard-client {clientId} — remove a departed client ────
+    // Admin-only, destructive: deletes the client's Klaviyo key, its entry in the
+    // client list, and every saved report (+ reproducibility snapshot) for it.
+    if (request.method === 'POST' && action === 'offboard-client') {
+      const authFail = await requireSession(request, env, origin, { admin: true });
+      if (authFail) return authFail;
+      if (!env.CLIENTS_KV) {
+        return new Response(JSON.stringify({ error: 'KV namespace not configured.' }), {
+          status: 503, headers: { 'Content-Type': 'application/json', ...cors(origin) },
+        });
+      }
+      let body; try { body = await request.json(); } catch { body = {}; }
+      const { clientId } = body;
+      if (!clientId) {
+        return new Response(JSON.stringify({ error: 'clientId is required.' }), {
+          status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) },
+        });
+      }
+      // Remove the Klaviyo key and the client-list entry.
+      const existingKv = JSON.parse(await env.CLIENTS_KV.get('clients') || '[]');
+      const updatedKv = existingKv.filter(c => c.id !== clientId);
+      await Promise.all([
+        env.CLIENTS_KV.delete('key_' + clientId),
+        env.CLIENTS_KV.put('clients', JSON.stringify(updatedKv)),
+      ]);
+      // Delete every saved report (and its snapshot) belonging to this client.
+      let reportsRemoved = 0;
+      const list = await env.CLIENTS_KV.list({ prefix: 'report_' });
+      const toDelete = list.keys.filter(k => k.metadata?.clientId === clientId);
+      for (const k of toDelete) {
+        await Promise.all([
+          env.CLIENTS_KV.delete(k.name),
+          env.CLIENTS_KV.delete(`reportdata_${k.name}`),
+        ]);
+        reportsRemoved++;
+      }
+      const allClients = await readClients(env);
+      return new Response(JSON.stringify({ offboarded: true, clientId, reportsRemoved, clients: allClients }), {
+        headers: { 'Content-Type': 'application/json', ...cors(origin) },
+      });
+    }
+
     // POST /?action=save-report — persist a generated report to KV ────────────
     if (request.method === 'POST' && action === 'save-report') {
       const authFail = await requireSession(request, env, origin);
