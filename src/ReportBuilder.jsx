@@ -192,6 +192,7 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, 
   const [loadingSavedReport, setLoadingSavedReport] = useState(false);
   const [dataWarnings, setDataWarnings] = useState([]);
   const [spendStatus, setSpendStatus] = useState(null); // { month, spentUsd, capUsd, ratio }
+  const [signedOff, setSignedOff] = useState(false); // human review confirmed before download/send
   const dropdownRef = useRef(null);
   const [regenProgress, setRegenProgress] = useState(0);
   const slidesProgressTimerRef = useRef(null);
@@ -1181,6 +1182,10 @@ function addEventMarkers(chart,events){
     if (reportHtml && !isGenerating) refreshSavedReports();
   }, [reportHtml, isGenerating]);
 
+  // Any time the displayed report changes (new generation or one loaded from
+  // history), require a fresh review sign-off before it can be downloaded/sent.
+  useEffect(() => { setSignedOff(false); }, [reportHtml]);
+
   // Escape closes the open slides modal or client dropdown, like a standard dialog.
   useEffect(() => {
     const onKey = (e) => {
@@ -1416,6 +1421,10 @@ ${reportHtml}`,
 
   const handleDownload = () => {
     if (!reportHtml) return;
+    if (!signedOff) {
+      setError("Please tick “I’ve reviewed the figures” before downloading the report to send.");
+      return;
+    }
     const blob = new Blob([reportHtml], { type: "text/html" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -1622,6 +1631,8 @@ ${reportHtml}`,
 
             <div style={{ height: "1px", background: "#ededed", marginBottom: "16px" }} />
 
+            <SignOffCheckbox checked={signedOff} onChange={setSignedOff} />
+
             <button
               onClick={handleDownload}
               style={{
@@ -1629,7 +1640,8 @@ ${reportHtml}`,
                 color: "#0a0a0a", border: "1px solid #0a0a0a",
                 fontFamily: "'DM Sans', sans-serif", fontSize: "11px",
                 fontWeight: 500, letterSpacing: "0.16em", textTransform: "uppercase",
-                cursor: "pointer", marginBottom: "8px",
+                cursor: "pointer", marginBottom: "8px", marginTop: "10px",
+                opacity: signedOff ? 1 : 0.45,
               }}
               onMouseEnter={e => e.currentTarget.style.background = "#f8f6f2"}
               onMouseLeave={e => e.currentTarget.style.background = "transparent"}
@@ -2116,6 +2128,7 @@ ${reportHtml}`,
 
         {reportHtml && !isGenerating && (
           <>
+            <SignOffCheckbox checked={signedOff} onChange={setSignedOff} />
             <button
               onClick={handleDownload}
               style={{
@@ -2131,6 +2144,7 @@ ${reportHtml}`,
                 textTransform: "uppercase",
                 cursor: "pointer",
                 marginTop: "10px",
+                opacity: signedOff ? 1 : 0.45,
                 transition: "background 0.15s ease",
               }}
               onMouseEnter={e => e.currentTarget.style.background = "#f8f6f2"}
@@ -3430,6 +3444,24 @@ const modalHintStyle = {
   marginTop: "6px", fontSize: "11px", color: "#6b6b6b",
   fontFamily: "'Ovo', serif", fontStyle: "italic", lineHeight: 1.4,
 };
+
+// Review sign-off: a report can't be downloaded/sent until a human confirms the
+// figures have been checked. Guards against AI-written numbers reaching a client unvetted.
+function SignOffCheckbox({ checked, onChange }) {
+  return (
+    <label style={{ display: "flex", alignItems: "flex-start", gap: "8px", cursor: "pointer", marginTop: "12px", marginBottom: "2px" }}>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={e => onChange(e.target.checked)}
+        style={{ marginTop: "1px", accentColor: "#0a0a0a", width: "13px", height: "13px", flexShrink: 0, cursor: "pointer" }}
+      />
+      <span style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "10px", color: "#6b6b6b", lineHeight: 1.45 }}>
+        I’ve reviewed the figures against Klaviyo — this report is ready to send.
+      </span>
+    </label>
+  );
+}
 
 // Admin-only destructive flow: remove a departed client's Klaviyo key, client-list
 // entry, and every saved report. Requires typing the client's exact name to confirm.
