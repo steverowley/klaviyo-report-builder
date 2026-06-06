@@ -72,6 +72,20 @@ export function trimReportWarnings(warnings) {
   return warnings.slice(0, 6).map((w) => String(w).slice(0, 120));
 }
 
+// KV key for a month's cumulative Anthropic spend, e.g. 'spend_2026-06'.
+export function spendMonthKey(date = new Date()) {
+  return `spend_${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+// Add a sanitised per-report cost to a running monthly total. Ignores garbage and
+// clamps a single report's contribution so one bad value can't blow up the total.
+export function addSpend(current, costUsd) {
+  const base = Number.isFinite(current) ? current : 0;
+  const add = Number(costUsd);
+  if (!Number.isFinite(add) || add <= 0) return base;
+  return Math.round((base + Math.min(add, 50)) * 1e6) / 1e6;
+}
+
 // Read merged client list: KV-stored clients first, then CLIENTS_JSON secret fallback.
 async function readClients(env) {
   let kvClients = [];
@@ -858,6 +872,40 @@ async function handleRequest(request, env, origin) {
         });
       }
       return new Response(JSON.stringify({ html: value, metadata }), {
+        headers: { 'Content-Type': 'application/json', ...cors(origin) },
+      });
+    }
+
+    // GET /?action=spend-status — this month's Anthropic spend vs the cap ────────
+    if (request.method === 'GET' && action === 'spend-status') {
+      const authFail = await requireSession(request, env, origin);
+      if (authFail) return authFail;
+      const capUsd = Number(env.SPEND_CAP_USD) > 0 ? Number(env.SPEND_CAP_USD) : 100;
+      const monthKey = spendMonthKey();
+      const spentUsd = env.CLIENTS_KV ? Number(await env.CLIENTS_KV.get(monthKey)) || 0 : 0;
+      return new Response(JSON.stringify({
+        month: monthKey.replace('spend_', ''),
+        spentUsd: Math.round(spentUsd * 100) / 100,
+        capUsd,
+        ratio: capUsd > 0 ? spentUsd / capUsd : 0,
+      }), { headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+    }
+
+    // POST /?action=track-spend {costUsd} — add a report's cost to the month total ─
+    if (request.method === 'POST' && action === 'track-spend') {
+      const authFail = await requireSession(request, env, origin);
+      if (authFail) return authFail;
+      let body; try { body = await request.json(); } catch { body = {}; }
+      if (env.CLIENTS_KV) {
+        const monthKey = spendMonthKey();
+        const current = Number(await env.CLIENTS_KV.get(monthKey)) || 0;
+        const updated = addSpend(current, body.costUsd);
+        await env.CLIENTS_KV.put(monthKey, String(updated));
+        return new Response(JSON.stringify({ spentUsd: updated }), {
+          headers: { 'Content-Type': 'application/json', ...cors(origin) },
+        });
+      }
+      return new Response(JSON.stringify({ spentUsd: 0 }), {
         headers: { 'Content-Type': 'application/json', ...cors(origin) },
       });
     }

@@ -190,6 +190,7 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, 
   const [currentReportMeta, setCurrentReportMeta] = useState(null);
   const [loadingSavedReport, setLoadingSavedReport] = useState(false);
   const [dataWarnings, setDataWarnings] = useState([]);
+  const [spendStatus, setSpendStatus] = useState(null); // { month, spentUsd, capUsd, ratio }
   const dropdownRef = useRef(null);
   const [regenProgress, setRegenProgress] = useState(0);
   const slidesProgressTimerRef = useRef(null);
@@ -200,6 +201,7 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, 
   const elapsedTimerRef = useRef(null);
   const abortControllerRef = useRef(null);
   const requestIdRef = useRef(0);
+  const overCapAckRef = useRef(false); // one-time-per-session ack of the spend-cap warning
 
   // Loading lines, paired with the progress range during which they appear.
   // Tone: dry, editorial, faintly amused, never marketing-speak.
@@ -617,6 +619,14 @@ ${JSON.stringify(trimData(klaviyoData))}`;
       return;
     }
 
+    // Soft spend-cap gate: warn once when this month's AI spend is over the cap, but
+    // let staff proceed (it's the agency's budget call) on the next click.
+    if (spendStatus && spendStatus.spentUsd >= spendStatus.capUsd && !overCapAckRef.current) {
+      overCapAckRef.current = true;
+      setError(`This month's AI spend ($${spendStatus.spentUsd.toFixed(2)}) has reached the $${spendStatus.capUsd} cap. Click Generate again to proceed anyway.`);
+      return;
+    }
+
     const workerUrl = localStorage.getItem(WORKER_URL) || BAKED_WORKER_URL;
 
     if (!workerUrl) {
@@ -967,6 +977,7 @@ function addEventMarkers(chart,events){
         outputTokens: u.output_tokens || 0,
         costUsd,
       });
+      trackSpend(costUsd);
 
       clearTimers();
       setProgress(100);
@@ -1042,6 +1053,30 @@ function addEventMarkers(chart,events){
       return true;
     }
     return false;
+  };
+
+  // Fetch this month's Anthropic spend vs the cap, for the sidebar meter.
+  const refreshSpendStatus = async () => {
+    const workerUrl = localStorage.getItem(WORKER_URL) || BAKED_WORKER_URL;
+    if (!workerUrl) return;
+    try {
+      const res = await fetch(`${workerUrl}?action=spend-status`, { headers: authHeaders(sessionToken) });
+      if (res.ok) setSpendStatus(await res.json());
+    } catch {}
+  };
+
+  // Record a finished report's cost against the monthly total.
+  const trackSpend = async (costUsd) => {
+    const workerUrl = localStorage.getItem(WORKER_URL) || BAKED_WORKER_URL;
+    if (!workerUrl || !(costUsd > 0)) return;
+    try {
+      await fetch(`${workerUrl}?action=track-spend`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders(sessionToken) },
+        body: JSON.stringify({ costUsd }),
+      });
+    } catch {}
+    refreshSpendStatus();
   };
 
   // Refresh the past-reports list from worker KV.
@@ -1127,6 +1162,7 @@ function addEventMarkers(chart,events){
   useEffect(() => {
     // One-time cleanup: remove old localStorage report cache (superseded by KV)
     localStorage.removeItem("swanky_report_cache");
+    refreshSpendStatus();
     return () => clearTimers();
   }, []);
 
@@ -1902,6 +1938,25 @@ ${reportHtml}`,
         )}
 
         <div style={{ flex: 1 }} />
+
+        {spendStatus && (
+          <div style={{ marginTop: "20px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontFamily: "'DM Sans', sans-serif", fontSize: "9px", fontWeight: 500, letterSpacing: "0.14em", textTransform: "uppercase", color: "#6b6b6b", marginBottom: "5px" }}>
+              <span>AI spend · {spendStatus.month}</span>
+              <span style={{ color: "#0a0a0a", fontWeight: spendStatus.ratio >= 1 ? 600 : 500 }}>
+                ${spendStatus.spentUsd.toFixed(2)} / ${spendStatus.capUsd}
+              </span>
+            </div>
+            <div style={{ height: "3px", background: "#ededed", overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${Math.min(100, (spendStatus.ratio || 0) * 100)}%`, background: "#0a0a0a", transition: "width 0.3s ease" }} />
+            </div>
+            {spendStatus.ratio >= 1 && (
+              <div style={{ fontFamily: "'Ovo', serif", fontStyle: "italic", fontSize: "10px", color: "#6b6b6b", marginTop: "5px" }}>
+                Monthly cap reached — further reports exceed it.
+              </div>
+            )}
+          </div>
+        )}
 
         <button
           onClick={handleGenerate}

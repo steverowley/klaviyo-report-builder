@@ -2,6 +2,8 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   slugify,
   trimReportWarnings,
+  spendMonthKey,
+  addSpend,
   extractResults,
   processAggregate,
   normaliseCampaigns,
@@ -50,6 +52,28 @@ describe('trimReportWarnings', () => {
     const [w] = trimReportWarnings([long]);
     expect(w).toHaveLength(120);
     expect(trimReportWarnings([123])).toEqual(['123']);
+  });
+});
+
+describe('spendMonthKey', () => {
+  it('formats a UTC year-month key', () => {
+    expect(spendMonthKey(new Date('2026-06-06T12:00:00Z'))).toBe('spend_2026-06');
+    expect(spendMonthKey(new Date('2026-01-01T00:00:00Z'))).toBe('spend_2026-01');
+  });
+});
+
+describe('addSpend', () => {
+  it('adds a valid cost to the running total', () => {
+    expect(addSpend(10, 2.5)).toBe(12.5);
+    expect(addSpend(undefined, 1)).toBe(1);
+  });
+  it('ignores non-positive or garbage costs', () => {
+    expect(addSpend(10, 0)).toBe(10);
+    expect(addSpend(10, -5)).toBe(10);
+    expect(addSpend(10, 'abc')).toBe(10);
+  });
+  it('clamps a single contribution so one bad value cannot blow up the total', () => {
+    expect(addSpend(0, 9999)).toBe(50);
   });
 });
 
