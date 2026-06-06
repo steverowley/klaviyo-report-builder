@@ -12,6 +12,34 @@ thrown out as false positives and are listed at the end.
 
 ---
 
+## 2026-06-06 — Client-readiness follow-up (supersedes the open items above)
+
+A second, client-readiness-focused audit re-verified the remaining open items against
+the current code and closed the backlog in one consolidated PR (`fix/report-integrity`).
+The work is grouped as:
+
+- **Report integrity** — a truncated/errored stream is no longer saved or shown as
+  complete; incomplete-data warnings persist across reload and are embedded in the report.
+- **Data accuracy** — SMS/push excluded from email figures; flow rates off `delivered`;
+  timezone-stable date windows; leap-year, last-day and aggregate-length fixes.
+- **Validation & resilience** — date-range validation (UI + worker); Anthropic retry/
+  backoff; idle-stream watchdog; friendly errors; clamped Retry-After; React error boundary.
+- **Output quality & brand** — headline numbers computed in JS (not by the model);
+  monochrome deltas; print/PDF CSS; chart edge cases; data-as-data prompt rule.
+- **UX, accessibility, worker/ops hardening** — empty states, edit-toggle fix, session-
+  expiry everywhere, dead Settings field removed; cursor opt-out + focus outline + Escape
+  to close; CORS allowlist, error-body sanitisation, KV size guard, dependency advisories
+  cleared (0 vulnerabilities).
+- **New features** — monthly AI spend cap/meter; audit trail (who generated each report)
+  + reproducibility snapshot of inputs; admin client-offboarding tool; human review
+  sign-off before a report can be sent.
+
+A Vitest suite (98 tests) plus CI gate every change. Remaining intentionally-deferred
+items (deep ARIA semantics, `workers_dev` public URL — needs a custom domain) are noted
+in the PR. See `docs/user-guide.md` for the up-to-date staff guide.
+
+---
+
 ## 🔴 Critical
 
 - [x] **Saved-report endpoints have no authentication** — `worker/index.js:569-650`
