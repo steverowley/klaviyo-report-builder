@@ -1139,6 +1139,17 @@ function addEventMarkers(chart,events){
     if (reportHtml && !isGenerating) refreshSavedReports();
   }, [reportHtml, isGenerating]);
 
+  // Escape closes the open slides modal or client dropdown, like a standard dialog.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      if (showSlidesModal) setShowSlidesModal(false);
+      else if (dropdownOpen) setDropdownOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showSlidesModal, dropdownOpen]);
+
   // Listen for regenerate-step messages from the report iframe
   useEffect(() => {
     const handler = async (event) => {
@@ -2610,28 +2621,45 @@ function LoadingState({ progress, line, elapsed, justFinished, onDismissCompleti
   const barRefs = useRef([]);
   const [ripples, setRipples] = useState([]);
 
-  // Mouse move → opacity spotlight (bars near cursor bright, far bars dim)
+  // Mouse move → opacity spotlight (bars near cursor bright, far bars dim).
+  // The bars don't move, so measure their geometry once (re-measuring on resize)
+  // instead of calling getBoundingClientRect for every bar on every mousemove.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
+    let rect = el.getBoundingClientRect();
+    let centers = barRefs.current.map((bar) => {
+      if (!bar) return null;
+      const br = bar.getBoundingClientRect();
+      return br.left + br.width / 2 - rect.left;
+    });
+    const remeasure = () => {
+      rect = el.getBoundingClientRect();
+      centers = barRefs.current.map((bar) => {
+        if (!bar) return null;
+        const br = bar.getBoundingClientRect();
+        return br.left + br.width / 2 - rect.left;
+      });
+    };
     const onMove = (e) => {
-      const rect = el.getBoundingClientRect();
       const mx = e.clientX - rect.left;
       barRefs.current.forEach((bar, i) => {
-        if (!bar) return;
-        const br = bar.getBoundingClientRect();
-        const bx = br.left + br.width / 2 - rect.left;
-        const dist = Math.abs(mx - bx);
-        const opacity = 0.12 + 0.88 * Math.exp(-(dist * dist) / (2 * 85 * 85));
-        bar.style.opacity = opacity;
+        if (!bar || centers[i] == null) return;
+        const dist = Math.abs(mx - centers[i]);
+        bar.style.opacity = 0.12 + 0.88 * Math.exp(-(dist * dist) / (2 * 85 * 85));
       });
     };
     const onLeave = () => {
       barRefs.current.forEach(bar => { if (bar) bar.style.opacity = 1; });
     };
+    window.addEventListener('resize', remeasure);
     el.addEventListener('mousemove', onMove);
     el.addEventListener('mouseleave', onLeave);
-    return () => { el.removeEventListener('mousemove', onMove); el.removeEventListener('mouseleave', onLeave); };
+    return () => {
+      window.removeEventListener('resize', remeasure);
+      el.removeEventListener('mousemove', onMove);
+      el.removeEventListener('mouseleave', onLeave);
+    };
   }, []);
 
   // Click → crosshair registration mark
@@ -3071,6 +3099,12 @@ function AddClientModal({ onClose, onAdded, sessionToken }) {
   const [status, setStatus] = useState(null); // null | "loading" | "success" | "error"
   const [errorMsg, setErrorMsg] = useState("");
 
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   const canSubmit = name.trim() && klaviyoKey.trim() && status !== "loading";
 
   const handleSubmit = async () => {
@@ -3089,10 +3123,12 @@ function AddClientModal({ onClose, onAdded, sessionToken }) {
         headers: { "Content-Type": "application/json", ...authHeaders(sessionToken) },
         body: JSON.stringify({ name: name.trim(), klaviyoKey: klaviyoKey.trim() }),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setStatus("error");
-        setErrorMsg(data.error || `Error ${res.status}`);
+        setErrorMsg(res.status === 403
+          ? "Only admins can add clients — ask a Swanky admin."
+          : (data.error || `Error ${res.status}`));
         return;
       }
       setStatus("success");

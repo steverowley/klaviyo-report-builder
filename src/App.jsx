@@ -10,15 +10,31 @@ function CursorDot() {
   const rafRef = useRef(null);
   const hovering = useRef(false);
 
+  // Opt out of the custom cursor for anyone who needs the native pointer: touch /
+  // coarse pointers and users who ask for reduced motion. They keep the OS cursor.
+  const [enabled] = useState(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return true;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const coarse = window.matchMedia("(pointer: coarse)").matches;
+    return !reduced && !coarse;
+  });
+
   useEffect(() => {
+    if (!enabled) return;
+    let lastHoverCheck = 0;
     const onMove = (e) => {
       pos.current = { x: e.clientX, y: e.clientY };
-      const el = document.elementFromPoint(e.clientX, e.clientY);
-      hovering.current = !!(el && (
-        el.tagName === 'BUTTON' || el.tagName === 'A' || el.tagName === 'INPUT' ||
-        el.tagName === 'SELECT' || el.tagName === 'TEXTAREA' ||
-        el.closest('button') || el.closest('a') || el.style?.cursor === 'pointer'
-      ));
+      // Throttle the (layout-thrashing) hit-test to ~16/s instead of every mousemove.
+      const now = performance.now();
+      if (now - lastHoverCheck > 60) {
+        lastHoverCheck = now;
+        const el = document.elementFromPoint(e.clientX, e.clientY);
+        hovering.current = !!(el && (
+          el.tagName === 'BUTTON' || el.tagName === 'A' || el.tagName === 'INPUT' ||
+          el.tagName === 'SELECT' || el.tagName === 'TEXTAREA' ||
+          el.closest('button') || el.closest('a') || el.style?.cursor === 'pointer'
+        ));
+      }
     };
     const onIframeMove = (e) => {
       pos.current = { x: e.detail.x, y: e.detail.y };
@@ -46,26 +62,30 @@ function CursorDot() {
       window.removeEventListener('iframe-cursor-move', onIframeMove);
       cancelAnimationFrame(rafRef.current);
     };
-  }, []);
+  }, [enabled]);
 
   return (
     <>
-      <div ref={dotRef} style={{
-        position: "fixed", top: 0, left: 0, width: 5, height: 5,
-        borderRadius: "50%", background: "#ffffff",
-        pointerEvents: "none", zIndex: 9999,
-        mixBlendMode: "difference",
-        willChange: "transform, width, height",
-        transition: "width 0.15s ease, height 0.15s ease, opacity 0.15s ease",
-        transform: "translate(-100px, -100px)",
-      }} />
+      {enabled && (
+        <div ref={dotRef} style={{
+          position: "fixed", top: 0, left: 0, width: 5, height: 5,
+          borderRadius: "50%", background: "#ffffff",
+          pointerEvents: "none", zIndex: 9999,
+          mixBlendMode: "difference",
+          willChange: "transform, width, height",
+          transition: "width 0.15s ease, height 0.15s ease, opacity 0.15s ease",
+          transform: "translate(-100px, -100px)",
+        }} />
+      )}
       <style>{`
-        * { cursor: none !important; }
+        ${enabled ? "* { cursor: none !important; }" : ""}
         ::-webkit-scrollbar { width: 5px; height: 5px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #c8c6c0; border-radius: 0; }
         ::-webkit-scrollbar-thumb:hover { background: #6b6b6b; }
         * { scrollbar-width: thin; scrollbar-color: #c8c6c0 transparent; }
+        /* Visible keyboard-focus indicator (custom cursor hides the usual hover cue) */
+        :focus-visible { outline: 2px solid #0a0a0a !important; outline-offset: 2px; }
       `}</style>
     </>
   );
@@ -96,6 +116,13 @@ function AdminPanel({ session, onClose, onSignOut }) {
   };
 
   useEffect(() => { fetchUsers(); }, []);
+
+  // Close on Escape, like a standard dialog.
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   const checkAuth = (res) => {
     if ((res.status === 401 || res.status === 403) && onSignOut) {
@@ -197,7 +224,7 @@ function AdminPanel({ session, onClose, onSignOut }) {
           }}>
             User Management
           </div>
-          <button onClick={onClose} style={{
+          <button onClick={onClose} aria-label="Close user management" style={{
             background: "none", border: "none", color: "#6b6b6b",
             fontFamily: "'DM Sans', sans-serif", fontSize: "18px", cursor: "pointer", lineHeight: 1,
             transition: "color 0.15s ease",
