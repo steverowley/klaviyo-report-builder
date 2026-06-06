@@ -5,9 +5,11 @@ import {
   extractResults,
   processAggregate,
   normaliseCampaigns,
+  isEmailChannel,
   aggregateFlowRows,
   reportBody,
   aggregateBody,
+  nextDay,
   tzOffset,
   pickMetric,
   countMetricMatches,
@@ -80,6 +82,13 @@ describe('processAggregate', () => {
     expect(processAggregate({}, 'count')).toBeNull();
     expect(processAggregate({ data: { attributes: { results: [{ dates: [], measurements: { count: [] } }] } } }, 'count')).toBeNull();
   });
+  it('returns null when dates and counts lengths differ (avoids a misaligned chart)', () => {
+    const agg = { data: { attributes: { results: [{
+      dates: ['2024-01-01T00:00:00Z', '2024-01-02T00:00:00Z', '2024-01-03T00:00:00Z'],
+      measurements: { count: [5, 7] },
+    }] } } };
+    expect(processAggregate(agg, 'count')).toBeNull();
+  });
 });
 
 describe('normaliseCampaigns', () => {
@@ -98,12 +107,42 @@ describe('normaliseCampaigns', () => {
     const report = { data: { attributes: { results: [{ groupings: { campaign_id: 'xyz' }, statistics: {} }] } } };
     expect(normaliseCampaigns(report, {})[0].campaign_name).toBe('xyz');
   });
+  it('excludes SMS/push campaigns but keeps email and untagged rows', () => {
+    const report = { data: { attributes: { results: [
+      { groupings: { campaign_id: 'c1', send_channel: 'email' }, statistics: { recipients: 10 } },
+      { groupings: { campaign_id: 'c2', send_channel: 'sms' }, statistics: { recipients: 99 } },
+      { groupings: { campaign_id: 'c3' }, statistics: { recipients: 5 } },
+    ] } } };
+    const ids = normaliseCampaigns(report, {}).map(r => r.campaign_id);
+    expect(ids).toEqual(['c1', 'c3']);
+  });
+});
+
+describe('isEmailChannel', () => {
+  it('treats email and missing/blank channels as email', () => {
+    expect(isEmailChannel('email')).toBe(true);
+    expect(isEmailChannel(null)).toBe(true);
+    expect(isEmailChannel('')).toBe(true);
+    expect(isEmailChannel(undefined)).toBe(true);
+  });
+  it('rejects explicit non-email channels', () => {
+    expect(isEmailChannel('sms')).toBe(false);
+    expect(isEmailChannel('push')).toBe(false);
+  });
+});
+
+describe('nextDay', () => {
+  it('adds one calendar day', () => {
+    expect(nextDay('2024-01-31')).toBe('2024-02-01');
+    expect(nextDay('2024-02-28')).toBe('2024-02-29'); // leap year
+    expect(nextDay('2026-12-31')).toBe('2027-01-01');
+  });
 });
 
 describe('aggregateFlowRows', () => {
-  it('reconstructs opens/clicks from rate*recipients and re-derives rates', () => {
+  it('reconstructs opens/clicks from rate*delivered and re-derives rates against delivered', () => {
     const report = { data: { attributes: { results: [
-      { groupings: { flow_id: 'f1' }, statistics: { recipients: 100, open_rate: 0.3, click_rate: 0.1, conversions: 5, conversion_value: 500 } },
+      { groupings: { flow_id: 'f1' }, statistics: { recipients: 100, delivered: 100, open_rate: 0.3, click_rate: 0.1, conversions: 5, conversion_value: 500 } },
     ] } } };
     const [f] = aggregateFlowRows(report, { f1: 'Welcome Flow' });
     expect(f.name).toBe('Welcome Flow');
@@ -115,10 +154,22 @@ describe('aggregateFlowRows', () => {
     expect(f.conversion_rate).toBeCloseTo(0.05);
     expect(f.rpr).toBeCloseTo(5);
   });
+  it('uses delivered (not recipients) so bounces do not overstate opens/clicks', () => {
+    // 1000 recipients but only 500 delivered at a 0.60 open rate → 300 opens, and
+    // the aggregate rate is the delivered-based 0.60, not 300/1000 = 0.30.
+    const report = { data: { attributes: { results: [
+      { groupings: { flow_id: 'f1' }, statistics: { recipients: 1000, delivered: 500, open_rate: 0.6, click_rate: 0.2, conversions: 0, conversion_value: 0 } },
+    ] } } };
+    const [f] = aggregateFlowRows(report, {});
+    expect(f.opens).toBe(300);
+    expect(f.clicks).toBe(100);
+    expect(f.open_rate).toBeCloseTo(0.6);
+    expect(f.click_rate).toBeCloseTo(0.2);
+  });
   it('sums multiple message rows of the same flow', () => {
     const report = { data: { attributes: { results: [
-      { groupings: { flow_id: 'f1' }, statistics: { recipients: 100, open_rate: 0.4, click_rate: 0.2, conversions: 2, conversion_value: 200 } },
-      { groupings: { flow_id: 'f1' }, statistics: { recipients: 100, open_rate: 0.2, click_rate: 0.1, conversions: 3, conversion_value: 100 } },
+      { groupings: { flow_id: 'f1' }, statistics: { recipients: 100, delivered: 100, open_rate: 0.4, click_rate: 0.2, conversions: 2, conversion_value: 200 } },
+      { groupings: { flow_id: 'f1' }, statistics: { recipients: 100, delivered: 100, open_rate: 0.2, click_rate: 0.1, conversions: 3, conversion_value: 100 } },
     ] } } };
     const [f] = aggregateFlowRows(report, {});
     expect(f.recipients).toBe(200);
@@ -126,6 +177,15 @@ describe('aggregateFlowRows', () => {
     expect(f.conversions).toBe(5);
     expect(f.conversion_value).toBe(300);
     expect(f.open_rate).toBeCloseTo(0.3);
+  });
+  it('excludes non-email (SMS/push) flow messages', () => {
+    const report = { data: { attributes: { results: [
+      { groupings: { flow_id: 'f1', send_channel: 'email' }, statistics: { recipients: 100, delivered: 100, open_rate: 0.3, click_rate: 0.1 } },
+      { groupings: { flow_id: 'f2', send_channel: 'sms' }, statistics: { recipients: 999, delivered: 999, open_rate: 0.9, click_rate: 0.9 } },
+    ] } } };
+    const rows = aggregateFlowRows(report, {});
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe('f1');
   });
 });
 
@@ -150,7 +210,8 @@ describe('aggregateBody', () => {
     expect(body.data.attributes.measurements).toEqual(['count']);
     expect(body.data.attributes.timezone).toBe('UTC');
     expect(body.data.attributes.filter).toContain('2024-01-01T00:00:00+00:00');
-    expect(body.data.attributes.filter).toContain('2024-01-31T23:59:59+00:00');
+    // Exclusive next-day-midnight bound so the whole final day is included.
+    expect(body.data.attributes.filter).toContain('2024-02-01T00:00:00+00:00');
   });
 });
 
@@ -180,7 +241,7 @@ describe('timezone-aware report bodies', () => {
     const b = JSON.parse(aggregateBody('m1', '2024-01-01', '2024-01-31', ['count'], 'America/New_York', '-05:00', '-05:00'));
     expect(b.data.attributes.timezone).toBe('America/New_York');
     expect(b.data.attributes.filter).toContain('2024-01-01T00:00:00-05:00');
-    expect(b.data.attributes.filter).toContain('2024-01-31T23:59:59-05:00');
+    expect(b.data.attributes.filter).toContain('2024-02-01T00:00:00-05:00');
   });
   it('defaults to UTC / +00:00 when not provided', () => {
     const b = JSON.parse(aggregateBody('m1', '2024-01-01', '2024-01-31', ['count']));

@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { extractReportHtml, reportCompletionError, embedIncompleteDataNotice } from "./reportHtml.js";
+import { fmtEventDate, parseLocalDate, shiftYear, fmtChartLabel } from "./dateUtils.js";
 
 const WORKER_URL = "swanky_worker_url";
 const MODEL_KEY = "swanky_model";
@@ -53,28 +54,15 @@ function lastWorkingDay(year, month) {
   return d;
 }
 
-function fmtEventDate(d) {
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-function fmtChartLabel(d) {
-  const day = d.getDate();
-  const month = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
-  return `${day} ${month}`;
-}
-
-const SCHOOL_KEYWORDS = /school|uniform|schoolwear|education|nursery|academy|college|pupil|student|kids ?wear|childrenswear|children.?s wear/i;
+const SCHOOL_KEYWORDS =/school|uniform|schoolwear|education|nursery|academy|college|pupil|student|kids ?wear|childrenswear|children.?s wear/i;
 
 function isSchoolBrand(accountName, context) {
   return SCHOOL_KEYWORDS.test(accountName) || SCHOOL_KEYWORDS.test(context || "");
 }
 
 function getEcommerceEvents(startDate, endDate, accountName, context) {
-  const start = new Date(startDate);
-  const end = new Date(endDate);
+  const start = parseLocalDate(startDate);
+  const end = parseLocalDate(endDate);
   const events = [];
   const MS = 86400000;
   const school = isSchoolBrand(accountName, context);
@@ -276,21 +264,21 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, 
       start = new Date(today.getFullYear(), 0, 1);
     } else if (reportType === "Custom") {
       if (customStart && customEnd) {
-        start = new Date(customStart);
-        end.setTime(new Date(customEnd).getTime());
+        start = parseLocalDate(customStart);
+        end.setTime(parseLocalDate(customEnd).getTime());
       }
     }
 
     return {
-      start: start.toISOString().split("T")[0],
-      end: end.toISOString().split("T")[0],
+      start: fmtEventDate(start),
+      end: fmtEventDate(end),
     };
   };
 
   const computeComparisonRange = (start, end) => {
     if (comparisonMode === "None") return null;
-    const startDate = new Date(start);
-    const endDate = new Date(end);
+    const startDate = parseLocalDate(start);
+    const endDate = parseLocalDate(end);
     const days = Math.round((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
 
     let compStart, compEnd;
@@ -300,15 +288,13 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, 
       compStart = new Date(compEnd);
       compStart.setDate(compStart.getDate() - (days - 1));
     } else {
-      compStart = new Date(startDate);
-      compStart.setFullYear(compStart.getFullYear() - 1);
-      compEnd = new Date(endDate);
-      compEnd.setFullYear(compEnd.getFullYear() - 1);
+      compStart = shiftYear(startDate, -1);
+      compEnd = shiftYear(endDate, -1);
     }
 
     return {
-      start: compStart.toISOString().split("T")[0],
-      end: compEnd.toISOString().split("T")[0],
+      start: fmtEventDate(compStart),
+      end: fmtEventDate(compEnd),
     };
   };
 

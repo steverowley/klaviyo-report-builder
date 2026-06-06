@@ -89,6 +89,13 @@ export function reportBody(type, startDate, endDate, conversionMetricId, startOf
   return JSON.stringify({ data: { type, attributes } });
 }
 
+// Add one calendar day to a YYYY-MM-DD string (UTC math is safe for a bare date).
+export function nextDay(dateStr) {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
 export function aggregateBody(metricId, startDate, endDate, measurements, timezone = 'UTC', startOffset = '+00:00', endOffset = '+00:00') {
   return JSON.stringify({
     data: {
@@ -97,7 +104,9 @@ export function aggregateBody(metricId, startDate, endDate, measurements, timezo
         metric_id: metricId,
         interval: 'day',
         measurements,
-        filter: `greater-or-equal(datetime,${startDate}T00:00:00${startOffset}),less-than(datetime,${endDate}T23:59:59${endOffset})`,
+        // Exclusive next-day-midnight upper bound includes the whole final day and
+        // matches the campaign/flow report window (which is inclusive of endDate).
+        filter: `greater-or-equal(datetime,${startDate}T00:00:00${startOffset}),less-than(datetime,${nextDay(endDate)}T00:00:00${endOffset})`,
         timezone,
         page_size: 500,
       },
@@ -182,6 +191,10 @@ export function processAggregate(agg, measurement = 'count') {
       const raw = r.measurements?.[measurement] ?? r.data?.[measurement];
       if (!dates?.length || !raw?.length) return null;
       const counts = raw.map(v => Array.isArray(v) ? Number(v[0] ?? 0) : Number(v ?? 0));
+      // Parallel arrays are plotted label-against-value; a length mismatch (malformed
+      // payload) would silently shift every count onto the wrong day, so treat it as
+      // unavailable rather than emit a wrong-date chart.
+      if (dates.length !== counts.length) return null;
       return { dates: dates.map(d => d.slice(0, 10)), counts };
     }
 
@@ -199,6 +212,7 @@ export function processAggregate(agg, measurement = 'count') {
     }
     if (!dates?.length || !raw?.length) return null;
     const counts = raw.map(v => Array.isArray(v) ? Number(v[0] ?? 0) : Number(v ?? 0));
+    if (dates.length !== counts.length) return null;
     return { dates: dates.map(d => d.slice(0, 10)), counts };
   } catch {
     return null;
@@ -228,8 +242,16 @@ export function countMetricMatches(metricList = [], { includes = [], exclude = [
   }).length;
 }
 
+// This is an email performance report, but Klaviyo's campaign-values-report returns
+// every channel (email, SMS, push). Drop any row explicitly tagged as a non-email
+// channel so SMS/push recipients and revenue don't inflate the email figures. A
+// missing/blank channel is treated as email to avoid dropping legitimate rows.
+export function isEmailChannel(sendChannel) {
+  return !sendChannel || sendChannel === 'email';
+}
+
 export function normaliseCampaigns(report, campaignNames = {}) {
-  return extractResults(report).map(row => {
+  return extractResults(report).filter(row => isEmailChannel(row.groupings?.send_channel)).map(row => {
     const g = row.groupings ?? {};
     const s = row.statistics ?? {};
     const id = g.campaign_id ?? null;
@@ -255,6 +277,7 @@ export function aggregateFlowRows(report, flowNames = {}) {
   for (const row of rows) {
     const g = row.groupings ?? {};
     const s = row.statistics ?? {};
+    if (!isEmailChannel(g.send_channel)) continue; // email report — exclude SMS/push flow messages
     const flowId   = g.flow_id ?? 'unknown';
     const flowName = flowNames[flowId] ?? g.flow_name ?? g.flow_message_name ?? flowId;
 
@@ -269,19 +292,22 @@ export function aggregateFlowRows(report, flowNames = {}) {
     }
 
     const f = byFlow[flowId];
-    const r = Number(s.recipients ?? 0);
-    f.recipients       += r;
-    f.delivered        += Number(s.delivered        ?? 0);
-    f.opens            += Math.round(Number(s.open_rate  ?? 0) * r);
-    f.clicks           += Math.round(Number(s.click_rate ?? 0) * r);
+    // Klaviyo's open_rate/click_rate denominator is `delivered` (bounces excluded),
+    // so reconstruct absolute opens/clicks against delivered — multiplying by
+    // recipients would overstate them whenever a message bounced.
+    const d = Number(s.delivered ?? 0);
+    f.recipients       += Number(s.recipients ?? 0);
+    f.delivered        += d;
+    f.opens            += Math.round(Number(s.open_rate  ?? 0) * d);
+    f.clicks           += Math.round(Number(s.click_rate ?? 0) * d);
     f.conversions      += Number(s.conversions      ?? 0);
     f.conversion_value += Number(s.conversion_value ?? 0);
   }
 
   return Object.values(byFlow).map(f => ({
     ...f,
-    open_rate:       f.recipients > 0 ? f.opens  / f.recipients : 0,
-    click_rate:      f.recipients > 0 ? f.clicks / f.recipients : 0,
+    open_rate:       f.delivered  > 0 ? f.opens  / f.delivered : 0,
+    click_rate:      f.delivered  > 0 ? f.clicks / f.delivered : 0,
     ctor:            f.opens      > 0 ? f.clicks / f.opens      : 0,
     conversion_rate: f.recipients > 0 ? f.conversions      / f.recipients : 0,
     rpr:             f.recipients > 0 ? f.conversion_value / f.recipients : 0,
