@@ -1,17 +1,13 @@
 import React, { useState, useEffect } from "react";
 
-const ANTHROPIC_KEY = "swanky_anthropic_key";
 const WORKER_URL = "swanky_worker_url";
 
 export default function Settings({ onSave }) {
-  const [anthropicKey, setAnthropicKey] = useState("");
   const [workerUrl, setWorkerUrl] = useState("");
-  const [showAnthropicKey, setShowAnthropicKey] = useState(false);
   const [saved, setSaved] = useState(false);
   const [cleared, setCleared] = useState(false);
 
   useEffect(() => {
-    setAnthropicKey(localStorage.getItem(ANTHROPIC_KEY) || "");
     setWorkerUrl(localStorage.getItem(WORKER_URL) || "");
   }, []);
 
@@ -25,19 +21,17 @@ export default function Settings({ onSave }) {
 
   const handleSave = () => {
     if (!canSave) return;
-    localStorage.setItem(ANTHROPIC_KEY, anthropicKey.trim());
     localStorage.setItem(WORKER_URL, normalizedWorkerUrl());
     setSaved(true);
     setTimeout(() => onSave(), 700);
   };
 
   const handleClear = () => {
-    localStorage.removeItem(ANTHROPIC_KEY);
     localStorage.removeItem(WORKER_URL);
+    localStorage.removeItem("swanky_anthropic_key"); // legacy — Anthropic key is now a worker secret
     localStorage.removeItem("swanky_admin_password"); // legacy
     localStorage.removeItem("swanky_klaviyo_key"); // legacy
     localStorage.removeItem("swanky_report_cache"); // legacy
-    setAnthropicKey("");
     setWorkerUrl("");
     setCleared(true);
     setTimeout(() => setCleared(false), 2500);
@@ -91,23 +85,11 @@ export default function Settings({ onSave }) {
             Admin Settings
           </div>
           <div style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.2em", color: "#6b6b6b" }}>
-            API keys &amp; worker configuration
+            Worker configuration
           </div>
         </div>
 
         <div style={{ height: "1px", background: "#ededed", marginBottom: "32px" }} />
-
-        <KeyField
-          label="Anthropic API key"
-          value={anthropicKey}
-          onChange={setAnthropicKey}
-          onKeyDown={handleKeyDown}
-          show={showAnthropicKey}
-          onToggleShow={() => setShowAnthropicKey(v => !v)}
-          placeholder="sk-ant-..."
-          hint="Get yours at console.anthropic.com → API Keys."
-          isPassword
-        />
 
         <div style={{ marginBottom: "28px" }}>
           <div style={labelStyle}>Klaviyo proxy worker URL</div>
@@ -139,7 +121,7 @@ export default function Settings({ onSave }) {
             fontStyle: "italic",
           }}
         >
-          Keys are stored only in this browser's localStorage. They are never sent to Swanky, never committed to code, and leave your machine only as authorisation headers to the Anthropic API and your own Cloudflare Worker.
+          Only the worker URL is stored, in this browser's localStorage. No API keys are kept in the browser — the Klaviyo and Anthropic keys live as secrets on your Cloudflare Worker and never reach this app.
         </div>
 
         <button
@@ -211,51 +193,6 @@ export default function Settings({ onSave }) {
           {cleared ? "Keys cleared from this browser" : "Clear all keys from this browser"}
         </button>
       </div>
-    </div>
-  );
-}
-
-function KeyField({ label, value, onChange, onKeyDown, show, onToggleShow, placeholder, hint, isPassword }) {
-  return (
-    <div style={{ marginBottom: "20px" }}>
-      <div style={labelStyle}>{label}</div>
-      <div style={{ position: "relative" }}>
-        <input
-          type={isPassword && !show ? "password" : "text"}
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          onKeyDown={onKeyDown}
-          placeholder={placeholder}
-          autoComplete="off"
-          spellCheck={false}
-          style={{ ...inputStyle, paddingRight: "48px" }}
-        />
-        <button
-          onClick={onToggleShow}
-          tabIndex={-1}
-          style={{
-            position: "absolute",
-            right: "10px",
-            top: "50%",
-            transform: "translateY(-50%)",
-            background: "transparent",
-            border: "none",
-            cursor: "pointer",
-            color: "#6b6b6b",
-            fontSize: "10px",
-            textTransform: "uppercase",
-            letterSpacing: "0.1em",
-            fontFamily: "'DM Sans', sans-serif",
-            padding: "2px 4px",
-            transition: "color 0.15s ease",
-          }}
-          onMouseEnter={e => e.currentTarget.style.color = "#0a0a0a"}
-          onMouseLeave={e => e.currentTarget.style.color = "#6b6b6b"}
-        >
-          {show ? "hide" : "show"}
-        </button>
-      </div>
-      {hint && <div style={hintStyle}>{hint}</div>}
     </div>
   );
 }

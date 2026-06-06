@@ -478,7 +478,7 @@ function bindStep(w){
   var pl=w.querySelector('.pri-level');
   if(pl){pl.onclick=function(){var i=LEVELS.indexOf(pl.textContent.trim());pl.textContent=LEVELS[(i+1)%3];pl.style.color=LEVEL_COLORS[pl.textContent]||'#888';};}
   w.querySelector('.btn-edit').onclick=function(){
-    var t=w.querySelector('.stitle'),d=w.querySelector('.sdesc'),pa=w.querySelector('.pri-area'),editing=t.isContentEditable==='true';
+    var t=w.querySelector('.stitle'),d=w.querySelector('.sdesc'),pa=w.querySelector('.pri-area'),editing=t.isContentEditable;
     [t,d,pa].forEach(function(el){if(el){el.contentEditable=editing?'false':'true';el.style.outline=editing?'':'1px dashed #ccc';}});
     if(!editing)t.focus();
     this.textContent=editing?'✎':'✓';
@@ -740,6 +740,15 @@ Return ONLY a JSON array of the index numbers for events that are commercially r
       if (myRequestId !== requestIdRef.current) return;
 
       const warnings = Array.isArray(klaviyoData.warnings) ? klaviyoData.warnings : [];
+      // Flag a completely empty period so an all-blank report can't be sent unnoticed.
+      const agg = klaviyoData.aggregates || {};
+      const noActivity = ["subscribers", "orders", "unsubscribes"].every((k) => {
+        const counts = agg[k]?.counts;
+        return !Array.isArray(counts) || counts.every((v) => !v);
+      });
+      if (!klaviyoData.period?.campaigns?.length && !klaviyoData.period?.flows?.length && noActivity) {
+        warnings.unshift("No campaigns, flows, or daily activity were found for this client in this period — double-check the client and date range before sending.");
+      }
       setDataWarnings(warnings);
 
       // Hand off: clear pre-phase timer. Start a fallback asymptotic timer so progress
@@ -965,8 +974,15 @@ function addEventMarkers(chart,events){
       setLastDuration(Math.round((Date.now() - startedAt) / 1000));
       const generatedNow = new Date().toISOString();
       const reportMeta = { clientId: selectedClientId, reportType, dateStart: range.start, dateEnd: range.end, accountName, generatedAt: generatedNow, warnings };
-      saveReportToWorker(rawHtml, reportMeta);
       setCurrentReportMeta({ ...reportMeta });
+      // Persist, then adopt the server-assigned key so this report highlights as
+      // "current" in the Past reports list and the list shows it.
+      saveReportToWorker(rawHtml, reportMeta).then((key) => {
+        if (key && myRequestId === requestIdRef.current) {
+          setCurrentReportMeta((prev) => (prev ? { ...prev, key } : prev));
+          refreshSavedReports();
+        }
+      });
       setCachedInfo(null);
       setReportHtml(rawHtml);
       setSlidesPrompt("");
@@ -1018,12 +1034,23 @@ function addEventMarkers(chart,events){
     setCurrentReportMeta(null);
   };
 
+  // Route an authenticated fetch's 401/403 to a clean re-login prompt (matching the
+  // generate path). Returns true if it handled an auth failure — the caller stops.
+  const handleAuthFailure = (res) => {
+    if ((res?.status === 401 || res?.status === 403) && onSignOut) {
+      onSignOut("Your session has expired — please sign in again.");
+      return true;
+    }
+    return false;
+  };
+
   // Refresh the past-reports list from worker KV.
   const refreshSavedReports = async () => {
     const workerUrl = localStorage.getItem(WORKER_URL);
     if (!workerUrl) return;
     try {
       const res = await fetch(`${workerUrl}?action=list-reports`, { headers: authHeaders(sessionToken) });
+      if (handleAuthFailure(res)) return;
       if (res.ok) {
         const entries = await res.json();
         if (Array.isArray(entries)) setSavedReports(entries);
@@ -1031,15 +1058,21 @@ function addEventMarkers(chart,events){
     } catch {}
   };
 
-  // Fire-and-forget: save a freshly generated report to KV for cross-device access.
-  const saveReportToWorker = (html, metadata) => {
+  // Save a freshly generated report to KV for cross-device access. Returns the
+  // server-assigned key (or null) so the caller can highlight it as the current report.
+  const saveReportToWorker = async (html, metadata) => {
     const workerUrl = localStorage.getItem(WORKER_URL);
-    if (!workerUrl) return;
-    fetch(`${workerUrl}?action=save-report`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...authHeaders(sessionToken) },
-      body: JSON.stringify({ html, metadata }),
-    }).catch(() => {});
+    if (!workerUrl) return null;
+    try {
+      const res = await fetch(`${workerUrl}?action=save-report`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders(sessionToken) },
+        body: JSON.stringify({ html, metadata }),
+      });
+      if (handleAuthFailure(res)) return null;
+      if (res.ok) { const d = await res.json().catch(() => ({})); return d.key || null; }
+    } catch {}
+    return null;
   };
 
   // Delete a report from KV, refresh the list.
@@ -1051,7 +1084,8 @@ function addEventMarkers(chart,events){
     const workerUrl = localStorage.getItem(WORKER_URL);
     if (workerUrl) {
       try {
-        await fetch(`${workerUrl}?action=delete-report&key=${encodeURIComponent(key)}`, { method: "POST", headers: authHeaders(sessionToken) });
+        const res = await fetch(`${workerUrl}?action=delete-report&key=${encodeURIComponent(key)}`, { method: "POST", headers: authHeaders(sessionToken) });
+        handleAuthFailure(res);
       } catch {}
     }
   };
@@ -1065,9 +1099,10 @@ function addEventMarkers(chart,events){
       let html, meta;
       try {
         const res = await fetch(`${workerUrl}?action=get-report&key=${encodeURIComponent(key)}`, { headers: authHeaders(sessionToken) });
+        if (handleAuthFailure(res)) return;
         if (res.ok) { const d = await res.json(); html = d.html; meta = d.metadata; }
       } catch {}
-      if (!html) return;
+      if (!html) { setError("Couldn’t open that report — please try again."); return; }
       setReportHtml(html);
       // Restore the incomplete-data warnings so the "review before sending" banner
       // reappears when a report is reopened from history.
@@ -1152,7 +1187,8 @@ function addEventMarkers(chart,events){
             }],
           }),
         });
-        if (!res.ok) throw new Error(`API error ${res.status}`);
+        if (handleAuthFailure(res)) { clearInterval(regenProgressTimerRef.current); return; }
+        if (!res.ok) throw new Error(friendlyErrorMessage(res.status, `API error ${res.status}`));
         const data = await res.json();
         const text = data.content?.[0]?.text ?? '{}';
         const parsed = JSON.parse(text);
@@ -1281,6 +1317,8 @@ ${reportHtml}`,
           }],
         }),
       });
+      if (handleAuthFailure(res)) { clearInterval(slidesProgressTimerRef.current); return; }
+      if (!res.ok) throw new Error(friendlyErrorMessage(res.status, `API error ${res.status}`));
       const data = await res.json();
       const text = data.content?.[0]?.text ?? "";
       clearInterval(slidesProgressTimerRef.current);
@@ -1717,25 +1755,37 @@ ${reportHtml}`,
                     {c.name}
                   </button>
                 ))}
-                <button
-                  onClick={() => { setDropdownOpen(false); setShowAddClientModal(true); }}
-                  style={{
-                    display: "flex", alignItems: "center", gap: "6px",
-                    width: "100%", textAlign: "left",
-                    padding: "9px 12px", background: "transparent",
-                    border: "none", borderTop: clients.length > 0 ? "1px solid #ededed" : "none",
-                    fontFamily: "'DM Sans', sans-serif", fontSize: "11px",
-                    color: "#6b6b6b", fontWeight: 400, cursor: "pointer",
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.color = "#0a0a0a"; }}
-                  onMouseLeave={e => { e.currentTarget.style.color = "#6b6b6b"; }}
-                >
-                  <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-                    <line x1="5.5" y1="1" x2="5.5" y2="10" />
-                    <line x1="1" y1="5.5" x2="10" y2="5.5" />
-                  </svg>
-                  Add new client
-                </button>
+                {clients.length === 0 && (
+                  <div style={{
+                    padding: "10px 12px", fontFamily: "'DM Sans', sans-serif",
+                    fontSize: "11px", fontWeight: 300, color: "#6b6b6b", lineHeight: 1.5,
+                  }}>
+                    {session?.admin
+                      ? "No clients configured yet — add one with the + below."
+                      : "No clients configured yet — ask a Swanky admin to add one."}
+                  </div>
+                )}
+                {session?.admin && (
+                  <button
+                    onClick={() => { setDropdownOpen(false); setShowAddClientModal(true); }}
+                    style={{
+                      display: "flex", alignItems: "center", gap: "6px",
+                      width: "100%", textAlign: "left",
+                      padding: "9px 12px", background: "transparent",
+                      border: "none", borderTop: clients.length > 0 ? "1px solid #ededed" : "none",
+                      fontFamily: "'DM Sans', sans-serif", fontSize: "11px",
+                      color: "#6b6b6b", fontWeight: 400, cursor: "pointer",
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.color = "#0a0a0a"; }}
+                    onMouseLeave={e => { e.currentTarget.style.color = "#6b6b6b"; }}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                      <line x1="5.5" y1="1" x2="5.5" y2="10" />
+                      <line x1="1" y1="5.5" x2="10" y2="5.5" />
+                    </svg>
+                    Add new client
+                  </button>
+                )}
               </div>
             )}
           </div>

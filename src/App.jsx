@@ -71,7 +71,7 @@ function CursorDot() {
   );
 }
 
-function AdminPanel({ session, onClose }) {
+function AdminPanel({ session, onClose, onSignOut }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -97,22 +97,42 @@ function AdminPanel({ session, onClose }) {
 
   useEffect(() => { fetchUsers(); }, []);
 
+  const checkAuth = (res) => {
+    if ((res.status === 401 || res.status === 403) && onSignOut) {
+      onSignOut("Your session has expired — please sign in again.");
+      return false;
+    }
+    return res.ok;
+  };
+
   const approve = async (username) => {
-    await fetch(`${workerUrl}?action=admin-approve`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
-      body: JSON.stringify({ username }),
-    });
-    fetchUsers();
+    setError("");
+    try {
+      const res = await fetch(`${workerUrl}?action=admin-approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
+        body: JSON.stringify({ username }),
+      });
+      if (!checkAuth(res)) { if (res.ok === false && res.status !== 401 && res.status !== 403) setError(`Could not approve ${username} — please try again.`); return; }
+      fetchUsers();
+    } catch {
+      setError(`Could not approve ${username} — please try again.`);
+    }
   };
 
   const deleteUser = async (username) => {
-    await fetch(`${workerUrl}?action=admin-delete`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
-      body: JSON.stringify({ username }),
-    });
-    fetchUsers();
+    setError("");
+    try {
+      const res = await fetch(`${workerUrl}?action=admin-delete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
+        body: JSON.stringify({ username }),
+      });
+      if (!checkAuth(res)) { if (res.status !== 401 && res.status !== 403) setError(`Could not remove ${username} — please try again.`); return; }
+      fetchUsers();
+    } catch {
+      setError(`Could not remove ${username} — please try again.`);
+    }
   };
 
   const pending = users.filter(u => !u.approved);
@@ -344,7 +364,7 @@ export default function App() {
         </div>
       )}
       {showAdmin && session.admin && (
-        <AdminPanel session={session} onClose={() => setShowAdmin(false)} />
+        <AdminPanel session={session} onClose={() => setShowAdmin(false)} onSignOut={handleSignOut} />
       )}
     </>
   );
