@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import { extractReportHtml, reportCompletionError, embedIncompleteDataNotice } from "./reportHtml.js";
 
 const WORKER_URL = "swanky_worker_url";
 const MODEL_KEY = "swanky_model";
@@ -725,7 +726,8 @@ Return ONLY a JSON array of the index numbers for events that are commercially r
 
       if (myRequestId !== requestIdRef.current) return;
 
-      setDataWarnings(Array.isArray(klaviyoData.warnings) ? klaviyoData.warnings : []);
+      const warnings = Array.isArray(klaviyoData.warnings) ? klaviyoData.warnings : [];
+      setDataWarnings(warnings);
 
       // Hand off: clear pre-phase timer. Start a fallback asymptotic timer so progress
       // never freezes even if SSE updates stall. Streaming overrides it via setProgress.
@@ -788,6 +790,7 @@ Return ONLY a JSON array of the index numbers for events that are commercially r
       let rawHtml = '';
       let outputTokens = 0;
       let stopReason = null;
+      let sawMessageStop = false;
       let inputUsage = {};
       // Scale progress denominator to the report's actual token budget so the bar
       // doesn't peg early on long ranges or crawl on short ones. Reports typically
@@ -806,41 +809,53 @@ Return ONLY a JSON array of the index numbers for events that are commercially r
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue;
           const payload = line.slice(6).trim();
-          if (payload === '[DONE]') break outer;
-          try {
-            const ev = JSON.parse(payload);
-            if (ev.type === 'message_start' && ev.message?.usage) {
-              inputUsage = ev.message.usage;
-            } else if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
-              rawHtml += ev.delta.text;
-              outputTokens++;
-              // Update every 50 tokens — more responsive than 100
-              if (outputTokens % 50 === 0) {
-                const pct = Math.min(96, handoffPct + (96 - handoffPct) * Math.min(1, outputTokens / EST_OUTPUT));
-                setProgress(p => Math.max(p, pct));
-                const line2 = lineForProgress(pct);
-                if (line2) setLoadingLine(line2);
-                else {
-                  setLoadingLine(holdingLines[holdingLineIndex % holdingLines.length].text);
-                  if (outputTokens % 2000 === 0) holdingLineIndex++;
-                }
+          if (payload === '[DONE]') { sawMessageStop = true; break outer; }
+          let ev;
+          try { ev = JSON.parse(payload); } catch { continue; }
+          if (ev.type === 'error') {
+            // Anthropic emits an SSE error event (e.g. overloaded_error) mid-stream and
+            // then closes — surface it instead of saving the half-written report.
+            throw new Error("The report generation failed partway through (" + (ev.error?.type || ev.error?.message || 'stream error') + "). Please try again.");
+          } else if (ev.type === 'message_start' && ev.message?.usage) {
+            inputUsage = ev.message.usage;
+          } else if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
+            rawHtml += ev.delta.text;
+            outputTokens++;
+            // Update every 50 tokens — more responsive than 100
+            if (outputTokens % 50 === 0) {
+              const pct = Math.min(96, handoffPct + (96 - handoffPct) * Math.min(1, outputTokens / EST_OUTPUT));
+              setProgress(p => Math.max(p, pct));
+              const line2 = lineForProgress(pct);
+              if (line2) setLoadingLine(line2);
+              else {
+                setLoadingLine(holdingLines[holdingLineIndex % holdingLines.length].text);
+                if (outputTokens % 2000 === 0) holdingLineIndex++;
               }
-            } else if (ev.type === 'message_delta') {
-              stopReason = ev.delta?.stop_reason ?? null;
-              if (ev.usage?.output_tokens) outputTokens = ev.usage.output_tokens;
             }
-          } catch (_) {}
+          } else if (ev.type === 'message_delta') {
+            stopReason = ev.delta?.stop_reason ?? null;
+            if (ev.usage?.output_tokens) outputTokens = ev.usage.output_tokens;
+          } else if (ev.type === 'message_stop') {
+            sawMessageStop = true;
+            break outer;
+          }
         }
       }
 
       if (myRequestId !== requestIdRef.current) return;
 
-      if (stopReason === 'max_tokens') {
-        throw new Error("The report was too long and got cut off (max tokens reached). Try a shorter date range or contact Rowley to increase the output limit.");
-      }
-      if (!rawHtml.trim()) {
-        throw new Error("The model returned no report content. The prompt may have exceeded the context limit — try a shorter date range.");
-      }
+      // Pull out the HTML document, then verify the stream actually completed. A
+      // mid-stream error, dropped connection, or max-tokens cutoff must NOT be saved
+      // or shown as a finished report — staff could otherwise send a client a
+      // half-written document that looks complete.
+      const extracted = extractReportHtml(rawHtml);
+      const completionError = reportCompletionError({
+        sawMessageStop,
+        stopReason,
+        hasClosingTag: extracted.hasClosingTag,
+      });
+      if (completionError) throw new Error(completionError);
+      rawHtml = extracted.html;
 
       // Build usage object from streaming events (input from message_start, output from message_delta)
       const streamUsage = {
@@ -849,12 +864,6 @@ Return ONLY a JSON array of the index numbers for events that are commercially r
         cache_read_input_tokens: inputUsage.cache_read_input_tokens || 0,
         output_tokens: outputTokens,
       };
-      // Extract the HTML document — discard any preamble/reasoning text and trailing content
-      const htmlStart = rawHtml.search(/<!DOCTYPE\s+html/i);
-      if (htmlStart > 0) rawHtml = rawHtml.slice(htmlStart);
-      const htmlEnd = rawHtml.search(/<\/html\s*>/i);
-      if (htmlEnd > 0) rawHtml = rawHtml.slice(0, htmlEnd + "</html>".length);
-      rawHtml = rawHtml.trim();
 
       // Inject event markers script — using JSON.stringify avoids all apostrophe/quote syntax errors
       const eventsForChart = relevantEvents.map(e => ({ label: e.chartLabel, name: e.name }));
@@ -896,6 +905,11 @@ function addEventMarkers(chart,events){
 <\/script>`;
       rawHtml = rawHtml.replace(/<\/head>/i, annotationScript + '</head>');
 
+      // If the underlying Klaviyo data was incomplete, bake a visible notice into the
+      // report itself so the warning travels with the downloaded/printed/sent file —
+      // not just the in-app banner that disappears on reload.
+      rawHtml = embedIncompleteDataNotice(rawHtml, warnings);
+
       const u = streamUsage;
       const pricing = (MODELS[selectedModel] || MODELS[DEFAULT_MODEL]).pricing;
       const costUsd =
@@ -916,7 +930,7 @@ function addEventMarkers(chart,events){
       setLoadingLine("Ready");
       setLastDuration(Math.round((Date.now() - startedAt) / 1000));
       const generatedNow = new Date().toISOString();
-      const reportMeta = { clientId: selectedClientId, reportType, dateStart: range.start, dateEnd: range.end, accountName, generatedAt: generatedNow };
+      const reportMeta = { clientId: selectedClientId, reportType, dateStart: range.start, dateEnd: range.end, accountName, generatedAt: generatedNow, warnings };
       saveReportToWorker(rawHtml, reportMeta);
       setCurrentReportMeta({ ...reportMeta });
       setCachedInfo(null);
@@ -1009,7 +1023,9 @@ function addEventMarkers(chart,events){
       } catch {}
       if (!html) return;
       setReportHtml(html);
-      setDataWarnings([]);
+      // Restore the incomplete-data warnings so the "review before sending" banner
+      // reappears when a report is reopened from history.
+      setDataWarnings(Array.isArray(meta?.warnings) ? meta.warnings : []);
       setSlidesPrompt("");
       setCurrentReportMeta({ key, ...meta });
       setCachedInfo({ generatedAt: meta.generatedAt, key });

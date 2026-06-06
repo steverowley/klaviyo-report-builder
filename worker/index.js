@@ -42,6 +42,13 @@ export function slugify(name) {
     .slice(0, 32) || ('client_' + Date.now().toString(36));
 }
 
+// KV metadata is capped at 1024 bytes total; keep persisted warnings small so a
+// report with many warnings still saves (the warning also lives in the report HTML).
+export function trimReportWarnings(warnings) {
+  if (!Array.isArray(warnings)) return [];
+  return warnings.slice(0, 6).map((w) => String(w).slice(0, 120));
+}
+
 // Read merged client list: KV-stored clients first, then CLIENTS_JSON secret fallback.
 async function readClients(env) {
   let kvClients = [];
@@ -697,8 +704,16 @@ async function handleRequest(request, env, origin) {
         dateStart:   metadata.dateStart   || '',
         dateEnd:     metadata.dateEnd     || '',
         accountName: (metadata.accountName || '').slice(0, 100),
+        warnings:    trimReportWarnings(metadata.warnings),
       };
-      await env.CLIENTS_KV.put(key, html, { metadata: kvMeta });
+      try {
+        await env.CLIENTS_KV.put(key, html, { metadata: kvMeta });
+      } catch {
+        // KV metadata exceeds its 1024-byte cap — drop the warnings (still in the
+        // report HTML) rather than fail the whole save.
+        delete kvMeta.warnings;
+        await env.CLIENTS_KV.put(key, html, { metadata: kvMeta });
+      }
       return new Response(JSON.stringify({ saved: true, key }), {
         headers: { 'Content-Type': 'application/json', ...cors(origin) },
       });

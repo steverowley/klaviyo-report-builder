@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   slugify,
+  trimReportWarnings,
   extractResults,
   processAggregate,
   normaliseCampaigns,
@@ -28,6 +29,23 @@ describe('slugify', () => {
   });
   it('falls back to a client_ prefix when nothing usable remains', () => {
     expect(slugify('!!!')).toMatch(/^client_/);
+  });
+});
+
+describe('trimReportWarnings', () => {
+  it('returns [] for non-arrays', () => {
+    expect(trimReportWarnings(undefined)).toEqual([]);
+    expect(trimReportWarnings('nope')).toEqual([]);
+  });
+  it('caps the number of warnings at 6', () => {
+    const many = Array.from({ length: 20 }, (_, i) => `w${i}`);
+    expect(trimReportWarnings(many)).toHaveLength(6);
+  });
+  it('caps each warning length at 120 chars and coerces to string', () => {
+    const long = 'x'.repeat(500);
+    const [w] = trimReportWarnings([long]);
+    expect(w).toHaveLength(120);
+    expect(trimReportWarnings([123])).toEqual(['123']);
   });
 });
 
