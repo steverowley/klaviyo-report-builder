@@ -11,6 +11,7 @@ import {
   aggregateBody,
   nextDay,
   validateDateRange,
+  allowedOrigin,
   tzOffset,
   pickMetric,
   countMetricMatches,
@@ -137,6 +138,25 @@ describe('nextDay', () => {
     expect(nextDay('2024-01-31')).toBe('2024-02-01');
     expect(nextDay('2024-02-28')).toBe('2024-02-29'); // leap year
     expect(nextDay('2026-12-31')).toBe('2027-01-01');
+  });
+});
+
+describe('allowedOrigin', () => {
+  it('reflects an allowlisted origin', () => {
+    expect(allowedOrigin('https://steverowley.github.io', {})).toBe('https://steverowley.github.io');
+  });
+  it('allows localhost on any port for dev', () => {
+    expect(allowedOrigin('http://localhost:5173', {})).toBe('http://localhost:5173');
+    expect(allowedOrigin('http://127.0.0.1:4173', {})).toBe('http://127.0.0.1:4173');
+  });
+  it('falls back to the default for a disallowed origin (no reflection)', () => {
+    expect(allowedOrigin('https://evil.example.com', {})).toBe('https://steverowley.github.io');
+    expect(allowedOrigin(null, {})).toBe('https://steverowley.github.io');
+  });
+  it('honours the ALLOWED_ORIGINS override', () => {
+    const env = { ALLOWED_ORIGINS: 'https://a.com, https://b.com' };
+    expect(allowedOrigin('https://b.com', env)).toBe('https://b.com');
+    expect(allowedOrigin('https://c.com', env)).toBe('https://a.com');
   });
 });
 

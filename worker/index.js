@@ -9,9 +9,24 @@ function klaviyoHeaders(apiKey) {
   };
 }
 
+const DEFAULT_ORIGIN = 'https://steverowley.github.io';
+
+// Resolve the CORS origin against an allowlist instead of reflecting any origin.
+// Override the allowlist with the ALLOWED_ORIGINS worker var (comma-separated).
+// localhost/127.0.0.1 on any port is always allowed for local dev.
+export function allowedOrigin(origin, env) {
+  const list = (env?.ALLOWED_ORIGINS || DEFAULT_ORIGIN)
+    .split(',').map(s => s.trim()).filter(Boolean);
+  if (origin && (list.includes(origin) || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin))) {
+    return origin;
+  }
+  return list[0] || DEFAULT_ORIGIN;
+}
+
 function cors(origin) {
   return {
-    'Access-Control-Allow-Origin': origin || '*',
+    'Access-Control-Allow-Origin': origin || DEFAULT_ORIGIN,
+    'Vary': 'Origin',
     'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Max-Age': '86400',
@@ -32,8 +47,13 @@ async function kFetch(path, apiKey, init = {}, retries = 4) {
     return kFetch(path, apiKey, init, retries - 1);
   }
   if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Klaviyo ${res.status} on ${path}: ${body.slice(0, 400)}`);
+    const body = await res.text().catch(() => '');
+    // Log the upstream detail server-side only; never return raw Klaviyo bodies to
+    // the browser (they can echo request context).
+    console.error(`Klaviyo ${res.status} on ${path}: ${body.slice(0, 400)}`);
+    const err = new Error(`Klaviyo request failed (${res.status})`);
+    err.klaviyoStatus = res.status;
+    throw err;
   }
   return res.json();
 }
@@ -420,7 +440,7 @@ async function requireSession(request, env, origin, { admin = false } = {}) {
 
 export default {
   async fetch(request, env) {
-    const origin = request.headers.get('Origin') || '*';
+    const origin = allowedOrigin(request.headers.get('Origin'), env);
 
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: cors(origin) });
@@ -429,7 +449,8 @@ export default {
     try {
       return await handleRequest(request, env, origin);
     } catch (err) {
-      return new Response(JSON.stringify({ error: err.message || 'Internal server error' }), {
+      console.error('Unhandled worker error:', err);
+      return new Response(JSON.stringify({ error: 'Internal server error' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json', ...cors(origin) },
       });
@@ -442,7 +463,11 @@ async function handleRequest(request, env, origin) {
     const action = url.searchParams.get('action');
 
     // ── POST /?action=register ────────────────────────────────────────────────
+    // Not exposed in the UI (access is Google SSO + admin login). Gated behind an
+    // admin session so it can't be used for anonymous/unbounded account creation.
     if (request.method === 'POST' && action === 'register') {
+      const regAuthFail = await requireSession(request, env, origin, { admin: true });
+      if (regAuthFail) return regAuthFail;
       let body;
       try { body = await request.json(); } catch {
         return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
@@ -750,8 +775,16 @@ async function handleRequest(request, env, origin) {
           status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) },
         });
       }
+      // Guard against a pathologically large report quietly bloating KV.
+      if (typeof html !== 'string' || html.length > 2_000_000) {
+        return new Response(JSON.stringify({ error: 'Report is too large to save.' }), {
+          status: 413, headers: { 'Content-Type': 'application/json', ...cors(origin) },
+        });
+      }
+      // Random suffix so two reports for the same client in the same millisecond
+      // can't collide on the key.
       const ts = String(Date.now()).padStart(16, '0');
-      const key = `report_${ts}_${metadata.clientId}`;
+      const key = `report_${ts}_${crypto.randomUUID().slice(0, 8)}_${metadata.clientId}`;
       const kvMeta = {
         generatedAt: metadata.generatedAt || new Date().toISOString(),
         clientId:    metadata.clientId,
@@ -1079,7 +1112,8 @@ async function handleRequest(request, env, origin) {
       });
 
     } catch (err) {
-      return new Response(JSON.stringify({ error: err.message }), {
+      console.error('Data endpoint error:', err);
+      return new Response(JSON.stringify({ error: "Couldn't load this client's data from Klaviyo — please try again. If it persists, check the client's API key permissions." }), {
         status: 502,
         headers: { 'Content-Type': 'application/json', ...cors(origin) },
       });
