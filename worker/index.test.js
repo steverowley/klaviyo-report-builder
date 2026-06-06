@@ -1,12 +1,19 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   slugify,
+  trimReportWarnings,
+  spendMonthKey,
+  addSpend,
   extractResults,
   processAggregate,
   normaliseCampaigns,
+  isEmailChannel,
   aggregateFlowRows,
   reportBody,
   aggregateBody,
+  nextDay,
+  validateDateRange,
+  allowedOrigin,
   tzOffset,
   pickMetric,
   countMetricMatches,
@@ -28,6 +35,45 @@ describe('slugify', () => {
   });
   it('falls back to a client_ prefix when nothing usable remains', () => {
     expect(slugify('!!!')).toMatch(/^client_/);
+  });
+});
+
+describe('trimReportWarnings', () => {
+  it('returns [] for non-arrays', () => {
+    expect(trimReportWarnings(undefined)).toEqual([]);
+    expect(trimReportWarnings('nope')).toEqual([]);
+  });
+  it('caps the number of warnings at 6', () => {
+    const many = Array.from({ length: 20 }, (_, i) => `w${i}`);
+    expect(trimReportWarnings(many)).toHaveLength(6);
+  });
+  it('caps each warning length at 120 chars and coerces to string', () => {
+    const long = 'x'.repeat(500);
+    const [w] = trimReportWarnings([long]);
+    expect(w).toHaveLength(120);
+    expect(trimReportWarnings([123])).toEqual(['123']);
+  });
+});
+
+describe('spendMonthKey', () => {
+  it('formats a UTC year-month key', () => {
+    expect(spendMonthKey(new Date('2026-06-06T12:00:00Z'))).toBe('spend_2026-06');
+    expect(spendMonthKey(new Date('2026-01-01T00:00:00Z'))).toBe('spend_2026-01');
+  });
+});
+
+describe('addSpend', () => {
+  it('adds a valid cost to the running total', () => {
+    expect(addSpend(10, 2.5)).toBe(12.5);
+    expect(addSpend(undefined, 1)).toBe(1);
+  });
+  it('ignores non-positive or garbage costs', () => {
+    expect(addSpend(10, 0)).toBe(10);
+    expect(addSpend(10, -5)).toBe(10);
+    expect(addSpend(10, 'abc')).toBe(10);
+  });
+  it('clamps a single contribution so one bad value cannot blow up the total', () => {
+    expect(addSpend(0, 9999)).toBe(50);
   });
 });
 
@@ -62,6 +108,13 @@ describe('processAggregate', () => {
     expect(processAggregate({}, 'count')).toBeNull();
     expect(processAggregate({ data: { attributes: { results: [{ dates: [], measurements: { count: [] } }] } } }, 'count')).toBeNull();
   });
+  it('returns null when dates and counts lengths differ (avoids a misaligned chart)', () => {
+    const agg = { data: { attributes: { results: [{
+      dates: ['2024-01-01T00:00:00Z', '2024-01-02T00:00:00Z', '2024-01-03T00:00:00Z'],
+      measurements: { count: [5, 7] },
+    }] } } };
+    expect(processAggregate(agg, 'count')).toBeNull();
+  });
 });
 
 describe('normaliseCampaigns', () => {
@@ -80,12 +133,80 @@ describe('normaliseCampaigns', () => {
     const report = { data: { attributes: { results: [{ groupings: { campaign_id: 'xyz' }, statistics: {} }] } } };
     expect(normaliseCampaigns(report, {})[0].campaign_name).toBe('xyz');
   });
+  it('excludes SMS/push campaigns but keeps email and untagged rows', () => {
+    const report = { data: { attributes: { results: [
+      { groupings: { campaign_id: 'c1', send_channel: 'email' }, statistics: { recipients: 10 } },
+      { groupings: { campaign_id: 'c2', send_channel: 'sms' }, statistics: { recipients: 99 } },
+      { groupings: { campaign_id: 'c3' }, statistics: { recipients: 5 } },
+    ] } } };
+    const ids = normaliseCampaigns(report, {}).map(r => r.campaign_id);
+    expect(ids).toEqual(['c1', 'c3']);
+  });
+});
+
+describe('isEmailChannel', () => {
+  it('treats email and missing/blank channels as email', () => {
+    expect(isEmailChannel('email')).toBe(true);
+    expect(isEmailChannel(null)).toBe(true);
+    expect(isEmailChannel('')).toBe(true);
+    expect(isEmailChannel(undefined)).toBe(true);
+  });
+  it('rejects explicit non-email channels', () => {
+    expect(isEmailChannel('sms')).toBe(false);
+    expect(isEmailChannel('push')).toBe(false);
+  });
+});
+
+describe('nextDay', () => {
+  it('adds one calendar day', () => {
+    expect(nextDay('2024-01-31')).toBe('2024-02-01');
+    expect(nextDay('2024-02-28')).toBe('2024-02-29'); // leap year
+    expect(nextDay('2026-12-31')).toBe('2027-01-01');
+  });
+});
+
+describe('allowedOrigin', () => {
+  it('reflects an allowlisted origin', () => {
+    expect(allowedOrigin('https://steverowley.github.io', {})).toBe('https://steverowley.github.io');
+  });
+  it('allows localhost on any port for dev', () => {
+    expect(allowedOrigin('http://localhost:5173', {})).toBe('http://localhost:5173');
+    expect(allowedOrigin('http://127.0.0.1:4173', {})).toBe('http://127.0.0.1:4173');
+  });
+  it('falls back to the default for a disallowed origin (no reflection)', () => {
+    expect(allowedOrigin('https://evil.example.com', {})).toBe('https://steverowley.github.io');
+    expect(allowedOrigin(null, {})).toBe('https://steverowley.github.io');
+  });
+  it('honours the ALLOWED_ORIGINS override', () => {
+    const env = { ALLOWED_ORIGINS: 'https://a.com, https://b.com' };
+    expect(allowedOrigin('https://b.com', env)).toBe('https://b.com');
+    expect(allowedOrigin('https://c.com', env)).toBe('https://a.com');
+  });
+});
+
+describe('validateDateRange', () => {
+  it('accepts a valid range', () => {
+    expect(validateDateRange({ startDate: '2026-01-01', endDate: '2026-01-31' })).toBeNull();
+  });
+  it('rejects a non-YYYY-MM-DD date', () => {
+    expect(validateDateRange({ startDate: '01/01/2026', endDate: '2026-01-31' })).toMatch(/YYYY-MM-DD/);
+  });
+  it('rejects start after end', () => {
+    expect(validateDateRange({ startDate: '2026-02-01', endDate: '2026-01-01' })).toMatch(/on or before/);
+  });
+  it('rejects an absurdly long span', () => {
+    expect(validateDateRange({ startDate: '2020-01-01', endDate: '2026-01-01' })).toMatch(/too long/);
+  });
+  it('validates the comparison window when present', () => {
+    expect(validateDateRange({ startDate: '2026-01-01', endDate: '2026-01-31', comparisonStart: 'bad', comparisonEnd: '2025-12-31' })).toMatch(/comparisonStart/);
+    expect(validateDateRange({ startDate: '2026-01-01', endDate: '2026-01-31', comparisonStart: '2025-12-31', comparisonEnd: '2025-12-01' })).toMatch(/comparisonStart must be on or before/);
+  });
 });
 
 describe('aggregateFlowRows', () => {
-  it('reconstructs opens/clicks from rate*recipients and re-derives rates', () => {
+  it('reconstructs opens/clicks from rate*delivered and re-derives rates against delivered', () => {
     const report = { data: { attributes: { results: [
-      { groupings: { flow_id: 'f1' }, statistics: { recipients: 100, open_rate: 0.3, click_rate: 0.1, conversions: 5, conversion_value: 500 } },
+      { groupings: { flow_id: 'f1' }, statistics: { recipients: 100, delivered: 100, open_rate: 0.3, click_rate: 0.1, conversions: 5, conversion_value: 500 } },
     ] } } };
     const [f] = aggregateFlowRows(report, { f1: 'Welcome Flow' });
     expect(f.name).toBe('Welcome Flow');
@@ -97,10 +218,22 @@ describe('aggregateFlowRows', () => {
     expect(f.conversion_rate).toBeCloseTo(0.05);
     expect(f.rpr).toBeCloseTo(5);
   });
+  it('uses delivered (not recipients) so bounces do not overstate opens/clicks', () => {
+    // 1000 recipients but only 500 delivered at a 0.60 open rate → 300 opens, and
+    // the aggregate rate is the delivered-based 0.60, not 300/1000 = 0.30.
+    const report = { data: { attributes: { results: [
+      { groupings: { flow_id: 'f1' }, statistics: { recipients: 1000, delivered: 500, open_rate: 0.6, click_rate: 0.2, conversions: 0, conversion_value: 0 } },
+    ] } } };
+    const [f] = aggregateFlowRows(report, {});
+    expect(f.opens).toBe(300);
+    expect(f.clicks).toBe(100);
+    expect(f.open_rate).toBeCloseTo(0.6);
+    expect(f.click_rate).toBeCloseTo(0.2);
+  });
   it('sums multiple message rows of the same flow', () => {
     const report = { data: { attributes: { results: [
-      { groupings: { flow_id: 'f1' }, statistics: { recipients: 100, open_rate: 0.4, click_rate: 0.2, conversions: 2, conversion_value: 200 } },
-      { groupings: { flow_id: 'f1' }, statistics: { recipients: 100, open_rate: 0.2, click_rate: 0.1, conversions: 3, conversion_value: 100 } },
+      { groupings: { flow_id: 'f1' }, statistics: { recipients: 100, delivered: 100, open_rate: 0.4, click_rate: 0.2, conversions: 2, conversion_value: 200 } },
+      { groupings: { flow_id: 'f1' }, statistics: { recipients: 100, delivered: 100, open_rate: 0.2, click_rate: 0.1, conversions: 3, conversion_value: 100 } },
     ] } } };
     const [f] = aggregateFlowRows(report, {});
     expect(f.recipients).toBe(200);
@@ -108,6 +241,15 @@ describe('aggregateFlowRows', () => {
     expect(f.conversions).toBe(5);
     expect(f.conversion_value).toBe(300);
     expect(f.open_rate).toBeCloseTo(0.3);
+  });
+  it('excludes non-email (SMS/push) flow messages', () => {
+    const report = { data: { attributes: { results: [
+      { groupings: { flow_id: 'f1', send_channel: 'email' }, statistics: { recipients: 100, delivered: 100, open_rate: 0.3, click_rate: 0.1 } },
+      { groupings: { flow_id: 'f2', send_channel: 'sms' }, statistics: { recipients: 999, delivered: 999, open_rate: 0.9, click_rate: 0.9 } },
+    ] } } };
+    const rows = aggregateFlowRows(report, {});
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe('f1');
   });
 });
 
@@ -132,7 +274,8 @@ describe('aggregateBody', () => {
     expect(body.data.attributes.measurements).toEqual(['count']);
     expect(body.data.attributes.timezone).toBe('UTC');
     expect(body.data.attributes.filter).toContain('2024-01-01T00:00:00+00:00');
-    expect(body.data.attributes.filter).toContain('2024-01-31T23:59:59+00:00');
+    // Exclusive next-day-midnight bound so the whole final day is included.
+    expect(body.data.attributes.filter).toContain('2024-02-01T00:00:00+00:00');
   });
 });
 
@@ -162,7 +305,7 @@ describe('timezone-aware report bodies', () => {
     const b = JSON.parse(aggregateBody('m1', '2024-01-01', '2024-01-31', ['count'], 'America/New_York', '-05:00', '-05:00'));
     expect(b.data.attributes.timezone).toBe('America/New_York');
     expect(b.data.attributes.filter).toContain('2024-01-01T00:00:00-05:00');
-    expect(b.data.attributes.filter).toContain('2024-01-31T23:59:59-05:00');
+    expect(b.data.attributes.filter).toContain('2024-02-01T00:00:00-05:00');
   });
   it('defaults to UTC / +00:00 when not provided', () => {
     const b = JSON.parse(aggregateBody('m1', '2024-01-01', '2024-01-31', ['count']));

@@ -9,9 +9,24 @@ function klaviyoHeaders(apiKey) {
   };
 }
 
+const DEFAULT_ORIGIN = 'https://steverowley.github.io';
+
+// Resolve the CORS origin against an allowlist instead of reflecting any origin.
+// Override the allowlist with the ALLOWED_ORIGINS worker var (comma-separated).
+// localhost/127.0.0.1 on any port is always allowed for local dev.
+export function allowedOrigin(origin, env) {
+  const list = (env?.ALLOWED_ORIGINS || DEFAULT_ORIGIN)
+    .split(',').map(s => s.trim()).filter(Boolean);
+  if (origin && (list.includes(origin) || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin))) {
+    return origin;
+  }
+  return list[0] || DEFAULT_ORIGIN;
+}
+
 function cors(origin) {
   return {
-    'Access-Control-Allow-Origin': origin || '*',
+    'Access-Control-Allow-Origin': origin || DEFAULT_ORIGIN,
+    'Vary': 'Origin',
     'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Max-Age': '86400',
@@ -24,13 +39,21 @@ async function kFetch(path, apiKey, init = {}, retries = 4) {
     headers: klaviyoHeaders(apiKey),
   });
   if (res.status === 429 && retries > 0) {
-    const retryAfter = parseInt(res.headers.get('Retry-After') || '1', 10);
-    await new Promise(r => setTimeout(r, retryAfter * 1000));
+    const parsed = parseInt(res.headers.get('Retry-After') || '1', 10);
+    // Clamp to 10s so a hostile or oversized Retry-After can't hang the worker
+    // until it times out into an opaque 5xx.
+    const wait = Math.min(Number.isFinite(parsed) ? Math.max(parsed, 0) : 1, 10);
+    await new Promise(r => setTimeout(r, wait * 1000));
     return kFetch(path, apiKey, init, retries - 1);
   }
   if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Klaviyo ${res.status} on ${path}: ${body.slice(0, 400)}`);
+    const body = await res.text().catch(() => '');
+    // Log the upstream detail server-side only; never return raw Klaviyo bodies to
+    // the browser (they can echo request context).
+    console.error(`Klaviyo ${res.status} on ${path}: ${body.slice(0, 400)}`);
+    const err = new Error(`Klaviyo request failed (${res.status})`);
+    err.klaviyoStatus = res.status;
+    throw err;
   }
   return res.json();
 }
@@ -40,6 +63,27 @@ export function slugify(name) {
     .replace(/\s+/g, '_')
     .replace(/[^a-z0-9_]/g, '')
     .slice(0, 32) || ('client_' + Date.now().toString(36));
+}
+
+// KV metadata is capped at 1024 bytes total; keep persisted warnings small so a
+// report with many warnings still saves (the warning also lives in the report HTML).
+export function trimReportWarnings(warnings) {
+  if (!Array.isArray(warnings)) return [];
+  return warnings.slice(0, 6).map((w) => String(w).slice(0, 120));
+}
+
+// KV key for a month's cumulative Anthropic spend, e.g. 'spend_2026-06'.
+export function spendMonthKey(date = new Date()) {
+  return `spend_${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+// Add a sanitised per-report cost to a running monthly total. Ignores garbage and
+// clamps a single report's contribution so one bad value can't blow up the total.
+export function addSpend(current, costUsd) {
+  const base = Number.isFinite(current) ? current : 0;
+  const add = Number(costUsd);
+  if (!Number.isFinite(add) || add <= 0) return base;
+  return Math.round((base + Math.min(add, 50)) * 1e6) / 1e6;
 }
 
 // Read merged client list: KV-stored clients first, then CLIENTS_JSON secret fallback.
@@ -82,6 +126,39 @@ export function reportBody(type, startDate, endDate, conversionMetricId, startOf
   return JSON.stringify({ data: { type, attributes } });
 }
 
+// Validate the date inputs to the data endpoint (defence-in-depth — the UI also
+// validates). Returns a user-facing error string, or null when the range is sane.
+export function validateDateRange({ startDate, endDate, comparisonStart, comparisonEnd } = {}) {
+  const ymd = /^\d{4}-\d{2}-\d{2}$/;
+  const check = (label, v) => {
+    if (!ymd.test(v)) return `${label} must be in YYYY-MM-DD format`;
+    if (Number.isNaN(Date.parse(`${v}T00:00:00Z`))) return `${label} is not a valid date`;
+    return null;
+  };
+  for (const [label, v] of [['startDate', startDate], ['endDate', endDate]]) {
+    const e = check(label, v);
+    if (e) return e;
+  }
+  if (startDate > endDate) return 'startDate must be on or before endDate'; // lexicographic == chronological for YYYY-MM-DD
+  const span = (Date.parse(`${endDate}T00:00:00Z`) - Date.parse(`${startDate}T00:00:00Z`)) / 86400000;
+  if (span > 430) return 'Date range is too long (maximum ~14 months)';
+  if (comparisonStart != null || comparisonEnd != null) {
+    for (const [label, v] of [['comparisonStart', comparisonStart], ['comparisonEnd', comparisonEnd]]) {
+      const e = check(label, v);
+      if (e) return e;
+    }
+    if (comparisonStart > comparisonEnd) return 'comparisonStart must be on or before comparisonEnd';
+  }
+  return null;
+}
+
+// Add one calendar day to a YYYY-MM-DD string (UTC math is safe for a bare date).
+export function nextDay(dateStr) {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
 export function aggregateBody(metricId, startDate, endDate, measurements, timezone = 'UTC', startOffset = '+00:00', endOffset = '+00:00') {
   return JSON.stringify({
     data: {
@@ -90,7 +167,9 @@ export function aggregateBody(metricId, startDate, endDate, measurements, timezo
         metric_id: metricId,
         interval: 'day',
         measurements,
-        filter: `greater-or-equal(datetime,${startDate}T00:00:00${startOffset}),less-than(datetime,${endDate}T23:59:59${endOffset})`,
+        // Exclusive next-day-midnight upper bound includes the whole final day and
+        // matches the campaign/flow report window (which is inclusive of endDate).
+        filter: `greater-or-equal(datetime,${startDate}T00:00:00${startOffset}),less-than(datetime,${nextDay(endDate)}T00:00:00${endOffset})`,
         timezone,
         page_size: 500,
       },
@@ -175,6 +254,10 @@ export function processAggregate(agg, measurement = 'count') {
       const raw = r.measurements?.[measurement] ?? r.data?.[measurement];
       if (!dates?.length || !raw?.length) return null;
       const counts = raw.map(v => Array.isArray(v) ? Number(v[0] ?? 0) : Number(v ?? 0));
+      // Parallel arrays are plotted label-against-value; a length mismatch (malformed
+      // payload) would silently shift every count onto the wrong day, so treat it as
+      // unavailable rather than emit a wrong-date chart.
+      if (dates.length !== counts.length) return null;
       return { dates: dates.map(d => d.slice(0, 10)), counts };
     }
 
@@ -192,6 +275,7 @@ export function processAggregate(agg, measurement = 'count') {
     }
     if (!dates?.length || !raw?.length) return null;
     const counts = raw.map(v => Array.isArray(v) ? Number(v[0] ?? 0) : Number(v ?? 0));
+    if (dates.length !== counts.length) return null;
     return { dates: dates.map(d => d.slice(0, 10)), counts };
   } catch {
     return null;
@@ -221,8 +305,16 @@ export function countMetricMatches(metricList = [], { includes = [], exclude = [
   }).length;
 }
 
+// This is an email performance report, but Klaviyo's campaign-values-report returns
+// every channel (email, SMS, push). Drop any row explicitly tagged as a non-email
+// channel so SMS/push recipients and revenue don't inflate the email figures. A
+// missing/blank channel is treated as email to avoid dropping legitimate rows.
+export function isEmailChannel(sendChannel) {
+  return !sendChannel || sendChannel === 'email';
+}
+
 export function normaliseCampaigns(report, campaignNames = {}) {
-  return extractResults(report).map(row => {
+  return extractResults(report).filter(row => isEmailChannel(row.groupings?.send_channel)).map(row => {
     const g = row.groupings ?? {};
     const s = row.statistics ?? {};
     const id = g.campaign_id ?? null;
@@ -248,6 +340,7 @@ export function aggregateFlowRows(report, flowNames = {}) {
   for (const row of rows) {
     const g = row.groupings ?? {};
     const s = row.statistics ?? {};
+    if (!isEmailChannel(g.send_channel)) continue; // email report — exclude SMS/push flow messages
     const flowId   = g.flow_id ?? 'unknown';
     const flowName = flowNames[flowId] ?? g.flow_name ?? g.flow_message_name ?? flowId;
 
@@ -262,19 +355,22 @@ export function aggregateFlowRows(report, flowNames = {}) {
     }
 
     const f = byFlow[flowId];
-    const r = Number(s.recipients ?? 0);
-    f.recipients       += r;
-    f.delivered        += Number(s.delivered        ?? 0);
-    f.opens            += Math.round(Number(s.open_rate  ?? 0) * r);
-    f.clicks           += Math.round(Number(s.click_rate ?? 0) * r);
+    // Klaviyo's open_rate/click_rate denominator is `delivered` (bounces excluded),
+    // so reconstruct absolute opens/clicks against delivered — multiplying by
+    // recipients would overstate them whenever a message bounced.
+    const d = Number(s.delivered ?? 0);
+    f.recipients       += Number(s.recipients ?? 0);
+    f.delivered        += d;
+    f.opens            += Math.round(Number(s.open_rate  ?? 0) * d);
+    f.clicks           += Math.round(Number(s.click_rate ?? 0) * d);
     f.conversions      += Number(s.conversions      ?? 0);
     f.conversion_value += Number(s.conversion_value ?? 0);
   }
 
   return Object.values(byFlow).map(f => ({
     ...f,
-    open_rate:       f.recipients > 0 ? f.opens  / f.recipients : 0,
-    click_rate:      f.recipients > 0 ? f.clicks / f.recipients : 0,
+    open_rate:       f.delivered  > 0 ? f.opens  / f.delivered : 0,
+    click_rate:      f.delivered  > 0 ? f.clicks / f.delivered : 0,
     ctor:            f.opens      > 0 ? f.clicks / f.opens      : 0,
     conversion_rate: f.recipients > 0 ? f.conversions      / f.recipients : 0,
     rpr:             f.recipients > 0 ? f.conversion_value / f.recipients : 0,
@@ -358,7 +454,7 @@ async function requireSession(request, env, origin, { admin = false } = {}) {
 
 export default {
   async fetch(request, env) {
-    const origin = request.headers.get('Origin') || '*';
+    const origin = allowedOrigin(request.headers.get('Origin'), env);
 
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: cors(origin) });
@@ -367,7 +463,8 @@ export default {
     try {
       return await handleRequest(request, env, origin);
     } catch (err) {
-      return new Response(JSON.stringify({ error: err.message || 'Internal server error' }), {
+      console.error('Unhandled worker error:', err);
+      return new Response(JSON.stringify({ error: 'Internal server error' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json', ...cors(origin) },
       });
@@ -380,7 +477,11 @@ async function handleRequest(request, env, origin) {
     const action = url.searchParams.get('action');
 
     // ── POST /?action=register ────────────────────────────────────────────────
+    // Not exposed in the UI (access is Google SSO + admin login). Gated behind an
+    // admin session so it can't be used for anonymous/unbounded account creation.
     if (request.method === 'POST' && action === 'register') {
+      const regAuthFail = await requireSession(request, env, origin, { admin: true });
+      if (regAuthFail) return regAuthFail;
       let body;
       try { body = await request.json(); } catch {
         return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
@@ -667,6 +768,48 @@ async function handleRequest(request, env, origin) {
       });
     }
 
+    // ── POST /?action=offboard-client {clientId} — remove a departed client ────
+    // Admin-only, destructive: deletes the client's Klaviyo key, its entry in the
+    // client list, and every saved report (+ reproducibility snapshot) for it.
+    if (request.method === 'POST' && action === 'offboard-client') {
+      const authFail = await requireSession(request, env, origin, { admin: true });
+      if (authFail) return authFail;
+      if (!env.CLIENTS_KV) {
+        return new Response(JSON.stringify({ error: 'KV namespace not configured.' }), {
+          status: 503, headers: { 'Content-Type': 'application/json', ...cors(origin) },
+        });
+      }
+      let body; try { body = await request.json(); } catch { body = {}; }
+      const { clientId } = body;
+      if (!clientId) {
+        return new Response(JSON.stringify({ error: 'clientId is required.' }), {
+          status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) },
+        });
+      }
+      // Remove the Klaviyo key and the client-list entry.
+      const existingKv = JSON.parse(await env.CLIENTS_KV.get('clients') || '[]');
+      const updatedKv = existingKv.filter(c => c.id !== clientId);
+      await Promise.all([
+        env.CLIENTS_KV.delete('key_' + clientId),
+        env.CLIENTS_KV.put('clients', JSON.stringify(updatedKv)),
+      ]);
+      // Delete every saved report (and its snapshot) belonging to this client.
+      let reportsRemoved = 0;
+      const list = await env.CLIENTS_KV.list({ prefix: 'report_' });
+      const toDelete = list.keys.filter(k => k.metadata?.clientId === clientId);
+      for (const k of toDelete) {
+        await Promise.all([
+          env.CLIENTS_KV.delete(k.name),
+          env.CLIENTS_KV.delete(`reportdata_${k.name}`),
+        ]);
+        reportsRemoved++;
+      }
+      const allClients = await readClients(env);
+      return new Response(JSON.stringify({ offboarded: true, clientId, reportsRemoved, clients: allClients }), {
+        headers: { 'Content-Type': 'application/json', ...cors(origin) },
+      });
+    }
+
     // POST /?action=save-report — persist a generated report to KV ────────────
     if (request.method === 'POST' && action === 'save-report') {
       const authFail = await requireSession(request, env, origin);
@@ -682,23 +825,51 @@ async function handleRequest(request, env, origin) {
           status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) },
         });
       }
-      const { html, metadata } = body;
+      const { html, metadata, inputData } = body;
       if (!html || !metadata?.clientId) {
         return new Response(JSON.stringify({ error: 'html and metadata.clientId are required' }), {
           status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) },
         });
       }
+      // Guard against a pathologically large report quietly bloating KV.
+      if (typeof html !== 'string' || html.length > 2_000_000) {
+        return new Response(JSON.stringify({ error: 'Report is too large to save.' }), {
+          status: 413, headers: { 'Content-Type': 'application/json', ...cors(origin) },
+        });
+      }
+      // Stamp the report with the verified session user (audit trail) — trust the
+      // signed token, not a client-supplied field.
+      const saveSession = await verifyToken(getBearerToken(request), env.TOKEN_SECRET);
+      // Random suffix so two reports for the same client in the same millisecond
+      // can't collide on the key.
       const ts = String(Date.now()).padStart(16, '0');
-      const key = `report_${ts}_${metadata.clientId}`;
+      const key = `report_${ts}_${crypto.randomUUID().slice(0, 8)}_${metadata.clientId}`;
       const kvMeta = {
         generatedAt: metadata.generatedAt || new Date().toISOString(),
+        generatedBy: (saveSession?.sub || '').slice(0, 80),
         clientId:    metadata.clientId,
         reportType:  metadata.reportType  || '',
         dateStart:   metadata.dateStart   || '',
         dateEnd:     metadata.dateEnd     || '',
         accountName: (metadata.accountName || '').slice(0, 100),
+        warnings:    trimReportWarnings(metadata.warnings),
       };
-      await env.CLIENTS_KV.put(key, html, { metadata: kvMeta });
+      try {
+        await env.CLIENTS_KV.put(key, html, { metadata: kvMeta });
+      } catch {
+        // KV metadata exceeds its 1024-byte cap — drop the warnings (still in the
+        // report HTML) rather than fail the whole save.
+        delete kvMeta.warnings;
+        await env.CLIENTS_KV.put(key, html, { metadata: kvMeta });
+      }
+      // Reproducibility: persist the exact Klaviyo inputs that produced this report
+      // (separate key, fetched on demand) so a disputed number can be reconstructed.
+      if (inputData) {
+        const snapshot = JSON.stringify(inputData);
+        if (snapshot.length <= 2_000_000) {
+          await env.CLIENTS_KV.put(`reportdata_${key}`, snapshot).catch(() => {});
+        }
+      }
       return new Response(JSON.stringify({ saved: true, key }), {
         headers: { 'Content-Type': 'application/json', ...cors(origin) },
       });
@@ -732,10 +903,32 @@ async function handleRequest(request, env, origin) {
           status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) },
         });
       }
-      await env.CLIENTS_KV.delete(key);
+      await Promise.all([
+        env.CLIENTS_KV.delete(key),
+        env.CLIENTS_KV.delete(`reportdata_${key}`), // also drop the reproducibility snapshot
+      ]);
       return new Response(JSON.stringify({ deleted: true, key }), {
         headers: { 'Content-Type': 'application/json', ...cors(origin) },
       });
+    }
+
+    // GET /?action=get-report-data&key=<key> — the saved Klaviyo inputs (for audit)
+    if (request.method === 'GET' && action === 'get-report-data') {
+      const authFail = await requireSession(request, env, origin);
+      if (authFail) return authFail;
+      const key = url.searchParams.get('key');
+      if (!key || !env.CLIENTS_KV) {
+        return new Response(JSON.stringify({ error: 'key required and KV must be configured' }), {
+          status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) },
+        });
+      }
+      const snapshot = await env.CLIENTS_KV.get(`reportdata_${key}`);
+      if (snapshot === null) {
+        return new Response(JSON.stringify({ error: 'No saved source data for this report' }), {
+          status: 404, headers: { 'Content-Type': 'application/json', ...cors(origin) },
+        });
+      }
+      return new Response(snapshot, { headers: { 'Content-Type': 'application/json', ...cors(origin) } });
     }
 
     // GET /?action=get-report&key=<key> — fetch full HTML for a saved report ──
@@ -755,6 +948,40 @@ async function handleRequest(request, env, origin) {
         });
       }
       return new Response(JSON.stringify({ html: value, metadata }), {
+        headers: { 'Content-Type': 'application/json', ...cors(origin) },
+      });
+    }
+
+    // GET /?action=spend-status — this month's Anthropic spend vs the cap ────────
+    if (request.method === 'GET' && action === 'spend-status') {
+      const authFail = await requireSession(request, env, origin);
+      if (authFail) return authFail;
+      const capUsd = Number(env.SPEND_CAP_USD) > 0 ? Number(env.SPEND_CAP_USD) : 100;
+      const monthKey = spendMonthKey();
+      const spentUsd = env.CLIENTS_KV ? Number(await env.CLIENTS_KV.get(monthKey)) || 0 : 0;
+      return new Response(JSON.stringify({
+        month: monthKey.replace('spend_', ''),
+        spentUsd: Math.round(spentUsd * 100) / 100,
+        capUsd,
+        ratio: capUsd > 0 ? spentUsd / capUsd : 0,
+      }), { headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+    }
+
+    // POST /?action=track-spend {costUsd} — add a report's cost to the month total ─
+    if (request.method === 'POST' && action === 'track-spend') {
+      const authFail = await requireSession(request, env, origin);
+      if (authFail) return authFail;
+      let body; try { body = await request.json(); } catch { body = {}; }
+      if (env.CLIENTS_KV) {
+        const monthKey = spendMonthKey();
+        const current = Number(await env.CLIENTS_KV.get(monthKey)) || 0;
+        const updated = addSpend(current, body.costUsd);
+        await env.CLIENTS_KV.put(monthKey, String(updated));
+        return new Response(JSON.stringify({ spentUsd: updated }), {
+          headers: { 'Content-Type': 'application/json', ...cors(origin) },
+        });
+      }
+      return new Response(JSON.stringify({ spentUsd: 0 }), {
         headers: { 'Content-Type': 'application/json', ...cors(origin) },
       });
     }
@@ -845,6 +1072,12 @@ async function handleRequest(request, env, origin) {
     const { clientId, startDate, endDate, comparisonStart, comparisonEnd } = body;
     if (!clientId || !startDate || !endDate) {
       return new Response(JSON.stringify({ error: 'Required: clientId, startDate, endDate' }), {
+        status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) },
+      });
+    }
+    const dateError = validateDateRange({ startDate, endDate, comparisonStart, comparisonEnd });
+    if (dateError) {
+      return new Response(JSON.stringify({ error: dateError }), {
         status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) },
       });
     }
@@ -1003,7 +1236,8 @@ async function handleRequest(request, env, origin) {
       });
 
     } catch (err) {
-      return new Response(JSON.stringify({ error: err.message }), {
+      console.error('Data endpoint error:', err);
+      return new Response(JSON.stringify({ error: "Couldn't load this client's data from Klaviyo — please try again. If it persists, check the client's API key permissions." }), {
         status: 502,
         headers: { 'Content-Type': 'application/json', ...cors(origin) },
       });

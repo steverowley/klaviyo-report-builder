@@ -19,19 +19,17 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: worker/package-lock.json
 
-      - name: Show config
+      - name: Syntax check
         working-directory: worker
-        run: |
-          echo "=== wrangler.toml ==="
-          cat wrangler.toml
-          echo "=== syntax check ==="
-          node --check index.js
+        run: node --check index.js
 
       - name: Install wrangler
         working-directory: worker
-        run: npm install
+        run: npm ci
 
       - name: Verify Cloudflare auth
         working-directory: worker
