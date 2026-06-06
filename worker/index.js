@@ -24,8 +24,11 @@ async function kFetch(path, apiKey, init = {}, retries = 4) {
     headers: klaviyoHeaders(apiKey),
   });
   if (res.status === 429 && retries > 0) {
-    const retryAfter = parseInt(res.headers.get('Retry-After') || '1', 10);
-    await new Promise(r => setTimeout(r, retryAfter * 1000));
+    const parsed = parseInt(res.headers.get('Retry-After') || '1', 10);
+    // Clamp to 10s so a hostile or oversized Retry-After can't hang the worker
+    // until it times out into an opaque 5xx.
+    const wait = Math.min(Number.isFinite(parsed) ? Math.max(parsed, 0) : 1, 10);
+    await new Promise(r => setTimeout(r, wait * 1000));
     return kFetch(path, apiKey, init, retries - 1);
   }
   if (!res.ok) {
@@ -87,6 +90,32 @@ export function reportBody(type, startDate, endDate, conversionMetricId, startOf
   };
   if (conversionMetricId) attributes.conversion_metric_id = conversionMetricId;
   return JSON.stringify({ data: { type, attributes } });
+}
+
+// Validate the date inputs to the data endpoint (defence-in-depth — the UI also
+// validates). Returns a user-facing error string, or null when the range is sane.
+export function validateDateRange({ startDate, endDate, comparisonStart, comparisonEnd } = {}) {
+  const ymd = /^\d{4}-\d{2}-\d{2}$/;
+  const check = (label, v) => {
+    if (!ymd.test(v)) return `${label} must be in YYYY-MM-DD format`;
+    if (Number.isNaN(Date.parse(`${v}T00:00:00Z`))) return `${label} is not a valid date`;
+    return null;
+  };
+  for (const [label, v] of [['startDate', startDate], ['endDate', endDate]]) {
+    const e = check(label, v);
+    if (e) return e;
+  }
+  if (startDate > endDate) return 'startDate must be on or before endDate'; // lexicographic == chronological for YYYY-MM-DD
+  const span = (Date.parse(`${endDate}T00:00:00Z`) - Date.parse(`${startDate}T00:00:00Z`)) / 86400000;
+  if (span > 430) return 'Date range is too long (maximum ~14 months)';
+  if (comparisonStart != null || comparisonEnd != null) {
+    for (const [label, v] of [['comparisonStart', comparisonStart], ['comparisonEnd', comparisonEnd]]) {
+      const e = check(label, v);
+      if (e) return e;
+    }
+    if (comparisonStart > comparisonEnd) return 'comparisonStart must be on or before comparisonEnd';
+  }
+  return null;
 }
 
 // Add one calendar day to a YYYY-MM-DD string (UTC math is safe for a bare date).
@@ -886,6 +915,12 @@ async function handleRequest(request, env, origin) {
     const { clientId, startDate, endDate, comparisonStart, comparisonEnd } = body;
     if (!clientId || !startDate || !endDate) {
       return new Response(JSON.stringify({ error: 'Required: clientId, startDate, endDate' }), {
+        status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) },
+      });
+    }
+    const dateError = validateDateRange({ startDate, endDate, comparisonStart, comparisonEnd });
+    if (dateError) {
+      return new Response(JSON.stringify({ error: dateError }), {
         status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) },
       });
     }

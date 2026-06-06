@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import ReportBuilder from "./ReportBuilder.jsx";
 import Settings from "./Settings.jsx";
 import SignIn from "./SignIn.jsx";
+import ErrorBoundary from "./ErrorBoundary.jsx";
 
 function CursorDot() {
   const dotRef = useRef(null);
@@ -326,15 +327,17 @@ export default function App() {
     <>
       <CursorDot />
 
-      <ReportBuilder
-        onOpenSettings={session.admin ? () => setShowSettings(true) : undefined}
-        settingsVersion={settingsVersion}
-        sessionToken={session.token}
-        session={session}
-        onSignOut={handleSignOut}
-        onOpenAdmin={session.admin ? () => setShowAdmin(v => !v) : undefined}
-        adminPanelOpen={showAdmin}
-      />
+      <ErrorBoundary>
+        <ReportBuilder
+          onOpenSettings={session.admin ? () => setShowSettings(true) : undefined}
+          settingsVersion={settingsVersion}
+          sessionToken={session.token}
+          session={session}
+          onSignOut={handleSignOut}
+          onOpenAdmin={session.admin ? () => setShowAdmin(v => !v) : undefined}
+          adminPanelOpen={showAdmin}
+        />
+      </ErrorBoundary>
       {showSettings && (
         <div style={{ position: "fixed", inset: 0, zIndex: 1000 }}>
           <Settings onSave={handleSettingsSaved} />

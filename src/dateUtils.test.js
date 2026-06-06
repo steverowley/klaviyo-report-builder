@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { fmtEventDate, parseLocalDate, shiftYear } from "./dateUtils.js";
+import { fmtEventDate, parseLocalDate, shiftYear, validateReportDates } from "./dateUtils.js";
 
 describe("parseLocalDate + fmtEventDate round-trip", () => {
   // The whole point: a YYYY-MM-DD string must survive a parse→format round-trip
@@ -30,5 +30,25 @@ describe("shiftYear", () => {
 
   it("keeps Feb 29 when the target year is also a leap year", () => {
     expect(fmtEventDate(shiftYear(parseLocalDate("2024-02-29"), -4))).toBe("2020-02-29");
+  });
+});
+
+describe("validateReportDates", () => {
+  const today = "2026-06-06";
+  it("accepts a sane past window", () => {
+    expect(validateReportDates("2026-05-01", "2026-05-31", today)).toBeNull();
+  });
+  it("rejects a reversed range", () => {
+    expect(validateReportDates("2026-05-31", "2026-05-01", today)).toMatch(/before the start/i);
+  });
+  it("rejects an end date of today or later (complete days only)", () => {
+    expect(validateReportDates("2026-06-01", "2026-06-06", today)).toMatch(/before today/i);
+    expect(validateReportDates("2026-06-01", "2026-07-01", today)).toMatch(/before today/i);
+  });
+  it("rejects an over-long range", () => {
+    expect(validateReportDates("2024-01-01", "2026-01-01", today)).toMatch(/too long/i);
+  });
+  it("requires both dates", () => {
+    expect(validateReportDates("", "2026-05-31", today)).toMatch(/choose a start and end/i);
   });
 });

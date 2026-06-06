@@ -10,6 +10,7 @@ import {
   reportBody,
   aggregateBody,
   nextDay,
+  validateDateRange,
   tzOffset,
   pickMetric,
   countMetricMatches,
@@ -136,6 +137,25 @@ describe('nextDay', () => {
     expect(nextDay('2024-01-31')).toBe('2024-02-01');
     expect(nextDay('2024-02-28')).toBe('2024-02-29'); // leap year
     expect(nextDay('2026-12-31')).toBe('2027-01-01');
+  });
+});
+
+describe('validateDateRange', () => {
+  it('accepts a valid range', () => {
+    expect(validateDateRange({ startDate: '2026-01-01', endDate: '2026-01-31' })).toBeNull();
+  });
+  it('rejects a non-YYYY-MM-DD date', () => {
+    expect(validateDateRange({ startDate: '01/01/2026', endDate: '2026-01-31' })).toMatch(/YYYY-MM-DD/);
+  });
+  it('rejects start after end', () => {
+    expect(validateDateRange({ startDate: '2026-02-01', endDate: '2026-01-01' })).toMatch(/on or before/);
+  });
+  it('rejects an absurdly long span', () => {
+    expect(validateDateRange({ startDate: '2020-01-01', endDate: '2026-01-01' })).toMatch(/too long/);
+  });
+  it('validates the comparison window when present', () => {
+    expect(validateDateRange({ startDate: '2026-01-01', endDate: '2026-01-31', comparisonStart: 'bad', comparisonEnd: '2025-12-31' })).toMatch(/comparisonStart/);
+    expect(validateDateRange({ startDate: '2026-01-01', endDate: '2026-01-31', comparisonStart: '2025-12-31', comparisonEnd: '2025-12-01' })).toMatch(/comparisonStart must be on or before/);
   });
 });
 

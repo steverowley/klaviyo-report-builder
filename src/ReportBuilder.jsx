@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { extractReportHtml, reportCompletionError, embedIncompleteDataNotice } from "./reportHtml.js";
-import { fmtEventDate, parseLocalDate, shiftYear, fmtChartLabel } from "./dateUtils.js";
+import { fmtEventDate, parseLocalDate, shiftYear, fmtChartLabel, validateReportDates } from "./dateUtils.js";
+import { friendlyErrorMessage, isRetryableStatus } from "./errors.js";
 
 const WORKER_URL = "swanky_worker_url";
 const MODEL_KEY = "swanky_model";
@@ -595,6 +596,16 @@ ${JSON.stringify(trimData(klaviyoData))}`;
       return;
     }
 
+    // Block nonsensical windows (future / reversed / absurdly long) before spending
+    // a generation on them — they'd otherwise render as a plausible-looking but
+    // mostly-empty report that could reach a client.
+    const plannedRange = computeDateRange();
+    const dateError = validateReportDates(plannedRange.start, plannedRange.end, fmtEventDate(new Date()));
+    if (dateError) {
+      setError(dateError);
+      return;
+    }
+
     const workerUrl = localStorage.getItem(WORKER_URL) || BAKED_WORKER_URL;
 
     if (!workerUrl) {
@@ -636,6 +647,11 @@ ${JSON.stringify(trimData(klaviyoData))}`;
 
     abortControllerRef.current = new AbortController();
     const { signal } = abortControllerRef.current;
+
+    // Idle-stream watchdog: if the SSE goes silent for too long, abort and tell the
+    // user it stalled (distinguished from a user cancel via the timedOut flag).
+    let timedOut = false;
+    let watchdog = null;
 
     try {
       // ── Phase 1: fetch Klaviyo data + filter ecommerce events in PARALLEL ──
@@ -742,35 +758,54 @@ Return ONLY a JSON array of the index numbers for events that are commercially r
       }, 4000);
 
       // ── Phase 2: stream HTML from Anthropic ─────────────────────────────────
-      const anthropicRes = await fetch(`${workerUrl}?action=anthropic`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          ...authHeaders(sessionToken),
-        },
-        body: JSON.stringify({
-          model: selectedModel,
-          max_tokens: maxTokensForReport(),
-          stream: true,
-          system: [{ type: "text", text: buildSystemPrompt(), cache_control: { type: "ephemeral" } }],
-          messages: [{ role: "user", content: buildUserMessage(klaviyoData, relevantEvents) }],
-        }),
-        signal,
+      const anthropicReqBody = JSON.stringify({
+        model: selectedModel,
+        max_tokens: maxTokensForReport(),
+        stream: true,
+        system: [{ type: "text", text: buildSystemPrompt(), cache_control: { type: "ephemeral" } }],
+        messages: [{ role: "user", content: buildUserMessage(klaviyoData, relevantEvents) }],
       });
 
-      if (myRequestId !== requestIdRef.current) return;
-
-      if (!anthropicRes.ok) {
-        let message = `Anthropic API error ${anthropicRes.status}`;
-        try {
-          const errData = await anthropicRes.json();
-          message = errData.error?.message || (typeof errData.error === "string" ? errData.error : message);
-        } catch (_) {}
-        throw new Error(message);
+      // Retry the initial request on transient overload (429/5xx/529) with backoff,
+      // before any bytes have streamed. Mid-stream failures are handled in the loop.
+      let anthropicRes;
+      for (let attempt = 0; ; attempt++) {
+        anthropicRes = await fetch(`${workerUrl}?action=anthropic`, {
+          method: "POST",
+          headers: { "content-type": "application/json", ...authHeaders(sessionToken) },
+          body: anthropicReqBody,
+          signal,
+        });
+        if (myRequestId !== requestIdRef.current) return;
+        if (anthropicRes.ok) break;
+        if (isRetryableStatus(anthropicRes.status) && attempt < 2) {
+          const ra = parseInt(anthropicRes.headers.get("retry-after") || "", 10);
+          const backoff = Number.isFinite(ra) ? Math.min(ra * 1000, 15000) : 1500 * Math.pow(2, attempt);
+          setLoadingLine("The AI service is busy — retrying in a moment");
+          await new Promise(r => setTimeout(r, backoff));
+          if (myRequestId !== requestIdRef.current) return;
+          continue;
+        }
+        // Non-retryable or out of retries — surface friendly guidance.
+        let message = friendlyErrorMessage(anthropicRes.status, `Anthropic API error ${anthropicRes.status}`);
+        if (anthropicRes.status < 500 && anthropicRes.status !== 429) {
+          try { const errData = await anthropicRes.json(); if (errData.error?.message) message = errData.error.message; } catch (_) {}
+        }
+        const err = new Error(message);
+        err.status = anthropicRes.status;
+        throw err;
       }
 
       // Read the SSE stream — accumulate full HTML, drive progress from real token count
       const reader = anthropicRes.body.getReader();
+      const IDLE_MS = 90000;
+      let lastActivity = Date.now();
+      watchdog = setInterval(() => {
+        if (Date.now() - lastActivity > IDLE_MS) {
+          timedOut = true;
+          try { abortControllerRef.current?.abort(); } catch (_) {}
+        }
+      }, 5000);
       const decoder = new TextDecoder();
       let sseBuffer = '';
       let rawHtml = '';
@@ -785,6 +820,7 @@ Return ONLY a JSON array of the index numbers for events that are commercially r
 
       outer: while (true) {
         const { done, value } = await reader.read();
+        lastActivity = Date.now();
         if (done) break;
         if (myRequestId !== requestIdRef.current) { reader.cancel(); return; }
 
@@ -828,6 +864,7 @@ Return ONLY a JSON array of the index numbers for events that are commercially r
         }
       }
 
+      clearInterval(watchdog);
       if (myRequestId !== requestIdRef.current) return;
 
       // Pull out the HTML document, then verify the stream actually completed. A
@@ -925,8 +962,20 @@ function addEventMarkers(chart,events){
       setJustFinished(true);
 
     } catch (e) {
+      clearInterval(watchdog);
       if (myRequestId !== requestIdRef.current) return;
-      if (e.name === "AbortError") return;
+      if (e.name === "AbortError") {
+        // The watchdog aborted a stalled stream — tell the user. A genuine user
+        // cancel bumps requestIdRef, so it returns above and never reaches here.
+        if (timedOut) {
+          clearTimers();
+          setError("The report generation stalled (no response for 90 seconds) — please try again.");
+          setProgress(0);
+          setJustFinished(false);
+          setIsGenerating(false);
+        }
+        return;
+      }
 
       clearTimers();
       if ((e.status === 401 || e.status === 403) && onSignOut) {
