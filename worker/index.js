@@ -783,7 +783,7 @@ async function handleRequest(request, env, origin) {
           status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) },
         });
       }
-      const { html, metadata } = body;
+      const { html, metadata, inputData } = body;
       if (!html || !metadata?.clientId) {
         return new Response(JSON.stringify({ error: 'html and metadata.clientId are required' }), {
           status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) },
@@ -795,12 +795,16 @@ async function handleRequest(request, env, origin) {
           status: 413, headers: { 'Content-Type': 'application/json', ...cors(origin) },
         });
       }
+      // Stamp the report with the verified session user (audit trail) — trust the
+      // signed token, not a client-supplied field.
+      const saveSession = await verifyToken(getBearerToken(request), env.TOKEN_SECRET);
       // Random suffix so two reports for the same client in the same millisecond
       // can't collide on the key.
       const ts = String(Date.now()).padStart(16, '0');
       const key = `report_${ts}_${crypto.randomUUID().slice(0, 8)}_${metadata.clientId}`;
       const kvMeta = {
         generatedAt: metadata.generatedAt || new Date().toISOString(),
+        generatedBy: (saveSession?.sub || '').slice(0, 80),
         clientId:    metadata.clientId,
         reportType:  metadata.reportType  || '',
         dateStart:   metadata.dateStart   || '',
@@ -815,6 +819,14 @@ async function handleRequest(request, env, origin) {
         // report HTML) rather than fail the whole save.
         delete kvMeta.warnings;
         await env.CLIENTS_KV.put(key, html, { metadata: kvMeta });
+      }
+      // Reproducibility: persist the exact Klaviyo inputs that produced this report
+      // (separate key, fetched on demand) so a disputed number can be reconstructed.
+      if (inputData) {
+        const snapshot = JSON.stringify(inputData);
+        if (snapshot.length <= 2_000_000) {
+          await env.CLIENTS_KV.put(`reportdata_${key}`, snapshot).catch(() => {});
+        }
       }
       return new Response(JSON.stringify({ saved: true, key }), {
         headers: { 'Content-Type': 'application/json', ...cors(origin) },
@@ -849,10 +861,32 @@ async function handleRequest(request, env, origin) {
           status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) },
         });
       }
-      await env.CLIENTS_KV.delete(key);
+      await Promise.all([
+        env.CLIENTS_KV.delete(key),
+        env.CLIENTS_KV.delete(`reportdata_${key}`), // also drop the reproducibility snapshot
+      ]);
       return new Response(JSON.stringify({ deleted: true, key }), {
         headers: { 'Content-Type': 'application/json', ...cors(origin) },
       });
+    }
+
+    // GET /?action=get-report-data&key=<key> — the saved Klaviyo inputs (for audit)
+    if (request.method === 'GET' && action === 'get-report-data') {
+      const authFail = await requireSession(request, env, origin);
+      if (authFail) return authFail;
+      const key = url.searchParams.get('key');
+      if (!key || !env.CLIENTS_KV) {
+        return new Response(JSON.stringify({ error: 'key required and KV must be configured' }), {
+          status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) },
+        });
+      }
+      const snapshot = await env.CLIENTS_KV.get(`reportdata_${key}`);
+      if (snapshot === null) {
+        return new Response(JSON.stringify({ error: 'No saved source data for this report' }), {
+          status: 404, headers: { 'Content-Type': 'application/json', ...cors(origin) },
+        });
+      }
+      return new Response(snapshot, { headers: { 'Content-Type': 'application/json', ...cors(origin) } });
     }
 
     // GET /?action=get-report&key=<key> — fetch full HTML for a saved report ──

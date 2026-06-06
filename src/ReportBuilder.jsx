@@ -986,9 +986,14 @@ function addEventMarkers(chart,events){
       const generatedNow = new Date().toISOString();
       const reportMeta = { clientId: selectedClientId, reportType, dateStart: range.start, dateEnd: range.end, accountName, generatedAt: generatedNow, warnings };
       setCurrentReportMeta({ ...reportMeta });
+      // Reproducibility snapshot: the exact inputs that produced this report.
+      const inputSnapshot = {
+        generatedAt: generatedNow, reportType, comparisonMode, model: selectedModel,
+        range, comparison, accountName, additionalContext, events: relevantEvents, klaviyo: klaviyoData,
+      };
       // Persist, then adopt the server-assigned key so this report highlights as
       // "current" in the Past reports list and the list shows it.
-      saveReportToWorker(rawHtml, reportMeta).then((key) => {
+      saveReportToWorker(rawHtml, reportMeta, inputSnapshot).then((key) => {
         if (key && myRequestId === requestIdRef.current) {
           setCurrentReportMeta((prev) => (prev ? { ...prev, key } : prev));
           refreshSavedReports();
@@ -1095,14 +1100,14 @@ function addEventMarkers(chart,events){
 
   // Save a freshly generated report to KV for cross-device access. Returns the
   // server-assigned key (or null) so the caller can highlight it as the current report.
-  const saveReportToWorker = async (html, metadata) => {
+  const saveReportToWorker = async (html, metadata, inputData) => {
     const workerUrl = localStorage.getItem(WORKER_URL);
     if (!workerUrl) return null;
     try {
       const res = await fetch(`${workerUrl}?action=save-report`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders(sessionToken) },
-        body: JSON.stringify({ html, metadata }),
+        body: JSON.stringify({ html, metadata, inputData }),
       });
       if (handleAuthFailure(res)) return null;
       if (res.ok) { const d = await res.json().catch(() => ({})); return d.key || null; }
@@ -1420,6 +1425,32 @@ ${reportHtml}`,
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  // Download the exact Klaviyo inputs that produced a saved report, so a disputed
+  // number can be reconstructed. Only available once a report has been saved (has a key).
+  const handleDownloadData = async () => {
+    const key = currentReportMeta?.key;
+    const workerUrl = localStorage.getItem(WORKER_URL) || BAKED_WORKER_URL;
+    if (!key || !workerUrl) { setError("Source data is available once the report has saved — try again in a moment."); return; }
+    try {
+      const res = await fetch(`${workerUrl}?action=get-report-data&key=${encodeURIComponent(key)}`, { headers: authHeaders(sessionToken) });
+      if (handleAuthFailure(res)) return;
+      if (!res.ok) { setError("No saved source data for this report."); return; }
+      const json = await res.text();
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const safeName = accountName.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+      a.href = url;
+      a.download = `${safeName}-${reportType.toLowerCase()}-source-data.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      setError("Couldn’t download the source data — please try again.");
+    }
   };
 
   return (
@@ -1926,7 +1957,9 @@ ${reportHtml}`,
                     <div style={{ fontSize: "11px", fontWeight: 500, color: "#0a0a0a", marginBottom: "1px" }}>
                       {entry.reportType}{entry.dateStart ? ` · ${fmtDateDisplay(entry.dateStart)}–${fmtDateDisplay(entry.dateEnd)}` : ""}
                     </div>
-                    <div style={{ fontSize: "10px", color: "#b8b8b8" }}>{relativeTime(entry.generatedAt)}</div>
+                    <div style={{ fontSize: "10px", color: "#b8b8b8" }}>
+                      {relativeTime(entry.generatedAt)}{entry.generatedBy ? ` · ${entry.generatedBy}` : ""}
+                    </div>
                   </div>
                   <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="#b8b8b8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                     <polyline points="1,4 7,4" /><polyline points="4,1 7,4 4,7" />
@@ -2088,6 +2121,21 @@ ${reportHtml}`,
               onMouseLeave={e => e.currentTarget.style.background = "transparent"}
             >
               Download HTML
+            </button>
+            <button
+              onClick={handleDownloadData}
+              title="Download the exact Klaviyo data this report was built from, for your records"
+              style={{
+                width: "100%", padding: "8px 20px", background: "transparent",
+                color: "#6b6b6b", border: "none",
+                fontFamily: "'DM Sans', sans-serif", fontSize: "9px", fontWeight: 500,
+                letterSpacing: "0.16em", textTransform: "uppercase", cursor: "pointer",
+                marginTop: "4px",
+              }}
+              onMouseEnter={e => e.currentTarget.style.color = "#0a0a0a"}
+              onMouseLeave={e => e.currentTarget.style.color = "#6b6b6b"}
+            >
+              Source data (JSON)
             </button>
             <button
               onClick={slidesPrompt && !isCreatingSlides ? () => setShowSlidesModal(true) : handleCreateSlidesPrompt}
