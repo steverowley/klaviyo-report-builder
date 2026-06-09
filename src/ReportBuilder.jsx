@@ -15,7 +15,7 @@ const MODELS = {
     label: "Haiku 4.5",
     blurb: "Fastest, lowest cost",
     pricing: { input: 1, cacheWrite: 1.25, cacheRead: 0.10, output: 5 },
-    maxOutputTokens: 64000,
+    maxOutputTokens: 32000,
   },
   "claude-sonnet-4-6": {
     label: "Sonnet 4.6",
@@ -243,19 +243,12 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, 
   const reportTypes = ["Weekly", "Fortnightly", "Monthly", "Quarterly", "YTD", "Custom"];
   const comparisonModes = ["None", "Previous Period", "Year on Year"];
 
-  // Scale max output tokens to the reporting period, capped by the selected model's
-  // actual output limit. Floor raised to 32k so even weekly reports have room to breathe;
-  // multiplier raised to 1200 tokens/day so monthly+ reports fill the available window.
-  // Haiku 4.5 and Sonnet 4.6 support 64k output; Opus 4.7 supports 128k.
-  const maxTokensForReport = () => {
-    const { start, end } = computeDateRange();
-    const days = Math.max(
-      1,
-      Math.round((new Date(end) - new Date(start)) / 86400000) + 1
-    );
-    const modelMax = (MODELS[selectedModel] || MODELS[DEFAULT_MODEL]).maxOutputTokens;
-    return Math.min(modelMax, Math.max(32000, 12000 + days * 1200));
-  };
+  // Always request the model's full output ceiling so reports are never cut off mid-generation.
+  // Haiku 4.5: 32k · Sonnet 4.6: 64k · Opus 4.7: 128k.
+  // Cost is based on tokens actually generated, not the ceiling, so there's no penalty for
+  // requesting the maximum.
+  const maxTokensForReport = () =>
+    (MODELS[selectedModel] || MODELS[DEFAULT_MODEL]).maxOutputTokens;
 
   const computeDateRange = () => {
     const today = new Date();
