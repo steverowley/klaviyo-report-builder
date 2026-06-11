@@ -15,7 +15,7 @@ const MODELS = {
     label: "Haiku 4.5",
     blurb: "Fastest, lowest cost",
     pricing: { input: 1, cacheWrite: 1.25, cacheRead: 0.10, output: 5 },
-    maxOutputTokens: 32000,
+    maxOutputTokens: 64000,
   },
   "claude-sonnet-4-6": {
     label: "Sonnet 4.6",
@@ -23,8 +23,8 @@ const MODELS = {
     pricing: { input: 3, cacheWrite: 3.75, cacheRead: 0.30, output: 15 },
     maxOutputTokens: 64000,
   },
-  "claude-opus-4-7": {
-    label: "Opus 4.7",
+  "claude-opus-4-8": {
+    label: "Opus 4.8",
     blurb: "Highest quality, slowest",
     pricing: { input: 5, cacheWrite: 6.25, cacheRead: 0.50, output: 25 },
     maxOutputTokens: 128000,
@@ -244,7 +244,7 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, 
   const comparisonModes = ["None", "Previous Period", "Year on Year"];
 
   // Always request the model's full output ceiling so reports are never cut off mid-generation.
-  // Haiku 4.5: 32k · Sonnet 4.6: 64k · Opus 4.7: 128k.
+  // Haiku 4.5 / Sonnet 4.6: 64k · Opus 4.8: 128k.
   // Cost is based on tokens actually generated, not the ceiling, so there's no penalty for
   // requesting the maximum.
   const maxTokensForReport = () =>
