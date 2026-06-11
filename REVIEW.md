@@ -40,6 +40,33 @@ in the PR. See `docs/user-guide.md` for the up-to-date staff guide.
 
 ---
 
+## 2026-06-11 — Roadmap pass (PR #95 + follow-up)
+
+A post-launch improvement pass closed the remaining engineering debt:
+
+- **Correctness** — the spend meter priced Opus 3× too high (fixed: $5/$25 per MTok);
+  Opus 4.7 → 4.8; Haiku's output ceiling raised to its real 64k; the superseded-stream
+  watchdog leak (could abort a replacement generation ~90s in) fixed.
+- **Pipeline** — the Pages deploy now runs the test suite, closing the
+  direct-push-to-main gap (CI previously covered only PRs and non-main branches).
+- **Structure** — `ReportBuilder.jsx` (3,605 lines) split into focused modules: a
+  versioned report prompt (`REPORT_PROMPT_VERSION` is stamped into saved-report
+  metadata and reproducibility snapshots), a shared worker-fetch helper, a tested SSE
+  parser, a `useReportGeneration` hook, theme tokens, and presentational components.
+  Every move machine-verified byte-identical. Tests 98 → 122.
+- **Deferred ARIA item landed** — focus traps, `role="dialog"`/`aria-modal`, and
+  labels across all dialogs and custom controls.
+- **Worker** — `list-reports` scopes per client server-side (`?clientId=`); wrangler
+  3.78 → 4.99 and `compatibility_date` 2024-10-15 → 2026-06-01, verified with a
+  before/after local smoke test of auth, validation, and CORS paths.
+
+Still open by choice: `workers_dev` public URL (needs a custom domain) · KV report
+retention (records tool — recommend keeping indefinitely) · inline-style sweep
+(visual-regression risk; `theme.js` covers new code) · branch protection on `main`
+(repo setting — Steve).
+
+---
+
 ## 🔴 Critical
 
 - [x] **Saved-report endpoints have no authentication** — `worker/index.js:569-650`

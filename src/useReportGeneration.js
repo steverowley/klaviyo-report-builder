@@ -295,7 +295,12 @@ Return ONLY a JSON array of the index numbers for events that are commercially r
           }
         },
       });
-      if (stream.cancelled) return;
+      // A superseded run must take its watchdog with it: the interval closes
+      // over this run's frozen lastActivity, so left alive it would fire ~90s
+      // later and abort whatever request abortControllerRef holds by then —
+      // killing a NEW generation mid-stream. (Reachable: open a past report
+      // while generating, then hit Generate again.)
+      if (stream.cancelled) { clearInterval(watchdog); return; }
       let rawHtml = stream.text;
       const { stopReason, sawMessageStop, inputUsage, outputTokens } = stream;
 
