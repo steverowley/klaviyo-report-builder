@@ -1,10 +1,9 @@
 import React, { useState, useRef, useEffect } from "react";
-import { extractReportHtml, reportCompletionError, embedIncompleteDataNotice } from "./reportHtml.js";
-import { fmtEventDate, parseLocalDate, shiftYear, fmtChartLabel, validateReportDates } from "./dateUtils.js";
-import { friendlyErrorMessage, isRetryableStatus } from "./errors.js";
-import { REPORT_PROMPT_VERSION, buildReportSystemPrompt, buildReportUserMessage } from "./reportPrompt.js";
+import { fmtEventDate, parseLocalDate, shiftYear, validateReportDates } from "./dateUtils.js";
+import { friendlyErrorMessage } from "./errors.js";
+import { REPORT_PROMPT_VERSION } from "./reportPrompt.js";
 import { workerFetch } from "./workerApi.js";
-import { readAnthropicSse } from "./anthropicStream.js";
+import { useReportGeneration } from "./useReportGeneration.js";
 
 const WORKER_URL = "swanky_worker_url";
 const MODEL_KEY = "swanky_model";
@@ -32,111 +31,6 @@ const MODELS = {
     maxOutputTokens: 128000,
   },
 };
-
-// ── Ecommerce event calendar ─────────────────────────────────────────────────
-
-function easterDate(year) {
-  const a = year % 19, b = Math.floor(year / 100), c = year % 100;
-  const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
-  const g = Math.floor((b - f + 1) / 3);
-  const h = (19 * a + b - d - g + 15) % 30;
-  const i = Math.floor(c / 4), k = c % 4;
-  const l = (32 + 2 * e + 2 * i - h - k) % 7;
-  const m = Math.floor((a + 11 * h + 22 * l) / 451);
-  const month = Math.floor((h + l - 7 * m + 114) / 31);
-  const day = ((h + l - 7 * m + 114) % 31) + 1;
-  return new Date(year, month - 1, day);
-}
-
-function nthWeekday(year, month, weekday, n) {
-  const d = new Date(year, month, 1);
-  const diff = (weekday - d.getDay() + 7) % 7;
-  d.setDate(1 + diff + (n - 1) * 7);
-  return d;
-}
-
-function lastWorkingDay(year, month) {
-  const d = new Date(year, month + 1, 0);
-  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1);
-  return d;
-}
-
-const SCHOOL_KEYWORDS =/school|uniform|schoolwear|education|nursery|academy|college|pupil|student|kids ?wear|childrenswear|children.?s wear/i;
-
-function isSchoolBrand(accountName, context) {
-  return SCHOOL_KEYWORDS.test(accountName) || SCHOOL_KEYWORDS.test(context || "");
-}
-
-function getEcommerceEvents(startDate, endDate, accountName, context) {
-  const start = parseLocalDate(startDate);
-  const end = parseLocalDate(endDate);
-  const events = [];
-  const MS = 86400000;
-  const school = isSchoolBrand(accountName, context);
-
-  const add = (d, name, type) => {
-    if (d >= start && d <= end) events.push({ date: fmtEventDate(d), chartLabel: fmtChartLabel(d), name, type });
-  };
-
-  for (let y = start.getFullYear(); y <= end.getFullYear(); y++) {
-    add(new Date(y, 0, 1),   "New Year's Day",          "holiday");
-    add(new Date(y, 1, 14),  "Valentine's Day",          "ecommerce");
-    add(new Date(y, 2, 8),   "International Women's Day","ecommerce");
-
-    const easter = easterDate(y);
-    add(new Date(easter.getTime() - 2 * MS), "Good Friday",          "holiday");
-    add(easter,                               "Easter Sunday",        "holiday");
-    // UK Mothering Sunday = 3 Sundays before Easter
-    add(new Date(easter.getTime() - 21 * MS), "UK Mother's Day",      "ecommerce");
-
-    add(nthWeekday(y, 5, 0, 3), "Father's Day",          "ecommerce"); // 3rd Sunday June
-    add(new Date(y, 6, 15),  "Amazon Prime Day (approx)","ecommerce");
-
-    if (school) {
-      // UK school terms (England approximate) — only for school/education brands
-      add(new Date(y, 6, 22),  "School Summer Holidays",   "school");   // ~22 Jul
-      add(new Date(y, 6, 25),  "Uniform buying peak",      "school");   // late Jul — schoolwear peak
-      add(new Date(y, 8, 3),   "Autumn Term Starts",       "school");   // ~1st week Sep
-      add(new Date(y, 9, 28),  "Autumn Half Term",         "school");   // ~last week Oct
-      add(new Date(y, 11, 19), "School Christmas Break",   "school");   // ~3rd week Dec
-      add(new Date(y, 0, 7),   "Spring Term Starts",       "school");   // ~7 Jan
-      add(new Date(y, 1, 17),  "Spring Half Term",         "school");   // ~3rd week Feb
-      const summerTermStart = new Date(easter.getTime() + 14 * MS);
-      add(summerTermStart,                                 "Summer Term Starts",  "school");
-      add(nthWeekday(y, 4, 1, 4), "May Half Term",        "school");   // ~last Mon May
-    }
-
-    add(new Date(y, 7, 28),  "Summer Bank Holiday",      "holiday");
-    add(new Date(y, 9, 31),  "Halloween",                "ecommerce");
-    add(new Date(y, 10, 11), "Singles' Day",             "ecommerce");
-
-    // Black Friday = day after 4th Thursday of November
-    const blackFriday = new Date(nthWeekday(y, 10, 4, 4).getTime() + MS);
-    add(blackFriday,                                "Black Friday",     "ecommerce");
-    add(new Date(blackFriday.getTime() + MS),       "Black Friday Weekend","ecommerce");
-    add(new Date(blackFriday.getTime() + 2 * MS),   "Black Friday Weekend","ecommerce");
-    add(new Date(blackFriday.getTime() + 3 * MS),   "Cyber Monday",     "ecommerce");
-
-    add(new Date(y, 11, 24), "Christmas Eve",     "holiday");
-    add(new Date(y, 11, 25), "Christmas Day",     "holiday");
-    add(new Date(y, 11, 26), "Boxing Day",        "ecommerce");
-    add(new Date(y, 11, 27), "Post-Christmas sale","ecommerce");
-    add(new Date(y, 11, 31), "New Year's Eve",    "holiday");
-
-    // End-of-month payday (last working day each month)
-    for (let m = 0; m < 12; m++) {
-      const pd = lastWorkingDay(y, m);
-      if (pd >= start && pd <= end) {
-        const mname = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m];
-        events.push({ date: fmtEventDate(pd), chartLabel: fmtChartLabel(pd), name: `${mname} payday`, type: "payday" });
-      }
-    }
-  }
-
-  return events
-    .filter((e, i, arr) => arr.findIndex(x => x.date === e.date && x.name === e.name) === i)
-    .sort((a, b) => a.date.localeCompare(b.date));
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -169,16 +63,8 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, 
   const [customEnd, setCustomEnd] = useState("");
   const [additionalContext, setAdditionalContext] = useState("");
   const [cachedInfo, setCachedInfo] = useState(null);
-  const [isGenerating, setIsGenerating] = useState(false);
   const [reportHtml, setReportHtml] = useState("");
-  const [error, setError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
-  const [progress, setProgress] = useState(0);
-  const [loadingLine, setLoadingLine] = useState("");
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [justFinished, setJustFinished] = useState(false);
-  const [lastUsage, setLastUsage] = useState(null);
-  const [lastDuration, setLastDuration] = useState(null);
   const [slidesPrompt, setSlidesPrompt] = useState("");
   const [isCreatingSlides, setIsCreatingSlides] = useState(false);
   const [slidesProgress, setSlidesProgress] = useState(0);
@@ -191,7 +77,6 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, 
   const [savedReports, setSavedReports] = useState([]);
   const [currentReportMeta, setCurrentReportMeta] = useState(null);
   const [loadingSavedReport, setLoadingSavedReport] = useState(false);
-  const [dataWarnings, setDataWarnings] = useState([]);
   const [spendStatus, setSpendStatus] = useState(null); // { month, spentUsd, capUsd, ratio }
   const [signedOff, setSignedOff] = useState(false); // human review confirmed before download/send
   const dropdownRef = useRef(null);
@@ -199,44 +84,7 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, 
   const slidesProgressTimerRef = useRef(null);
   const regenProgressTimerRef = useRef(null);
   const iframeRef = useRef(null);
-  const progressTimerRef = useRef(null);
-  const lineTimerRef = useRef(null);
-  const elapsedTimerRef = useRef(null);
-  const abortControllerRef = useRef(null);
-  const requestIdRef = useRef(0);
   const overCapAckRef = useRef(false); // one-time-per-session ack of the spend-cap warning
-
-  // Loading lines, paired with the progress range during which they appear.
-  // Tone: dry, editorial, faintly amused, never marketing-speak.
-  const loadingLines = [
-    { range: [0, 6], text: "Knocking politely on Klaviyo's door" },
-    { range: [6, 12], text: "Producing credentials, removing hat" },
-    { range: [12, 20], text: "Locating the campaign ledger" },
-    { range: [20, 28], text: "Counting open rates by candlelight" },
-    { range: [28, 36], text: "Tallying clicks, one by one" },
-    { range: [36, 44], text: "Asking the flows how they've been" },
-    { range: [44, 52], text: "Reconciling revenue against expectation" },
-    { range: [52, 60], text: "Comparing this period to its former self" },
-    { range: [60, 68], text: "Setting the table in Ovo" },
-    { range: [68, 76], text: "Polishing the numerals until they gleam" },
-    { range: [76, 84], text: "Composing the executive summary" },
-    { range: [84, 90], text: "Drafting recommendations, considered" },
-    { range: [90, 98], text: "A final, careful proofread", hold: true },
-    { range: [90, 98], text: "Adjusting the kerning, by hand", hold: true },
-    { range: [90, 98], text: "Triple-checking the conversion rate", hold: true },
-    { range: [90, 98], text: "Considering, at length, the comma", hold: true },
-    { range: [90, 98], text: "A second opinion on the line break", hold: true },
-    { range: [90, 98], text: "Folding the corners of the page", hold: true },
-    { range: [90, 98], text: "Letting the ink dry properly", hold: true },
-    { range: [90, 98], text: "One more pass for good measure", hold: true },
-  ];
-
-  const lineForProgress = (p) => {
-    const found = loadingLines.find(({ range, hold }) => !hold && p >= range[0] && p < range[1]);
-    return found ? found.text : null;
-  };
-
-  const holdingLines = loadingLines.filter((l) => l.hold);
 
   const reportTypes = ["Weekly", "Fortnightly", "Monthly", "Quarterly", "YTD", "Custom"];
   const comparisonModes = ["None", "Previous Period", "Year on Year"];
@@ -308,14 +156,47 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, 
     ? savedReports.filter(r => r.clientId === selectedClientId)
     : [];
 
-  const clearTimers = () => {
-    [progressTimerRef, lineTimerRef, elapsedTimerRef].forEach((r) => {
-      if (r.current) {
-        clearInterval(r.current);
-        r.current = null;
+  // What to do with a finished report: record the spend, persist it with full
+  // metadata (+ reproducibility snapshot), and render it. Receives the config
+  // that produced the report, so metadata can't be corrupted by settings
+  // changed mid-generation.
+  const handleGenerationComplete = ({ html, warnings, costUsd, config, relevantEvents, klaviyoData, isCurrent }) => {
+    trackSpend(costUsd);
+    const generatedNow = new Date().toISOString();
+    const reportMeta = { clientId: config.clientId, reportType: config.reportType, dateStart: config.range.start, dateEnd: config.range.end, accountName: config.accountName, generatedAt: generatedNow, warnings, promptVersion: REPORT_PROMPT_VERSION };
+    setCurrentReportMeta({ ...reportMeta });
+    // Reproducibility snapshot: the exact inputs that produced this report.
+    const inputSnapshot = {
+      generatedAt: generatedNow, reportType: config.reportType, comparisonMode: config.comparisonMode, model: config.model,
+      promptVersion: REPORT_PROMPT_VERSION,
+      range: config.range, comparison: config.comparison, accountName: config.accountName,
+      additionalContext: config.additionalContext, events: relevantEvents, klaviyo: klaviyoData,
+    };
+    // Persist, then adopt the server-assigned key so this report highlights as
+    // "current" in the Past reports list and the list shows it.
+    saveReportToWorker(html, reportMeta, inputSnapshot).then((key) => {
+      if (key && isCurrent()) {
+        setCurrentReportMeta((prev) => (prev ? { ...prev, key } : prev));
+        refreshSavedReports();
       }
     });
+    setCachedInfo(null);
+    setReportHtml(html);
+    setSlidesPrompt("");
   };
+
+  const generation = useReportGeneration({ sessionToken, onSignOut, onComplete: handleGenerationComplete });
+  const {
+    isGenerating, setIsGenerating,
+    error, setError,
+    progress, setProgress,
+    loadingLine,
+    elapsedSeconds,
+    justFinished, setJustFinished,
+    lastUsage, setLastUsage,
+    lastDuration, setLastDuration,
+    dataWarnings, setDataWarnings,
+  } = generation;
 
   const handleGenerate = async () => {
     setError("");
@@ -334,8 +215,8 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, 
     // Block nonsensical windows (future / reversed / absurdly long) before spending
     // a generation on them — they'd otherwise render as a plausible-looking but
     // mostly-empty report that could reach a client.
-    const plannedRange = computeDateRange();
-    const dateError = validateReportDates(plannedRange.start, plannedRange.end, fmtEventDate(new Date()));
+    const range = computeDateRange();
+    const dateError = validateReportDates(range.start, range.end, fmtEventDate(new Date()));
     if (dateError) {
       setError(dateError);
       return;
@@ -357,369 +238,20 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, 
       return;
     }
 
-    setIsGenerating(true);
     setReportHtml("");
-    setDataWarnings([]);
-    setProgress(0);
-    setLoadingLine("Knocking politely on Klaviyo's door");
-    setElapsedSeconds(0);
-    setStatusMessage("");
-    setJustFinished(false);
-
-    requestIdRef.current += 1;
-    const myRequestId = requestIdRef.current;
-
-    const startedAt = Date.now();
-    let holdingLineIndex = 0;
-
-    elapsedTimerRef.current = setInterval(() => {
-      setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
-    }, 1000);
-
-    // Single smooth timer running from t=0 through all phases.
-    // Phase 1+1b target: 0→20% (τ=5s — moves visibly during the Klaviyo/Haiku fetches).
-    // Hands off to the Anthropic timer once that starts.
-    const PRE_TAU_MS = 5000;
-    progressTimerRef.current = setInterval(() => {
-      const elapsed = Date.now() - startedAt;
-      const next = Math.min(19, 19 * (1 - Math.exp(-elapsed / PRE_TAU_MS)));
-      setProgress(next);
-      const line = lineForProgress(next);
-      if (line) setLoadingLine(line);
-    }, 100);
-
-    abortControllerRef.current = new AbortController();
-    const { signal } = abortControllerRef.current;
-
-    // Idle-stream watchdog: if the SSE goes silent for too long, abort and tell the
-    // user it stalled (distinguished from a user cancel via the timedOut flag).
-    let timedOut = false;
-    let watchdog = null;
-
-    try {
-      // ── Phase 1: fetch Klaviyo data + filter ecommerce events in PARALLEL ──
-      // The Haiku almanac call doesn't depend on the Klaviyo data — only on the
-      // date range, brand name and context — so both round-trips overlap.
-      const range = computeDateRange();
-      const comparison = computeComparisonRange(range.start, range.end);
-      const allEvents = getEcommerceEvents(range.start, range.end, accountName, additionalContext);
-
-      setLoadingLine("Consulting the almanac");
-
-      const klaviyoPromise = (async () => {
-        const workerRes = await workerFetch(workerUrl, {
-          method: "POST",
-          token: sessionToken,
-          body: {
-            clientId: selectedClientId,
-            startDate: range.start,
-            endDate: range.end,
-            ...(comparison ? { comparisonStart: comparison.start, comparisonEnd: comparison.end } : {}),
-          },
-          signal,
-        });
-        if (!workerRes.ok) {
-          const errData = await workerRes.json().catch(() => ({}));
-          const err = new Error(`Klaviyo data fetch failed: ${errData.error || `HTTP ${workerRes.status}`}`);
-          err.status = workerRes.status;
-          throw err;
-        }
-        return workerRes.json();
-      })();
-
-      const eventsPromise = (async () => {
-        if (allEvents.length === 0) return allEvents;
-        try {
-          const filterRes = await workerFetch(workerUrl, {
-            action: "anthropic",
-            method: "POST",
-            token: sessionToken,
-            body: {
-              model: "claude-haiku-4-5-20251001",
-              max_tokens: 512,
-              messages: [{
-                role: "user",
-                content: `You are configuring chart annotations for an email marketing report.
-Client: "${accountName}"${additionalContext.trim() ? `\nContext: ${additionalContext.trim()}` : ""}
-Potential calendar events in this period:
-${allEvents.map((e, i) => `${i}: ${e.name} (${e.date}) [${e.type}]`).join("\n")}
-
-Return ONLY a JSON array of the index numbers for events that are commercially relevant to THIS specific brand — events that could plausibly explain a spike or dip in their email metrics. Be inclusive for genuinely relevant events; exclude only what is clearly irrelevant to this business. Example: [0,2,5]`,
-              }],
-            },
-            signal,
-          });
-          if (filterRes.ok) {
-            const filterData = await filterRes.json();
-            const text = filterData.content?.[0]?.text || "";
-            const match = text.match(/\[[\d,\s]*\]/);
-            if (match) {
-              const indices = JSON.parse(match[0]);
-              const picked = indices.map(i => allEvents[i]).filter(Boolean);
-              if (picked.length > 0) return picked;
-            }
-          }
-        } catch (_) {
-          // Fall through and use all events
-        }
-        return allEvents;
-      })();
-
-      const [klaviyoData, relevantEvents] = await Promise.all([klaviyoPromise, eventsPromise]);
-
-      if (myRequestId !== requestIdRef.current) return;
-
-      const warnings = Array.isArray(klaviyoData.warnings) ? klaviyoData.warnings : [];
-      // Flag a completely empty period so an all-blank report can't be sent unnoticed.
-      const agg = klaviyoData.aggregates || {};
-      const noActivity = ["subscribers", "orders", "unsubscribes"].every((k) => {
-        const counts = agg[k]?.counts;
-        return !Array.isArray(counts) || counts.every((v) => !v);
-      });
-      if (!klaviyoData.period?.campaigns?.length && !klaviyoData.period?.flows?.length && noActivity) {
-        warnings.unshift("No campaigns, flows, or daily activity were found for this client in this period — double-check the client and date range before sending.");
-      }
-      setDataWarnings(warnings);
-
-      // Hand off: clear pre-phase timer. Start a fallback asymptotic timer so progress
-      // never freezes even if SSE updates stall. Streaming overrides it via setProgress.
-      clearInterval(progressTimerRef.current);
-      const preElapsed = Date.now() - startedAt;
-      const handoffPct = Math.min(19, 19 * (1 - Math.exp(-preElapsed / PRE_TAU_MS)));
-      const anthropicStartedAt = Date.now();
-      const TAU_MS = 65000;
-
-      progressTimerRef.current = setInterval(() => {
-        const el = Date.now() - anthropicStartedAt;
-        const fb = Math.min(96, handoffPct + (96 - handoffPct) * (1 - Math.exp(-el / TAU_MS)));
-        setProgress(p => Math.max(p, fb));
-        const fl = lineForProgress(fb);
-        if (!fl) {
-          setLoadingLine(holdingLines[holdingLineIndex % holdingLines.length].text);
-        }
-      }, 300);
-
-      lineTimerRef.current = setInterval(() => {
-        const el = Date.now() - anthropicStartedAt;
-        if (el >= TAU_MS * 0.5) {
-          setLoadingLine(holdingLines[holdingLineIndex % holdingLines.length].text);
-          holdingLineIndex++;
-        }
-      }, 4000);
-
-      // ── Phase 2: stream HTML from Anthropic ─────────────────────────────────
-      const anthropicReqBody = {
-        model: selectedModel,
-        max_tokens: maxTokensForReport(),
-        stream: true,
-        system: [{ type: "text", text: buildReportSystemPrompt({ accountName, reportType }), cache_control: { type: "ephemeral" } }],
-        messages: [{ role: "user", content: buildReportUserMessage({ klaviyoData, events: relevantEvents, range, comparison, reportType, comparisonMode, additionalContext }) }],
-      };
-
-      // Retry the initial request on transient overload (429/5xx/529) with backoff,
-      // before any bytes have streamed. Mid-stream failures are handled in the loop.
-      let anthropicRes;
-      for (let attempt = 0; ; attempt++) {
-        anthropicRes = await workerFetch(workerUrl, {
-          action: "anthropic",
-          method: "POST",
-          token: sessionToken,
-          body: anthropicReqBody,
-          signal,
-        });
-        if (myRequestId !== requestIdRef.current) return;
-        if (anthropicRes.ok) break;
-        if (isRetryableStatus(anthropicRes.status) && attempt < 2) {
-          const ra = parseInt(anthropicRes.headers.get("retry-after") || "", 10);
-          const backoff = Number.isFinite(ra) ? Math.min(ra * 1000, 15000) : 1500 * Math.pow(2, attempt);
-          setLoadingLine("The AI service is busy — retrying in a moment");
-          await new Promise(r => setTimeout(r, backoff));
-          if (myRequestId !== requestIdRef.current) return;
-          continue;
-        }
-        // Non-retryable or out of retries — surface friendly guidance.
-        let message = friendlyErrorMessage(anthropicRes.status, `Anthropic API error ${anthropicRes.status}`);
-        if (anthropicRes.status < 500 && anthropicRes.status !== 429) {
-          try { const errData = await anthropicRes.json(); if (errData.error?.message) message = errData.error.message; } catch (_) {}
-        }
-        const err = new Error(message);
-        err.status = anthropicRes.status;
-        throw err;
-      }
-
-      // Read the SSE stream — accumulate full HTML, drive progress from real token count
-      const reader = anthropicRes.body.getReader();
-      const IDLE_MS = 90000;
-      let lastActivity = Date.now();
-      watchdog = setInterval(() => {
-        if (Date.now() - lastActivity > IDLE_MS) {
-          timedOut = true;
-          try { abortControllerRef.current?.abort(); } catch (_) {}
-        }
-      }, 5000);
-      // Scale progress denominator to the report's actual token budget so the bar
-      // doesn't peg early on long ranges or crawl on short ones. Reports typically
-      // emit ~70% of max_tokens, with a 10k floor for the bar to feel responsive.
-      const EST_OUTPUT = Math.max(10000, Math.round(maxTokensForReport() * 0.7));
-
-      const stream = await readAnthropicSse(reader, {
-        onActivity: () => { lastActivity = Date.now(); },
-        isCancelled: () => myRequestId !== requestIdRef.current,
-        onTextDelta: (_delta, tokensSoFar) => {
-          // Update every 50 tokens — more responsive than 100
-          if (tokensSoFar % 50 === 0) {
-            const pct = Math.min(96, handoffPct + (96 - handoffPct) * Math.min(1, tokensSoFar / EST_OUTPUT));
-            setProgress(p => Math.max(p, pct));
-            const line2 = lineForProgress(pct);
-            if (line2) setLoadingLine(line2);
-            else {
-              setLoadingLine(holdingLines[holdingLineIndex % holdingLines.length].text);
-              if (tokensSoFar % 2000 === 0) holdingLineIndex++;
-            }
-          }
-        },
-      });
-      if (stream.cancelled) return;
-      let rawHtml = stream.text;
-      const { stopReason, sawMessageStop, inputUsage, outputTokens } = stream;
-
-      clearInterval(watchdog);
-      if (myRequestId !== requestIdRef.current) return;
-
-      // Pull out the HTML document, then verify the stream actually completed. A
-      // mid-stream error, dropped connection, or max-tokens cutoff must NOT be saved
-      // or shown as a finished report — staff could otherwise send a client a
-      // half-written document that looks complete.
-      const extracted = extractReportHtml(rawHtml);
-      const completionError = reportCompletionError({
-        sawMessageStop,
-        stopReason,
-        hasClosingTag: extracted.hasClosingTag,
-      });
-      if (completionError) throw new Error(completionError);
-      rawHtml = extracted.html;
-
-      // Build usage object from streaming events (input from message_start, output from message_delta)
-      const streamUsage = {
-        input_tokens: inputUsage.input_tokens || 0,
-        cache_creation_input_tokens: inputUsage.cache_creation_input_tokens || 0,
-        cache_read_input_tokens: inputUsage.cache_read_input_tokens || 0,
-        output_tokens: outputTokens,
-      };
-
-      // Inject event markers script — using JSON.stringify avoids all apostrophe/quote syntax errors
-      const eventsForChart = relevantEvents.map(e => ({ label: e.chartLabel, name: e.name }));
-      const annotationScript = `<script>
-window.CHART_EVENTS=${JSON.stringify(eventsForChart)};
-function addEventMarkers(chart,events){
-  if(!events||!events.length)return;
-  var wrapper=chart.canvas.parentNode;
-  wrapper.style.position='relative';
-  function place(){
-    try{
-      wrapper.querySelectorAll('.evt-marker').forEach(function(el){el.remove();});
-      events.forEach(function(ev){
-        var idx=chart.data.labels.indexOf(ev.label);
-        if(idx===-1)return;
-        var x=Math.round(chart.scales.x.getPixelForValue(idx));
-        var col=document.createElement('div');
-        col.className='evt-marker';
-        col.style.cssText='position:absolute;top:0;bottom:0;left:'+x+'px;width:0;z-index:5;pointer-events:none';
-        var rule=document.createElement('div');
-        rule.style.cssText='position:absolute;inset:0;border-left:1px dashed rgba(10,10,10,0.15)';
-        var pin=document.createElement('div');
-        pin.style.cssText='position:absolute;top:3px;left:-4px;width:8px;height:8px;background:#fff;border:1px solid #0a0a0a;transform:rotate(45deg);pointer-events:auto;transition:background 0.1s;z-index:6;cursor:default';
-        var tip=document.createElement('div');
-        tip.style.cssText='display:none;position:absolute;top:18px;left:0;transform:translateX(-50%);background:#0a0a0a;color:#fff;font-size:10px;font-family:"DM Sans",sans-serif;font-weight:400;letter-spacing:0.08em;padding:5px 10px;white-space:nowrap;pointer-events:none;z-index:20';
-        tip.textContent=ev.name;
-        pin.addEventListener('mouseenter',function(){tip.style.display='block';pin.style.background='#0a0a0a';});
-        pin.addEventListener('mouseleave',function(){tip.style.display='none';pin.style.background='#fff';});
-        pin.appendChild(tip);col.appendChild(rule);col.appendChild(pin);wrapper.appendChild(col);
-      });
-    }catch(e){}
-  }
-  place();
-  if(typeof ResizeObserver!=='undefined'){
-    var ro=new ResizeObserver(function(){place();});
-    ro.observe(chart.canvas);
-  }
-}
-<\/script>`;
-      rawHtml = rawHtml.replace(/<\/head>/i, annotationScript + '</head>');
-
-      // If the underlying Klaviyo data was incomplete, bake a visible notice into the
-      // report itself so the warning travels with the downloaded/printed/sent file —
-      // not just the in-app banner that disappears on reload.
-      rawHtml = embedIncompleteDataNotice(rawHtml, warnings);
-
-      const u = streamUsage;
-      const pricing = (MODELS[selectedModel] || MODELS[DEFAULT_MODEL]).pricing;
-      const costUsd =
-        (u.input_tokens || 0) * pricing.input / 1_000_000 +
-        (u.cache_creation_input_tokens || 0) * pricing.cacheWrite / 1_000_000 +
-        (u.cache_read_input_tokens || 0) * pricing.cacheRead / 1_000_000 +
-        (u.output_tokens || 0) * pricing.output / 1_000_000;
-      setLastUsage({
-        inputTokens: u.input_tokens || 0,
-        cacheCreationTokens: u.cache_creation_input_tokens || 0,
-        cacheReadTokens: u.cache_read_input_tokens || 0,
-        outputTokens: u.output_tokens || 0,
-        costUsd,
-      });
-      trackSpend(costUsd);
-
-      clearTimers();
-      setProgress(100);
-      setLoadingLine("Ready");
-      setLastDuration(Math.round((Date.now() - startedAt) / 1000));
-      const generatedNow = new Date().toISOString();
-      const reportMeta = { clientId: selectedClientId, reportType, dateStart: range.start, dateEnd: range.end, accountName, generatedAt: generatedNow, warnings, promptVersion: REPORT_PROMPT_VERSION };
-      setCurrentReportMeta({ ...reportMeta });
-      // Reproducibility snapshot: the exact inputs that produced this report.
-      const inputSnapshot = {
-        generatedAt: generatedNow, reportType, comparisonMode, model: selectedModel,
-        promptVersion: REPORT_PROMPT_VERSION,
-        range, comparison, accountName, additionalContext, events: relevantEvents, klaviyo: klaviyoData,
-      };
-      // Persist, then adopt the server-assigned key so this report highlights as
-      // "current" in the Past reports list and the list shows it.
-      saveReportToWorker(rawHtml, reportMeta, inputSnapshot).then((key) => {
-        if (key && myRequestId === requestIdRef.current) {
-          setCurrentReportMeta((prev) => (prev ? { ...prev, key } : prev));
-          refreshSavedReports();
-        }
-      });
-      setCachedInfo(null);
-      setReportHtml(rawHtml);
-      setSlidesPrompt("");
-      setJustFinished(true);
-
-    } catch (e) {
-      clearInterval(watchdog);
-      if (myRequestId !== requestIdRef.current) return;
-      if (e.name === "AbortError") {
-        // The watchdog aborted a stalled stream — tell the user. A genuine user
-        // cancel bumps requestIdRef, so it returns above and never reaches here.
-        if (timedOut) {
-          clearTimers();
-          setError("The report generation stalled (no response for 90 seconds) — please try again.");
-          setProgress(0);
-          setJustFinished(false);
-          setIsGenerating(false);
-        }
-        return;
-      }
-
-      clearTimers();
-      if ((e.status === 401 || e.status === 403) && onSignOut) {
-        onSignOut("Your session has expired — please sign in again.");
-        return;
-      }
-      setError(e.message || "Something went wrong. Check your settings and try again.");
-      setProgress(0);
-      setJustFinished(false);
-      setIsGenerating(false);
-    }
+    await generation.generate({
+      workerUrl,
+      clientId: selectedClientId,
+      accountName,
+      reportType,
+      comparisonMode,
+      additionalContext,
+      model: selectedModel,
+      maxOutputTokens: maxTokensForReport(),
+      pricing: (MODELS[selectedModel] || MODELS[DEFAULT_MODEL]).pricing,
+      range,
+      comparison: computeComparisonRange(range.start, range.end),
+    });
   };
 
   const handleDismissCompletion = () => {
@@ -853,7 +385,6 @@ function addEventMarkers(chart,events){
     // One-time cleanup: remove old localStorage report cache (superseded by KV)
     localStorage.removeItem("swanky_report_cache");
     refreshSpendStatus();
-    return () => clearTimers();
   }, []);
 
   // Refresh past-reports list when a client is selected or report mode becomes visible.
@@ -980,21 +511,7 @@ function addEventMarkers(chart,events){
 
 
   const handleCancel = () => {
-    requestIdRef.current += 1;
-
-    if (abortControllerRef.current) {
-      try {
-        abortControllerRef.current.abort();
-      } catch (_) {}
-      abortControllerRef.current = null;
-    }
-
-    clearTimers();
-    setIsGenerating(false);
-    setProgress(0);
-    setLoadingLine("");
-    setJustFinished(false);
-    setError("Request cancelled.");
+    generation.cancel();
     setStatusMessage("");
   };
 
