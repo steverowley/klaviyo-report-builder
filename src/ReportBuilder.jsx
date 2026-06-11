@@ -26,7 +26,7 @@ const MODELS = {
   "claude-opus-4-7": {
     label: "Opus 4.7",
     blurb: "Highest quality, slowest",
-    pricing: { input: 15, cacheWrite: 18.75, cacheRead: 1.50, output: 75 },
+    pricing: { input: 5, cacheWrite: 6.25, cacheRead: 0.50, output: 25 },
     maxOutputTokens: 128000,
   },
 };
