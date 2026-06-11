@@ -3,6 +3,7 @@ import ReportBuilder from "./ReportBuilder.jsx";
 import Settings from "./Settings.jsx";
 import SignIn from "./SignIn.jsx";
 import ErrorBoundary from "./ErrorBoundary.jsx";
+import { workerFetch } from "./workerApi.js";
 
 function CursorDot() {
   const dotRef = useRef(null);
@@ -102,9 +103,7 @@ function AdminPanel({ session, onClose, onSignOut }) {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${workerUrl}?action=admin-users`, {
-        headers: { Authorization: `Bearer ${session.token}` },
-      });
+      const res = await workerFetch(workerUrl, { action: "admin-users", token: session.token });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setUsers(Array.isArray(data) ? data : []);
@@ -135,10 +134,8 @@ function AdminPanel({ session, onClose, onSignOut }) {
   const approve = async (username) => {
     setError("");
     try {
-      const res = await fetch(`${workerUrl}?action=admin-approve`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
-        body: JSON.stringify({ username }),
+      const res = await workerFetch(workerUrl, {
+        action: "admin-approve", method: "POST", token: session.token, body: { username },
       });
       if (!checkAuth(res)) { if (res.ok === false && res.status !== 401 && res.status !== 403) setError(`Could not approve ${username} — please try again.`); return; }
       fetchUsers();
@@ -150,10 +147,8 @@ function AdminPanel({ session, onClose, onSignOut }) {
   const deleteUser = async (username) => {
     setError("");
     try {
-      const res = await fetch(`${workerUrl}?action=admin-delete`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
-        body: JSON.stringify({ username }),
+      const res = await workerFetch(workerUrl, {
+        action: "admin-delete", method: "POST", token: session.token, body: { username },
       });
       if (!checkAuth(res)) { if (res.status !== 401 && res.status !== 403) setError(`Could not remove ${username} — please try again.`); return; }
       fetchUsers();

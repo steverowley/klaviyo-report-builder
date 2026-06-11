@@ -3,6 +3,7 @@ import { extractReportHtml, reportCompletionError, embedIncompleteDataNotice } f
 import { fmtEventDate, parseLocalDate, shiftYear, fmtChartLabel, validateReportDates } from "./dateUtils.js";
 import { friendlyErrorMessage, isRetryableStatus } from "./errors.js";
 import { REPORT_PROMPT_VERSION, buildReportSystemPrompt, buildReportUserMessage } from "./reportPrompt.js";
+import { workerFetch } from "./workerApi.js";
 
 const WORKER_URL = "swanky_worker_url";
 const MODEL_KEY = "swanky_model";
@@ -153,10 +154,6 @@ function fmtDateDisplay(iso) {
   return d.getDate() + " " + ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];
 }
 
-
-function authHeaders(token) {
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
 
 export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, sessionToken, session, onSignOut, onOpenAdmin, adminPanelOpen }) {
   const [clients, setClients] = useState([]);
@@ -409,15 +406,15 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, 
       setLoadingLine("Consulting the almanac");
 
       const klaviyoPromise = (async () => {
-        const workerRes = await fetch(workerUrl, {
+        const workerRes = await workerFetch(workerUrl, {
           method: "POST",
-          headers: { "Content-Type": "application/json", ...authHeaders(sessionToken) },
-          body: JSON.stringify({
+          token: sessionToken,
+          body: {
             clientId: selectedClientId,
             startDate: range.start,
             endDate: range.end,
             ...(comparison ? { comparisonStart: comparison.start, comparisonEnd: comparison.end } : {}),
-          }),
+          },
           signal,
         });
         if (!workerRes.ok) {
@@ -432,13 +429,11 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, 
       const eventsPromise = (async () => {
         if (allEvents.length === 0) return allEvents;
         try {
-          const filterRes = await fetch(`${workerUrl}?action=anthropic`, {
+          const filterRes = await workerFetch(workerUrl, {
+            action: "anthropic",
             method: "POST",
-            headers: {
-              "content-type": "application/json",
-              ...authHeaders(sessionToken),
-            },
-            body: JSON.stringify({
+            token: sessionToken,
+            body: {
               model: "claude-haiku-4-5-20251001",
               max_tokens: 512,
               messages: [{
@@ -450,7 +445,7 @@ ${allEvents.map((e, i) => `${i}: ${e.name} (${e.date}) [${e.type}]`).join("\n")}
 
 Return ONLY a JSON array of the index numbers for events that are commercially relevant to THIS specific brand — events that could plausibly explain a spike or dip in their email metrics. Be inclusive for genuinely relevant events; exclude only what is clearly irrelevant to this business. Example: [0,2,5]`,
               }],
-            }),
+            },
             signal,
           });
           if (filterRes.ok) {
@@ -512,21 +507,22 @@ Return ONLY a JSON array of the index numbers for events that are commercially r
       }, 4000);
 
       // ── Phase 2: stream HTML from Anthropic ─────────────────────────────────
-      const anthropicReqBody = JSON.stringify({
+      const anthropicReqBody = {
         model: selectedModel,
         max_tokens: maxTokensForReport(),
         stream: true,
         system: [{ type: "text", text: buildReportSystemPrompt({ accountName, reportType }), cache_control: { type: "ephemeral" } }],
         messages: [{ role: "user", content: buildReportUserMessage({ klaviyoData, events: relevantEvents, range, comparison, reportType, comparisonMode, additionalContext }) }],
-      });
+      };
 
       // Retry the initial request on transient overload (429/5xx/529) with backoff,
       // before any bytes have streamed. Mid-stream failures are handled in the loop.
       let anthropicRes;
       for (let attempt = 0; ; attempt++) {
-        anthropicRes = await fetch(`${workerUrl}?action=anthropic`, {
+        anthropicRes = await workerFetch(workerUrl, {
+          action: "anthropic",
           method: "POST",
-          headers: { "content-type": "application/json", ...authHeaders(sessionToken) },
+          token: sessionToken,
           body: anthropicReqBody,
           signal,
         });
@@ -790,7 +786,7 @@ function addEventMarkers(chart,events){
     const workerUrl = localStorage.getItem(WORKER_URL) || BAKED_WORKER_URL;
     if (!workerUrl) return;
     try {
-      const res = await fetch(`${workerUrl}?action=spend-status`, { headers: authHeaders(sessionToken) });
+      const res = await workerFetch(workerUrl, { action: "spend-status", token: sessionToken });
       if (res.ok) setSpendStatus(await res.json());
     } catch {}
   };
@@ -800,11 +796,7 @@ function addEventMarkers(chart,events){
     const workerUrl = localStorage.getItem(WORKER_URL) || BAKED_WORKER_URL;
     if (!workerUrl || !(costUsd > 0)) return;
     try {
-      await fetch(`${workerUrl}?action=track-spend`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders(sessionToken) },
-        body: JSON.stringify({ costUsd }),
-      });
+      await workerFetch(workerUrl, { action: "track-spend", method: "POST", token: sessionToken, body: { costUsd } });
     } catch {}
     refreshSpendStatus();
   };
@@ -814,7 +806,7 @@ function addEventMarkers(chart,events){
     const workerUrl = localStorage.getItem(WORKER_URL);
     if (!workerUrl) return;
     try {
-      const res = await fetch(`${workerUrl}?action=list-reports`, { headers: authHeaders(sessionToken) });
+      const res = await workerFetch(workerUrl, { action: "list-reports", token: sessionToken });
       if (handleAuthFailure(res)) return;
       if (res.ok) {
         const entries = await res.json();
@@ -829,10 +821,9 @@ function addEventMarkers(chart,events){
     const workerUrl = localStorage.getItem(WORKER_URL);
     if (!workerUrl) return null;
     try {
-      const res = await fetch(`${workerUrl}?action=save-report`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders(sessionToken) },
-        body: JSON.stringify({ html, metadata, inputData }),
+      const res = await workerFetch(workerUrl, {
+        action: "save-report", method: "POST", token: sessionToken,
+        body: { html, metadata, inputData },
       });
       if (handleAuthFailure(res)) return null;
       if (res.ok) { const d = await res.json().catch(() => ({})); return d.key || null; }
@@ -849,7 +840,7 @@ function addEventMarkers(chart,events){
     const workerUrl = localStorage.getItem(WORKER_URL);
     if (workerUrl) {
       try {
-        const res = await fetch(`${workerUrl}?action=delete-report&key=${encodeURIComponent(key)}`, { method: "POST", headers: authHeaders(sessionToken) });
+        const res = await workerFetch(workerUrl, { action: "delete-report", params: { key }, method: "POST", token: sessionToken });
         handleAuthFailure(res);
       } catch {}
     }
@@ -863,7 +854,7 @@ function addEventMarkers(chart,events){
       if (!workerUrl) return;
       let html, meta;
       try {
-        const res = await fetch(`${workerUrl}?action=get-report&key=${encodeURIComponent(key)}`, { headers: authHeaders(sessionToken) });
+        const res = await workerFetch(workerUrl, { action: "get-report", params: { key }, token: sessionToken });
         if (handleAuthFailure(res)) return;
         if (res.ok) { const d = await res.json(); html = d.html; meta = d.metadata; }
       } catch {}
@@ -953,20 +944,18 @@ function addEventMarkers(chart,events){
       }, 80);
 
       try {
-        const res = await fetch(`${workerUrl}?action=anthropic`, {
+        const res = await workerFetch(workerUrl, {
+          action: 'anthropic',
           method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            ...authHeaders(sessionToken),
-          },
-          body: JSON.stringify({
+          token: sessionToken,
+          body: {
             model: 'claude-haiku-4-5-20251001',
             max_tokens: 300,
             messages: [{
               role: 'user',
               content: `You are improving a set of email marketing growth recommendations. Here are all the current recommendations:\n${event.data.allSteps?.map((s,i)=>`${i+1}. ${s}`).join('\n')}\n\nOne recommendation is being replaced. Generate the single best NEW recommendation that would be most impactful for this account AND does not duplicate any of the others. Be specific and actionable. Reply with ONLY valid JSON: {"title":"...","desc":"..."}`,
             }],
-          }),
+          },
         });
         if (handleAuthFailure(res)) { clearInterval(regenProgressTimerRef.current); return; }
         if (!res.ok) throw new Error(friendlyErrorMessage(res.status, `API error ${res.status}`));
@@ -1000,7 +989,7 @@ function addEventMarkers(chart,events){
     const workerUrl = localStorage.getItem(WORKER_URL);
     if (!workerUrl) return;
     setClientsError("");
-    fetch(workerUrl, { headers: authHeaders(sessionToken) })
+    workerFetch(workerUrl, { token: sessionToken })
       .then(r => {
         if ((r.status === 401 || r.status === 403) && onSignOut) {
           onSignOut("Your session has expired — please sign in again.");
@@ -1054,13 +1043,11 @@ function addEventMarkers(chart,events){
       setSlidesProgress(Math.min(92, eased * 92));
     }, 100);
     try {
-      const res = await fetch(`${workerUrl}?action=anthropic`, {
+      const res = await workerFetch(workerUrl, {
+        action: "anthropic",
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-          ...authHeaders(sessionToken),
-        },
-        body: JSON.stringify({
+        token: sessionToken,
+        body: {
           model: "claude-haiku-4-5-20251001",
           max_tokens: 4000,
           messages: [{
@@ -1096,7 +1083,7 @@ Now convert the following HTML report into slides. Extract all chart data from t
 
 ${reportHtml}`,
           }],
-        }),
+        },
       });
       if (handleAuthFailure(res)) { clearInterval(slidesProgressTimerRef.current); return; }
       if (!res.ok) throw new Error(friendlyErrorMessage(res.status, `API error ${res.status}`));
@@ -1167,7 +1154,7 @@ ${reportHtml}`,
     const workerUrl = localStorage.getItem(WORKER_URL) || BAKED_WORKER_URL;
     if (!key || !workerUrl) { setError("Source data is available once the report has saved — try again in a moment."); return; }
     try {
-      const res = await fetch(`${workerUrl}?action=get-report-data&key=${encodeURIComponent(key)}`, { headers: authHeaders(sessionToken) });
+      const res = await workerFetch(workerUrl, { action: "get-report-data", params: { key }, token: sessionToken });
       if (handleAuthFailure(res)) return;
       if (!res.ok) { setError("No saved source data for this report."); return; }
       const json = await res.text();
@@ -2992,10 +2979,9 @@ function AddClientModal({ onClose, onAdded, sessionToken }) {
     setStatus("loading");
     setErrorMsg("");
     try {
-      const res = await fetch(workerUrl + "?action=add-client", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders(sessionToken) },
-        body: JSON.stringify({ name: name.trim(), klaviyoKey: klaviyoKey.trim() }),
+      const res = await workerFetch(workerUrl, {
+        action: "add-client", method: "POST", token: sessionToken,
+        body: { name: name.trim(), klaviyoKey: klaviyoKey.trim() },
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -3209,10 +3195,9 @@ function OffboardClientModal({ clients, sessionToken, onClose, onSignOut, onOffb
     if (!workerUrl) { setStatus("error"); setErrorMsg("Worker URL not set. Open Settings and add it first."); return; }
     setStatus("loading"); setErrorMsg("");
     try {
-      const res = await fetch(workerUrl + "?action=offboard-client", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders(sessionToken) },
-        body: JSON.stringify({ clientId: selectedId }),
+      const res = await workerFetch(workerUrl, {
+        action: "offboard-client", method: "POST", token: sessionToken,
+        body: { clientId: selectedId },
       });
       if ((res.status === 401 || res.status === 403) && onSignOut) {
         onSignOut("Your session has expired — please sign in again."); return;
