@@ -16,7 +16,7 @@
 - **Client list** is stored as a Worker secret `CLIENTS_JSON` — a JSON array of `{id, name}` objects. Update it via the Cloudflare dashboard; no redeploy needed.
 - localStorage keys in use: `swanky_worker_url`. `swanky_anthropic_key` and `swanky_klaviyo_key` are legacy — cleared on sign-out / "Clear all keys" but no longer used (the Anthropic key is proxied server-side; Klaviyo keys are Worker secrets).
 - The worker exposes `GET /` (client list) and `POST /` (fetch Klaviyo data). The frontend calls `GET workerUrl` on load to populate the client dropdown.
-- `handleGenerate` POSTs to the Worker's `?action=anthropic` proxy (with the session token); the Worker forwards to `https://api.anthropic.com/v1/messages` and streams the SSE response back. The Klaviyo data arrives pre-fetched from the worker and is embedded in the Claude prompt.
+- Report generation (the `useReportGeneration` hook) POSTs to the Worker's `?action=anthropic` proxy (with the session token); the Worker forwards to `https://api.anthropic.com/v1/messages` and streams the SSE response back. The Klaviyo data arrives pre-fetched from the worker and is embedded in the Claude prompt (`src/reportPrompt.js` — bump `REPORT_PROMPT_VERSION` on any prompt change).
 - Vite `base` is `/klaviyo-report-builder/` to match the GitHub Pages path. Do not change this without also updating the repo name.
 
 ## Security rules (non-negotiable)

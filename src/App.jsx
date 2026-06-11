@@ -3,6 +3,8 @@ import ReportBuilder from "./ReportBuilder.jsx";
 import Settings from "./Settings.jsx";
 import SignIn from "./SignIn.jsx";
 import ErrorBoundary from "./ErrorBoundary.jsx";
+import { workerFetch } from "./workerApi.js";
+import { useFocusTrap } from "./useFocusTrap.js";
 
 function CursorDot() {
   const dotRef = useRef(null);
@@ -95,6 +97,8 @@ function AdminPanel({ session, onClose, onSignOut }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const panelRef = useRef(null);
+  useFocusTrap(panelRef);
 
   const workerUrl = localStorage.getItem("swanky_worker_url") || "";
 
@@ -102,9 +106,7 @@ function AdminPanel({ session, onClose, onSignOut }) {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${workerUrl}?action=admin-users`, {
-        headers: { Authorization: `Bearer ${session.token}` },
-      });
+      const res = await workerFetch(workerUrl, { action: "admin-users", token: session.token });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setUsers(Array.isArray(data) ? data : []);
@@ -135,10 +137,8 @@ function AdminPanel({ session, onClose, onSignOut }) {
   const approve = async (username) => {
     setError("");
     try {
-      const res = await fetch(`${workerUrl}?action=admin-approve`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
-        body: JSON.stringify({ username }),
+      const res = await workerFetch(workerUrl, {
+        action: "admin-approve", method: "POST", token: session.token, body: { username },
       });
       if (!checkAuth(res)) { if (res.ok === false && res.status !== 401 && res.status !== 403) setError(`Could not approve ${username} — please try again.`); return; }
       fetchUsers();
@@ -150,10 +150,8 @@ function AdminPanel({ session, onClose, onSignOut }) {
   const deleteUser = async (username) => {
     setError("");
     try {
-      const res = await fetch(`${workerUrl}?action=admin-delete`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.token}` },
-        body: JSON.stringify({ username }),
+      const res = await workerFetch(workerUrl, {
+        action: "admin-delete", method: "POST", token: session.token, body: { username },
       });
       if (!checkAuth(res)) { if (res.status !== 401 && res.status !== 403) setError(`Could not remove ${username} — please try again.`); return; }
       fetchUsers();
@@ -205,7 +203,7 @@ function AdminPanel({ session, onClose, onSignOut }) {
     }}
     onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div style={{
+      <div ref={panelRef} role="dialog" aria-modal="true" aria-label="User management" style={{
         width: "min(400px, 100vw)",
         height: "100%",
         background: "#ffffff",

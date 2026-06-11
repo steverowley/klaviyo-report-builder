@@ -28,6 +28,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Direct pushes to main skip the CI workflow (it only runs on PRs and
+      # other branches), so gate the deploy on the test suite here too.
+      - name: Run tests
+        run: npm test
+
       - name: Build
         run: npm run build
         env:

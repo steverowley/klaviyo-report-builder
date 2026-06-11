@@ -69,7 +69,7 @@ Admins additionally see a **Users** button (top) and **Add new client** /
 3. **Comparison** — None, Previous Period, or Year on Year. When set, the report adds a
    comparison section and shows deltas (↑/↓) against that period.
 4. **Model** — Haiku 4.5 (fastest, cheapest), Sonnet 4.6 (recommended), or
-   Opus 4.7 (highest quality, slowest, most expensive).
+   Opus 4.8 (highest quality, slowest, most expensive).
 5. **Additional context** (optional) — note anything that explains the numbers (a sale,
    a product launch, a platform change). The AI uses it in the narrative.
 6. Press **Generate report**. The tool fetches live Klaviyo data and streams the report
@@ -236,8 +236,9 @@ Generate again. If it keeps happening, ask Rowley to check the worker and the cl
 Klaviyo key.
 
 **"The report was too long and got cut off."**
-The model hit its output limit. Choose a **shorter date range**, or ask Rowley to raise
-the output limit. (Switching models won't help — they share the same limit.)
+The model hit its output limit. Each model has its own ceiling — Haiku and Sonnet allow
+64k output tokens, Opus allows 128k — so **switching to Opus** or choosing a **shorter
+date range** both help.
 
 **"The report was cut off before it finished" / "didn't finish rendering."**
 The connection dropped mid-generation. Nothing partial is saved — just generate again.
