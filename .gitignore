@@ -8,9 +8,13 @@ dist-ssr/
 # !! API keys must NEVER be committed !!
 .env
 .env.*
+.dev.vars
 *.key
 *.pem
 secrets.*
+
+# Wrangler local state
+.wrangler/
 
 # Editor
 .vscode/

@@ -2,7 +2,7 @@
   "name": "klaviyo-proxy",
   "private": true,
   "devDependencies": {
-    "wrangler": "3.78.12"
+    "wrangler": "4.99.0"
   },
   "scripts": {
     "deploy": "wrangler deploy"
