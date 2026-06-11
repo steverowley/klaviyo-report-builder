@@ -168,7 +168,7 @@ klaviyo-report-builder/
 
 **Report types:** Weekly, Fortnightly, Monthly, Quarterly, YTD, Custom date range.
 **Comparison modes:** None, Previous Period, Year on Year.
-**Models:** Haiku 4.5 (fastest), Sonnet 4.6 (recommended), Opus 4.7 (highest quality).
+**Models:** Haiku 4.5 (fastest), Sonnet 4.6 (recommended), Opus 4.8 (highest quality).
 
 ---
 
