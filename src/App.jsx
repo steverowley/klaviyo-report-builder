@@ -4,6 +4,7 @@ import Settings from "./Settings.jsx";
 import SignIn from "./SignIn.jsx";
 import ErrorBoundary from "./ErrorBoundary.jsx";
 import { workerFetch } from "./workerApi.js";
+import { useFocusTrap } from "./useFocusTrap.js";
 
 function CursorDot() {
   const dotRef = useRef(null);
@@ -96,6 +97,8 @@ function AdminPanel({ session, onClose, onSignOut }) {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const panelRef = useRef(null);
+  useFocusTrap(panelRef);
 
   const workerUrl = localStorage.getItem("swanky_worker_url") || "";
 
@@ -200,7 +203,7 @@ function AdminPanel({ session, onClose, onSignOut }) {
     }}
     onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div style={{
+      <div ref={panelRef} role="dialog" aria-modal="true" aria-label="User management" style={{
         width: "min(400px, 100vw)",
         height: "100%",
         background: "#ffffff",

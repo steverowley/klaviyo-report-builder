@@ -26,6 +26,7 @@ export function SegmentButton({ active, onClick, children, fullWidth }) {
   return (
     <button
       onClick={onClick}
+      aria-pressed={active}
       style={{
         padding: "9px 10px",
         background: active ? "#0a0a0a" : "#ffffff",
@@ -82,6 +83,7 @@ export function ContextTextarea({ value, onChange }) {
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         rows={4}
+        aria-label="Additional context"
         style={{
           ...inputStyle,
           resize: "vertical",

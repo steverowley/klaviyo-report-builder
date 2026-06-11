@@ -8,6 +8,7 @@ import { inputStyle } from "./theme.js";
 import { ActivityBanner, EmptyState, LoadingState } from "./components/ReportStates.jsx";
 import { Field, SegmentButton, ContextTextarea, SignOffCheckbox } from "./components/Controls.jsx";
 import { AddClientModal, OffboardClientModal } from "./components/ClientModals.jsx";
+import { useFocusTrap } from "./useFocusTrap.js";
 
 const WORKER_URL = "swanky_worker_url";
 const MODEL_KEY = "swanky_model";
@@ -89,6 +90,8 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, 
   const regenProgressTimerRef = useRef(null);
   const iframeRef = useRef(null);
   const overCapAckRef = useRef(false); // one-time-per-session ack of the spend-cap warning
+  const slidesModalRef = useRef(null);
+  useFocusTrap(slidesModalRef, showSlidesModal);
 
   const reportTypes = ["Weekly", "Fortnightly", "Monthly", "Quarterly", "YTD", "Custom"];
   const comparisonModes = ["None", "Previous Period", "Year on Year"];
@@ -765,6 +768,7 @@ ${reportHtml}`,
               <button
                 onClick={onOpenSettings}
                 title="API key settings"
+                aria-label="Open settings"
                 style={{
                   background: "transparent", border: "none", cursor: "pointer", padding: "4px",
                   color: "#b8b8b8", display: "flex", alignItems: "center", justifyContent: "center",
@@ -949,6 +953,7 @@ ${reportHtml}`,
                         <button
                           onClick={(e) => deleteReport(entry.key, e)}
                           title="Delete report"
+                          aria-label="Delete report"
                           style={{
                             background: "transparent", border: "none",
                             cursor: "pointer", color: "#d0d0d0",
@@ -980,6 +985,9 @@ ${reportHtml}`,
           <div ref={dropdownRef} style={{ position: "relative" }}>
             <button
               onClick={() => setDropdownOpen(o => !o)}
+              aria-haspopup="listbox"
+              aria-expanded={dropdownOpen}
+              aria-label="Select client"
               style={{
                 ...inputStyle,
                 width: "100%",
@@ -1114,6 +1122,7 @@ ${reportHtml}`,
                 type="date"
                 value={customStart}
                 onChange={(e) => setCustomStart(e.target.value)}
+                aria-label="Start date"
                 style={{ ...inputStyle, flex: "1 1 120px", minWidth: 0 }}
               />
               <span style={{ color: "#b8b8b8", fontSize: "11px", flexShrink: 0 }}>→</span>
@@ -1122,6 +1131,7 @@ ${reportHtml}`,
                 value={customEnd}
                 min={customStart || undefined}
                 onChange={(e) => setCustomEnd(e.target.value)}
+                aria-label="End date"
                 style={{ ...inputStyle, flex: "1 1 120px", minWidth: 0 }}
               />
             </div>
@@ -1627,7 +1637,7 @@ ${reportHtml}`,
           }}
           onClick={(e) => { if (e.target === e.currentTarget) setShowSlidesModal(false); }}
         >
-          <div style={{
+          <div ref={slidesModalRef} role="dialog" aria-modal="true" aria-label="Speedy Slides prompt" style={{
             background: "#ffffff",
             width: "min(760px, 100%)",
             height: "min(880px, 90vh)",

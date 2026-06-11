@@ -1,7 +1,8 @@
 // Admin client-management modals: add a new client (validates the Klaviyo
 // key server-side) and the destructive offboard flow.
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { workerFetch } from "../workerApi.js";
+import { useFocusTrap } from "../useFocusTrap.js";
 
 const modalLabelStyle = {
   fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.16em",
@@ -32,6 +33,8 @@ export function AddClientModal({ onClose, onAdded, sessionToken }) {
   const [showKey, setShowKey] = useState(false);
   const [status, setStatus] = useState(null); // null | "loading" | "success" | "error"
   const [errorMsg, setErrorMsg] = useState("");
+  const dialogRef = useRef(null);
+  useFocusTrap(dialogRef);
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === "Escape") onClose(); };
@@ -80,7 +83,7 @@ export function AddClientModal({ onClose, onAdded, sessionToken }) {
       }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div style={{ background: "#fff", width: "min(480px,100%)", border: "1px solid #ededed", padding: "40px" }}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Add new client" style={{ background: "#fff", width: "min(480px,100%)", border: "1px solid #ededed", padding: "40px" }}>
         <div style={{ marginBottom: "28px" }}>
           <div style={{ fontFamily: "'Ovo', serif", fontSize: "26px", fontWeight: 400, color: "#0a0a0a", marginBottom: "6px" }}>
             Add new client
@@ -211,6 +214,8 @@ export function OffboardClientModal({ clients, sessionToken, onClose, onSignOut,
   const [confirmText, setConfirmText] = useState("");
   const [status, setStatus] = useState("idle"); // idle | loading | error
   const [errorMsg, setErrorMsg] = useState("");
+  const dialogRef = useRef(null);
+  useFocusTrap(dialogRef);
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === "Escape") onClose(); };
@@ -250,7 +255,7 @@ export function OffboardClientModal({ clients, sessionToken, onClose, onSignOut,
       }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div style={{ background: "#fff", width: "min(480px,100%)", border: "1px solid #ededed", padding: "40px" }}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Offboard a client" style={{ background: "#fff", width: "min(480px,100%)", border: "1px solid #ededed", padding: "40px" }}>
         <div style={{ marginBottom: "24px" }}>
           <div style={{ fontFamily: "'Ovo', serif", fontSize: "26px", fontWeight: 400, color: "#0a0a0a", marginBottom: "6px" }}>
             Offboard a client
