@@ -140,16 +140,29 @@ npm run dev
 ```
 klaviyo-report-builder/
 ├── src/
-│   ├── App.jsx              # Root: auth gate, admin panel, session management
-│   ├── ReportBuilder.jsx    # Main UI: config sidebar, report iframe, history
-│   ├── Settings.jsx         # API key management (admin only)
-│   ├── SignIn.jsx           # Login / register screen
-│   └── main.jsx             # React entry point
+│   ├── App.jsx                 # Root: auth gate, admin panel, session management
+│   ├── ReportBuilder.jsx       # Main UI: config sidebar, report iframe, history
+│   ├── useReportGeneration.js  # Generation lifecycle: fetch, stream, retry, watchdog, cancel
+│   ├── reportPrompt.js         # The Claude report prompt, versioned (REPORT_PROMPT_VERSION)
+│   ├── anthropicStream.js      # Anthropic SSE stream parser
+│   ├── workerApi.js            # Authenticated fetch helper for all worker calls
+│   ├── ecommerceEvents.js      # UK ecommerce/holiday/payday event calendar
+│   ├── reportHtml.js           # Report extraction, completeness checks, warning embeds
+│   ├── reportMetrics.js        # Headline metrics computed in JS (not by the model)
+│   ├── dateUtils.js            # Date helpers + report date validation
+│   ├── errors.js               # Friendly error messages + retry classification
+│   ├── theme.js                # Monochrome design tokens + shared input style
+│   ├── useFocusTrap.js         # Keyboard focus management for dialogs
+│   ├── components/             # ReportStates, Controls, ClientModals
+│   ├── Settings.jsx            # Worker URL settings (admin only)
+│   ├── SignIn.jsx              # Login screen
+│   └── main.jsx                # React entry point
 ├── worker/
 │   ├── index.js             # Cloudflare Worker: Klaviyo proxy + auth backend
 │   └── wrangler.toml        # Worker config, KV bindings
 ├── .github/workflows/
-│   ├── deploy.yml           # GitHub Pages build + deploy
+│   ├── ci.yml               # Tests + build on every PR and non-main push
+│   ├── deploy.yml           # GitHub Pages: tests, build, deploy on push to main
 │   └── deploy-worker.yml    # Cloudflare Worker deploy (requires CLOUDFLARE_API_TOKEN secret)
 ├── index.html
 ├── vite.config.js           # base: "/klaviyo-report-builder/"
@@ -164,7 +177,8 @@ klaviyo-report-builder/
 2. The Worker resolves the Klaviyo key from KV (or env secrets), fetches and normalises campaign reports, flow reports, and daily metric aggregates, then returns clean JSON.
 3. The browser calls the Worker's authenticated Anthropic proxy (streamed) with a detailed system prompt specifying the full HTML layout, and the Klaviyo JSON as data. The Worker injects the Anthropic key and streams Claude's response back.
 4. Claude writes the complete HTML document. The browser streams it into an `<iframe srcdoc>` in real time and saves a copy to KV when complete.
-5. Past reports are accessible from the sidebar and persist across devices.
+5. Each saved report is stamped with who generated it, the prompt version that produced it (`REPORT_PROMPT_VERSION` in `src/reportPrompt.js`), and a snapshot of the exact Klaviyo inputs — so any number in a past report can be traced back to its source.
+6. Past reports are accessible from the sidebar and persist across devices.
 
 **Report types:** Weekly, Fortnightly, Monthly, Quarterly, YTD, Custom date range.
 **Comparison modes:** None, Previous Period, Year on Year.
