@@ -847,6 +847,8 @@ async function handleRequest(request, env, origin) {
         dateStart:   metadata.dateStart   || '',
         dateEnd:     metadata.dateEnd     || '',
         accountName: (metadata.accountName || '').slice(0, 100),
+        // Which version of the report prompt produced this report (audit trail).
+        promptVersion: metadata.promptVersion != null ? String(metadata.promptVersion).slice(0, 16) : '',
         warnings:    trimReportWarnings(metadata.warnings),
       };
       try {
