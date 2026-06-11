@@ -4,6 +4,7 @@ import { fmtEventDate, parseLocalDate, shiftYear, fmtChartLabel, validateReportD
 import { friendlyErrorMessage, isRetryableStatus } from "./errors.js";
 import { REPORT_PROMPT_VERSION, buildReportSystemPrompt, buildReportUserMessage } from "./reportPrompt.js";
 import { workerFetch } from "./workerApi.js";
+import { readAnthropicSse } from "./anthropicStream.js";
 
 const WORKER_URL = "swanky_worker_url";
 const MODEL_KEY = "swanky_model";
@@ -556,63 +557,31 @@ Return ONLY a JSON array of the index numbers for events that are commercially r
           try { abortControllerRef.current?.abort(); } catch (_) {}
         }
       }, 5000);
-      const decoder = new TextDecoder();
-      let sseBuffer = '';
-      let rawHtml = '';
-      let outputTokens = 0;
-      let stopReason = null;
-      let sawMessageStop = false;
-      let inputUsage = {};
       // Scale progress denominator to the report's actual token budget so the bar
       // doesn't peg early on long ranges or crawl on short ones. Reports typically
       // emit ~70% of max_tokens, with a 10k floor for the bar to feel responsive.
       const EST_OUTPUT = Math.max(10000, Math.round(maxTokensForReport() * 0.7));
 
-      outer: while (true) {
-        const { done, value } = await reader.read();
-        lastActivity = Date.now();
-        if (done) break;
-        if (myRequestId !== requestIdRef.current) { reader.cancel(); return; }
-
-        sseBuffer += decoder.decode(value, { stream: true });
-        const lines = sseBuffer.split('\n');
-        sseBuffer = lines.pop() ?? '';
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const payload = line.slice(6).trim();
-          if (payload === '[DONE]') { sawMessageStop = true; break outer; }
-          let ev;
-          try { ev = JSON.parse(payload); } catch { continue; }
-          if (ev.type === 'error') {
-            // Anthropic emits an SSE error event (e.g. overloaded_error) mid-stream and
-            // then closes — surface it instead of saving the half-written report.
-            throw new Error("The report generation failed partway through (" + (ev.error?.type || ev.error?.message || 'stream error') + "). Please try again.");
-          } else if (ev.type === 'message_start' && ev.message?.usage) {
-            inputUsage = ev.message.usage;
-          } else if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
-            rawHtml += ev.delta.text;
-            outputTokens++;
-            // Update every 50 tokens — more responsive than 100
-            if (outputTokens % 50 === 0) {
-              const pct = Math.min(96, handoffPct + (96 - handoffPct) * Math.min(1, outputTokens / EST_OUTPUT));
-              setProgress(p => Math.max(p, pct));
-              const line2 = lineForProgress(pct);
-              if (line2) setLoadingLine(line2);
-              else {
-                setLoadingLine(holdingLines[holdingLineIndex % holdingLines.length].text);
-                if (outputTokens % 2000 === 0) holdingLineIndex++;
-              }
+      const stream = await readAnthropicSse(reader, {
+        onActivity: () => { lastActivity = Date.now(); },
+        isCancelled: () => myRequestId !== requestIdRef.current,
+        onTextDelta: (_delta, tokensSoFar) => {
+          // Update every 50 tokens — more responsive than 100
+          if (tokensSoFar % 50 === 0) {
+            const pct = Math.min(96, handoffPct + (96 - handoffPct) * Math.min(1, tokensSoFar / EST_OUTPUT));
+            setProgress(p => Math.max(p, pct));
+            const line2 = lineForProgress(pct);
+            if (line2) setLoadingLine(line2);
+            else {
+              setLoadingLine(holdingLines[holdingLineIndex % holdingLines.length].text);
+              if (tokensSoFar % 2000 === 0) holdingLineIndex++;
             }
-          } else if (ev.type === 'message_delta') {
-            stopReason = ev.delta?.stop_reason ?? null;
-            if (ev.usage?.output_tokens) outputTokens = ev.usage.output_tokens;
-          } else if (ev.type === 'message_stop') {
-            sawMessageStop = true;
-            break outer;
           }
-        }
-      }
+        },
+      });
+      if (stream.cancelled) return;
+      let rawHtml = stream.text;
+      const { stopReason, sawMessageStop, inputUsage, outputTokens } = stream;
 
       clearInterval(watchdog);
       if (myRequestId !== requestIdRef.current) return;
