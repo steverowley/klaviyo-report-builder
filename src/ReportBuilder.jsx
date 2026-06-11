@@ -314,7 +314,13 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, 
     const workerUrl = localStorage.getItem(WORKER_URL);
     if (!workerUrl) return;
     try {
-      const res = await workerFetch(workerUrl, { action: "list-reports", token: sessionToken });
+      const res = await workerFetch(workerUrl, {
+        action: "list-reports",
+        // Scope server-side to the selected client; unscoped only before a
+        // client is chosen (the UI shows nothing in that case anyway).
+        params: selectedClientId ? { clientId: selectedClientId } : {},
+        token: sessionToken,
+      });
       if (handleAuthFailure(res)) return;
       if (res.ok) {
         const entries = await res.json();

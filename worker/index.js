@@ -881,8 +881,13 @@ async function handleRequest(request, env, origin) {
           headers: { 'Content-Type': 'application/json', ...cors(origin) },
         });
       }
+      // Optional ?clientId= filter: scope the listing to one client server-side
+      // instead of shipping every client's report metadata to the browser.
+      // (The 200-key KV listing cap applies before the filter.)
+      const listClientId = url.searchParams.get('clientId');
       const list = await env.CLIENTS_KV.list({ prefix: 'report_', limit: 200 });
       const entries = list.keys
+        .filter(k => !listClientId || k.metadata?.clientId === listClientId)
         .map(k => ({ key: k.name, ...k.metadata }))
         .sort((a, b) => new Date(b.generatedAt) - new Date(a.generatedAt));
       return new Response(JSON.stringify(entries), {
