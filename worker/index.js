@@ -619,17 +619,12 @@ async function handleRequest(request, env, origin) {
           status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) },
         });
       }
-      // Only the streaming report call needs the prompt-caching / extended-output betas.
-      const betaHeaders = payload.stream
-        ? { 'anthropic-beta': 'prompt-caching-2024-07-31,output-128k-2025-02-19' }
-        : {};
       const upstream = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
           'x-api-key': env.SHARED_ANTHROPIC_KEY,
           'anthropic-version': '2023-06-01',
           'content-type': 'application/json',
-          ...betaHeaders,
         },
         body: JSON.stringify(payload),
       });
