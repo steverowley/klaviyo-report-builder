@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Swanky">
+  <style>
+    .tile { fill: #0a0a0a; }
+    .mark { fill: #f8f6f2; }
+    @media (prefers-color-scheme: dark) {
+      .tile { fill: #f8f6f2; }
+      .mark { fill: #0a0a0a; }
+    }
+  </style>
+  <rect class="tile" width="32" height="32" rx="7" ry="7" />
+  <text class="mark" x="16" y="16.6" text-anchor="middle" dominant-baseline="central"
+        font-family="Ovo, Georgia, 'Times New Roman', 'Times', serif"
+        font-size="22">S</text>
+</svg>
