@@ -9,11 +9,11 @@ import { ActivityBanner, EmptyState, LoadingState } from "./components/ReportSta
 import { Field, SegmentButton, ContextTextarea, SignOffCheckbox } from "./components/Controls.jsx";
 import { AddClientModal, OffboardClientModal } from "./components/ClientModals.jsx";
 import { useFocusTrap } from "./useFocusTrap.js";
+import { DEFAULT_WORKER_URL as BAKED_WORKER_URL } from "./config.js";
 
 const WORKER_URL = "swanky_worker_url";
 const MODEL_KEY = "swanky_model";
 const DEFAULT_MODEL = "claude-sonnet-4-6";
-const BAKED_WORKER_URL = import.meta.env.VITE_WORKER_URL || "";
 
 // Model registry. Pricing in USD per million tokens.
 const MODELS = {

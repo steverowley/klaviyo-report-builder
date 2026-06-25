@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
+import { DEFAULT_WORKER_URL } from "./config.js";
 
 const WORKER_URL_KEY = "swanky_worker_url";
 const GOOGLE_CLIENT_ID = "603699639407-kufvngv1tcjbr38bp2bi7i7f21o3rvbb.apps.googleusercontent.com";
-const DEFAULT_WORKER_URL = import.meta.env.VITE_WORKER_URL || "";
 
 function signInErrorMessage(data, status) {
   if (data?.error === "pending") {
