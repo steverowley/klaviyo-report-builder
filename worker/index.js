@@ -72,6 +72,21 @@ export function trimReportWarnings(warnings) {
   return warnings.slice(0, 6).map((w) => String(w).slice(0, 120));
 }
 
+// Shape of a saved-report KV key: report_<timestamp>_<rand>_<clientId>.
+export function isReportKey(k) {
+  return typeof k === 'string' && /^report_\d+_[a-z0-9]+_/.test(k);
+}
+
+// Whether a save request may overwrite an existing report in place (an autosave of
+// inline edits). Only a well-formed key pointing at an existing report OWNED BY THE
+// SAME CLIENT may be reused — a stray key must never clobber another client's report.
+export function canReuseReportKey(requestedKey, existing, clientId) {
+  return isReportKey(requestedKey)
+    && existing != null
+    && existing.value != null
+    && existing.metadata?.clientId === clientId;
+}
+
 // KV key for a month's cumulative Anthropic spend, e.g. 'spend_2026-06'.
 export function spendMonthKey(date = new Date()) {
   return `spend_${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
@@ -937,13 +952,26 @@ async function handleRequest(request, env, origin) {
       // Stamp the report with the verified session user (audit trail) — trust the
       // signed token, not a client-supplied field.
       const saveSession = await verifyToken(getBearerToken(request), env.TOKEN_SECRET);
-      // Random suffix so two reports for the same client in the same millisecond
-      // can't collide on the key.
-      const ts = String(Date.now()).padStart(16, '0');
-      const key = `report_${ts}_${crypto.randomUUID().slice(0, 8)}_${metadata.clientId}`;
+      // Updating an existing report in place (e.g. an autosave of inline edits)
+      // reuses its key; a fresh report mints a new one. The random suffix keeps two
+      // reports for the same client in the same millisecond from colliding.
+      let key = null;
+      let existingMeta = null;
+      if (isReportKey(body.key)) {
+        const existing = await env.CLIENTS_KV.getWithMetadata(body.key);
+        if (canReuseReportKey(body.key, existing, metadata.clientId)) {
+          key = body.key;
+          existingMeta = existing.metadata;
+        }
+      }
+      if (!key) {
+        const ts = String(Date.now()).padStart(16, '0');
+        key = `report_${ts}_${crypto.randomUUID().slice(0, 8)}_${metadata.clientId}`;
+      }
       const kvMeta = {
-        generatedAt: metadata.generatedAt || new Date().toISOString(),
-        generatedBy: (saveSession?.sub || '').slice(0, 80),
+        // Keep the original authorship/time when updating an existing report in place.
+        generatedAt: existingMeta?.generatedAt || metadata.generatedAt || new Date().toISOString(),
+        generatedBy: existingMeta?.generatedBy || (saveSession?.sub || '').slice(0, 80),
         clientId:    metadata.clientId,
         reportType:  metadata.reportType  || '',
         dateStart:   metadata.dateStart   || '',

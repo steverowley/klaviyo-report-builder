@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { wireProseEditing } from './reportEditing.js';
+import { describe, it, expect } from 'vitest';
+import { wireProseEditing, cleanReportClone } from './reportEditing.js';
 
 // Minimal DOM stub — enough of the element API for wireProseEditing to run in
 // plain Node (the test env has no jsdom). Elements live under a single root so
@@ -155,5 +155,81 @@ describe('wireProseEditing', () => {
     const h = root.children.find(c => c.tagName === 'H2');
     expect(h.children.filter(c => c.tagName === 'BUTTON')).toHaveLength(1);
     expect(root.children.some(c => c.className === 'swanky-editable')).toBe(false);
+  });
+});
+
+// Attribute-first node stub for cleanReportClone (which works via attribute/class
+// selectors and inline-style manipulation, unlike the wireProseEditing stub above).
+class Node2 {
+  constructor(tag, attrs = {}) {
+    this.tagName = tag.toUpperCase();
+    this.children = [];
+    this.parentNode = null;
+    this._attrs = { ...attrs };
+    const self = this;
+    this.style = {
+      set outline(v) { self._setStyleProp('outline', v); },
+      set outlineOffset(v) { self._setStyleProp('outline-offset', v); },
+    };
+  }
+  append(...kids) { for (const k of kids) { k.parentNode = this; this.children.push(k); } return this; }
+  _setStyleProp(prop, v) {
+    const map = {};
+    (this._attrs.style || '').split(';').forEach((pair) => {
+      const [k, val] = pair.split(':');
+      if (k && k.trim()) map[k.trim()] = (val || '').trim();
+    });
+    if (v === '' || v == null) delete map[prop]; else map[prop] = v;
+    const out = Object.entries(map).map(([k, val]) => `${k}:${val}`).join(';');
+    if (out) this._attrs.style = out; else delete this._attrs.style;
+  }
+  get className() { return this._attrs.class || ''; }
+  getAttribute(n) { return n in this._attrs ? this._attrs[n] : null; }
+  hasAttribute(n) { return n in this._attrs; }
+  removeAttribute(n) { delete this._attrs[n]; }
+  remove() {
+    if (!this.parentNode) return;
+    const i = this.parentNode.children.indexOf(this);
+    if (i >= 0) this.parentNode.children.splice(i, 1);
+    this.parentNode = null;
+  }
+  _matches(sel) {
+    if (sel[0] === '[') return this.hasAttribute(sel.slice(1, -1));
+    if (sel[0] === '.') return this.className.split(/\s+/).includes(sel.slice(1));
+    return this.tagName === sel.toUpperCase();
+  }
+  querySelectorAll(sel) {
+    const out = [];
+    (function walk(n) { for (const c of n.children) { if (c._matches(sel)) out.push(c); walk(c); } })(this);
+    return out;
+  }
+}
+
+describe('cleanReportClone', () => {
+  it('strips app scaffolding, edit buttons, contenteditable, and dashed outlines — keeps the rest', () => {
+    const root = new Node2('html');
+    const head = new Node2('head');
+    const body = new Node2('body');
+    root.append(head, body);
+    head.append(
+      new Node2('meta', { 'data-swanky': '', 'http-equiv': 'Content-Security-Policy' }),
+      new Node2('style', { 'data-swanky': '' }), // cursor:none etc.
+    );
+    const h2 = new Node2('h2');
+    h2.append(new Node2('button', { class: 'swanky-edit-btn' }));
+    const box = new Node2('div', { class: 'swanky-editable', contenteditable: 'true', style: 'outline:1px dashed #ccc' });
+    const keepP = new Node2('p', { style: 'color:#222' }); // legit inline style
+    box.append(keepP);
+    body.append(h2, box);
+
+    cleanReportClone(root);
+
+    expect(root.querySelectorAll('[data-swanky]')).toHaveLength(0);
+    expect(root.querySelectorAll('.swanky-edit-btn')).toHaveLength(0);
+    expect(root.querySelectorAll('[contenteditable]')).toHaveLength(0);
+    expect(box.hasAttribute('style')).toBe(false);          // dashed outline gone → style dropped
+    expect(keepP.getAttribute('style')).toBe('color:#222');  // legit inline style preserved
+    expect(root.querySelectorAll('.swanky-editable')).toHaveLength(1); // prose wrapper survives
+    expect(root.querySelectorAll('p')).toHaveLength(1);      // and its content
   });
 });

@@ -143,10 +143,17 @@ data tables are locked so the figures can't be accidentally changed.
 - **Regenerate** (↺) — ask the AI for a fresh, non-duplicate recommendation in that slot.
 - **Delete** — remove a step.
 
-Your edits appear in the live preview and in the report's **Print / Save PDF** output
-(the button at the top-right of the report), which is what you send to the client. The
-separate **Download HTML** button in the sidebar saves the original AI draft, so make
-your edits then use **Print / Save PDF** to capture them.
+**Your edits are captured everywhere they matter:**
+
+- **Print / Save PDF** (top-right of the report) and **Download HTML** (sidebar) both
+  export exactly what's on screen, edits included.
+- Edits **auto-save** back to the stored report every 20 seconds or so, so if you close
+  the tab and reopen the report later from **Past reports**, your changes are still there.
+  A small "Edits auto-saved …" note under the report title in the sidebar confirms the
+  last save.
+
+(The auto-saved and downloaded files are cleaned up automatically — the ✎ edit buttons
+and dashed outlines are stripped out, so the client only sees the finished report.)
 
 ---
 

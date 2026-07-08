@@ -1,16 +1,16 @@
-// Inline prose editing for the report preview.
+// Inline prose editing + edited-HTML capture for the report preview.
 //
-// This is injected into the sandboxed report iframe (see ReportBuilder), so it
-// runs against EVERY report — including ones generated before the editing
-// feature existed — rather than depending on the report's own HTML to carry the
-// edit controls. It finds the report's narrative prose sections by their heading
-// and adds a small ✎ / ✓ toggle that makes the prose editable in place.
+// These run inside the sandboxed report iframe (see ReportBuilder), against EVERY
+// report — including ones generated before this feature existed — rather than
+// depending on the report's own HTML to carry the edit logic. wireProseEditing
+// adds a ✎ / ✓ toggle to the narrative sections; serializeReport captures the
+// current (edited) DOM as clean HTML for Download and autosave.
 //
-// It is written as a plain, self-contained ES5-style function (no closures over
+// They are written as plain, self-contained ES5-style functions (no closures over
 // module scope, no imports) for two reasons:
-//   1. it can be unit-tested directly against a DOM stub (see reportEditing.test.js), and
-//   2. it can be serialised with `.toString()` and injected into the iframe.
-// Keep it dependency-free so both of those keep working.
+//   1. they can be unit-tested directly against a DOM stub (see reportEditing.test.js), and
+//   2. they can be serialised with `.toString()` and injected into the iframe.
+// Keep them dependency-free so both of those keep working.
 
 // Headings whose following prose should be editable. Data-heavy sections
 // (Period Snapshot, tables, charts) are intentionally excluded so figures can't
@@ -71,4 +71,31 @@ export function wireProseEditing(doc) {
       h.insertBefore(btn, h.firstChild);
     })(h, box);
   }
+}
+
+// Strip the app-only scaffolding from a CLONE of the report root, leaving the clean
+// report plus the user's content edits. Mutates and returns the passed node.
+// Removes: the injected nodes we tagged with data-swanky (CSP meta, cursor style,
+// print style, relay/edit scripts), the ✎ edit buttons, the contenteditable flags,
+// and any leftover dashed editing outline. Exported so it can be unit-tested.
+export function cleanReportClone(root) {
+  root.querySelectorAll('[data-swanky]').forEach(function (n) { n.remove(); });
+  root.querySelectorAll('.swanky-edit-btn').forEach(function (n) { n.remove(); });
+  root.querySelectorAll('[contenteditable]').forEach(function (n) { n.removeAttribute('contenteditable'); });
+  root.querySelectorAll('[style]').forEach(function (n) {
+    if (/outline/i.test(n.getAttribute('style') || '')) {
+      n.style.outline = '';
+      n.style.outlineOffset = '';
+      if (!n.getAttribute('style')) n.removeAttribute('style');
+    }
+  });
+  return root;
+}
+
+// Serialize the live report DOM to a clean, self-contained HTML string that
+// reflects the user's on-screen edits — used for both Download and autosave.
+export function serializeReport(doc) {
+  var clone = doc.documentElement.cloneNode(true);
+  cleanReportClone(clone);
+  return '<!DOCTYPE html>\n' + clone.outerHTML;
 }

@@ -2,6 +2,8 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   slugify,
   trimReportWarnings,
+  isReportKey,
+  canReuseReportKey,
   spendMonthKey,
   addSpend,
   sanitiseMetaLine,
@@ -54,6 +56,38 @@ describe('trimReportWarnings', () => {
     const [w] = trimReportWarnings([long]);
     expect(w).toHaveLength(120);
     expect(trimReportWarnings([123])).toEqual(['123']);
+  });
+});
+
+describe('isReportKey', () => {
+  it('accepts a well-formed report key', () => {
+    expect(isReportKey('report_0000000001700000000_ab12cd34_client_acme')).toBe(true);
+  });
+  it('rejects anything else', () => {
+    expect(isReportKey('reportdata_report_1_x_c')).toBe(false);
+    expect(isReportKey('spend_2026-06')).toBe(false);
+    expect(isReportKey('')).toBe(false);
+    expect(isReportKey(null)).toBe(false);
+    expect(isReportKey(42)).toBe(false);
+  });
+});
+
+describe('canReuseReportKey', () => {
+  const key = 'report_0000000001700000000_ab12cd34_client_acme';
+  const existing = { value: '<html>…</html>', metadata: { clientId: 'client_acme' } };
+
+  it('allows overwriting an existing report owned by the same client', () => {
+    expect(canReuseReportKey(key, existing, 'client_acme')).toBe(true);
+  });
+  it('refuses a different client (no cross-client clobber)', () => {
+    expect(canReuseReportKey(key, existing, 'client_other')).toBe(false);
+  });
+  it('refuses a key that does not exist yet', () => {
+    expect(canReuseReportKey(key, { value: null, metadata: null }, 'client_acme')).toBe(false);
+    expect(canReuseReportKey(key, null, 'client_acme')).toBe(false);
+  });
+  it('refuses a malformed key even if an entry is returned', () => {
+    expect(canReuseReportKey('nope', existing, 'client_acme')).toBe(false);
   });
 });
 
