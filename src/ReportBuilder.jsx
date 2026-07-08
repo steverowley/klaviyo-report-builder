@@ -4,7 +4,7 @@ import { friendlyErrorMessage } from "./errors.js";
 import { REPORT_PROMPT_VERSION } from "./reportPrompt.js";
 import { workerFetch } from "./workerApi.js";
 import { useReportGeneration } from "./useReportGeneration.js";
-import { wireProseEditing } from "./reportEditing.js";
+import { wireProseEditing, serializeReport, cleanReportClone } from "./reportEditing.js";
 import { inputStyle } from "./theme.js";
 import { ActivityBanner, EmptyState, LoadingState } from "./components/ReportStates.jsx";
 import { Field, SegmentButton, ContextTextarea, SignOffCheckbox } from "./components/Controls.jsx";
@@ -94,6 +94,10 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, 
   const iframeRef = useRef(null);
   const overCapAckRef = useRef(false); // one-time-per-session ack of the spend-cap warning
   const slidesModalRef = useRef(null);
+  const htmlReqSeq = useRef(0);            // request id for pulling edited HTML from the iframe
+  const pendingHtmlReqs = useRef(new Map()); // reqId -> resolve()
+  const lastAutosavedHtmlRef = useRef(null); // last edited HTML seen by the autosave loop
+  const [lastAutosaveAt, setLastAutosaveAt] = useState(null); // timestamp of last successful autosave
   useFocusTrap(slidesModalRef, showSlidesModal);
 
   const reportTypes = ["Weekly", "Fortnightly", "Monthly", "Quarterly", "YTD", "Custom"];
@@ -334,13 +338,15 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, 
 
   // Save a freshly generated report to KV for cross-device access. Returns the
   // server-assigned key (or null) so the caller can highlight it as the current report.
-  const saveReportToWorker = async (html, metadata, inputData) => {
+  // Save a report to KV. Pass `key` to update an existing report in place (autosave
+  // of inline edits) instead of creating a new entry.
+  const saveReportToWorker = async (html, metadata, inputData, key) => {
     const workerUrl = localStorage.getItem(WORKER_URL);
     if (!workerUrl) return null;
     try {
       const res = await workerFetch(workerUrl, {
         action: "save-report", method: "POST", token: sessionToken,
-        body: { html, metadata, inputData },
+        body: { html, metadata, inputData, ...(key ? { key } : {}) },
       });
       if (handleAuthFailure(res)) return null;
       if (res.ok) { const d = await res.json().catch(() => ({})); return d.key || null; }
@@ -413,8 +419,9 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, 
   }, [reportHtml, isGenerating]);
 
   // Any time the displayed report changes (new generation or one loaded from
-  // history), require a fresh review sign-off before it can be downloaded/sent.
-  useEffect(() => { setSignedOff(false); }, [reportHtml]);
+  // history), require a fresh review sign-off before it can be downloaded/sent,
+  // and clear the previous report's autosave indicator.
+  useEffect(() => { setSignedOff(false); setLastAutosaveAt(null); }, [reportHtml]);
 
   // Escape closes the open slides modal or client dropdown, like a standard dialog.
   useEffect(() => {
@@ -439,6 +446,15 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, 
           window.dispatchEvent(new CustomEvent('iframe-cursor-move', {
             detail: { x: rect.left + event.data.x, y: rect.top + event.data.y },
           }));
+        }
+        return;
+      }
+      // Reply with the current (edited) report HTML, resolving the matching request.
+      if (event.data?.type === 'swanky-html') {
+        const resolve = pendingHtmlReqs.current.get(event.data.reqId);
+        if (resolve) {
+          pendingHtmlReqs.current.delete(event.data.reqId);
+          resolve(event.data.html);
         }
         return;
       }
@@ -605,28 +621,69 @@ ${reportHtml}`,
 
   useEffect(() => {
     if (!iframeRef.current || !reportHtml) return;
+    // Everything injected here is tagged data-swanky so serializeReport can strip it
+    // back out — Download and autosave get the clean report plus the user's edits,
+    // never the app's cursor/relay/edit scaffolding.
     // Inject cursor:none and a postMessage relay so the custom cursor works
-    // inside the iframe (sandbox without allow-same-origin blocks contentDocument)
-    const relayScript = `<script>document.addEventListener('mousemove',function(e){window.parent.postMessage({type:'cursor-move',x:e.clientX,y:e.clientY},'*');});<\/script>`;
+    // inside the iframe (sandbox without allow-same-origin blocks contentDocument).
+    const relayScript = `<script data-swanky>document.addEventListener('mousemove',function(e){window.parent.postMessage({type:'cursor-move',x:e.clientX,y:e.clientY},'*');});<\/script>`;
     // Block data exfiltration from the sandboxed report (fetch/XHR/WebSocket/beacon)
     // without affecting how the report renders or its print button.
-    const csp = `<meta http-equiv="Content-Security-Policy" content="connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">`;
-    // Make the narrative prose editable in the preview. Injected here (not baked
-    // into the report HTML) so it works on every report — including ones saved
-    // before this feature shipped — and never lands in the downloaded file.
+    const csp = `<meta data-swanky http-equiv="Content-Security-Policy" content="connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">`;
+    // Make the narrative prose editable in the preview, and let the app pull the
+    // edited HTML back out on request (Download / autosave). Injected here — not
+    // baked into the report — so it works on every report, including ones saved
+    // before this feature shipped, and never lands in the saved/downloaded file.
     // Hide all controls and the editing outline when printing to PDF, so no edit
-    // affordance (new prose pencils or the report's own recommendation buttons)
-    // reaches the client PDF regardless of the report's own print CSS.
-    const editStyle = `<style>@media print{button{display:none!important}[contenteditable]{outline:none!important}}</style>`;
-    const editScript = `<script>(function(){function go(){try{(${wireProseEditing.toString()})(document);}catch(e){}}if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',go);}else{go();}})();<\/script>`;
-    const headInjection = `${csp}<style>*{cursor:none!important}</style>${editStyle}${relayScript}${editScript}`;
+    // affordance reaches the client PDF regardless of the report's own print CSS.
+    const editStyle = `<style data-swanky>@media print{button{display:none!important}[contenteditable]{outline:none!important}}</style>`;
+    // Inject the editing + serialize functions by name so serializeReport's call to
+    // cleanReportClone resolves inside the iframe (they can't reference module scope).
+    const editScript = `<script data-swanky>(function(){`
+      + `var cleanReportClone=${cleanReportClone.toString()};`
+      + `var wireProseEditing=${wireProseEditing.toString()};`
+      + `var serializeReport=${serializeReport.toString()};`
+      + `function go(){try{wireProseEditing(document);}catch(e){}}`
+      + `if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',go);}else{go();}`
+      + `window.addEventListener('message',function(e){if(e&&e.data&&e.data.type==='swanky-get-html'){try{window.parent.postMessage({type:'swanky-html',reqId:e.data.reqId,html:serializeReport(document)},'*');}catch(err){}}});`
+      + `})();<\/script>`;
+    const headInjection = `${csp}<style data-swanky>*{cursor:none!important}</style>${editStyle}${relayScript}${editScript}`;
     // Always land the CSP inside a <head>; if a report has none, prepend one so the
     // exfiltration guard can never silently fail open.
     const injected = /<\/head>/i.test(reportHtml)
       ? reportHtml.replace(/<\/head>/i, `${headInjection}</head>`)
       : `<head>${headInjection}</head>${reportHtml}`;
+    // Capture the report as first loaded (unedited) as the autosave baseline, so the
+    // loop only persists once the user actually changes something.
+    lastAutosavedHtmlRef.current = null;
+    iframeRef.current.onload = () => {
+      requestReportHtml().then((html) => { if (html != null) lastAutosavedHtmlRef.current = html; });
+    };
     iframeRef.current.srcdoc = injected;
   }, [reportHtml]);
+
+  // Autosave inline edits back to the saved report (same KV key), so reopening it
+  // later shows them. Runs only for a persisted report; compares each capture to the
+  // load-time baseline so an untouched report is never re-saved.
+  useEffect(() => {
+    const key = currentReportMeta?.key;
+    if (!reportHtml || isGenerating || !key) return;
+    let cancelled = false;
+    const id = setInterval(async () => {
+      const html = await requestReportHtml();
+      if (cancelled || html == null || lastAutosavedHtmlRef.current == null) return;
+      if (html === lastAutosavedHtmlRef.current) return; // nothing changed since last save
+      const savedKey = await saveReportToWorker(html, { ...currentReportMeta }, null, key);
+      if (!cancelled && savedKey) {
+        lastAutosavedHtmlRef.current = html;
+        setLastAutosaveAt(Date.now());
+        // If the original entry was gone and the worker minted a new key, adopt it so
+        // the next autosave updates that one in place instead of creating more copies.
+        if (savedKey !== key) setCurrentReportMeta((prev) => (prev ? { ...prev, key: savedKey } : prev));
+      }
+    }, 20000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [reportHtml, isGenerating, currentReportMeta?.key]);
 
   useEffect(() => {
     if (!dropdownOpen) return;
@@ -639,13 +696,29 @@ ${reportHtml}`,
     return () => document.removeEventListener('mousedown', onDown);
   }, [dropdownOpen]);
 
-  const handleDownload = () => {
+  // Ask the sandboxed report iframe for its current (edited) HTML. The iframe can't
+  // be read directly (no allow-same-origin), so it serializes and posts it back.
+  // Resolves null if the iframe doesn't answer in time (so callers can tell "not
+  // ready" apart from real content).
+  const requestReportHtml = () => new Promise((resolve) => {
+    const iwin = iframeRef.current?.contentWindow;
+    if (!iwin) { resolve(null); return; }
+    const reqId = ++htmlReqSeq.current;
+    let settled = false;
+    const finish = (html) => { if (settled) return; settled = true; pendingHtmlReqs.current.delete(reqId); resolve(html); };
+    pendingHtmlReqs.current.set(reqId, finish);
+    iwin.postMessage({ type: 'swanky-get-html', reqId }, '*');
+    setTimeout(() => finish(null), 2000);
+  });
+
+  const handleDownload = async () => {
     if (!reportHtml) return;
     if (!signedOff) {
       setError("Please tick “I’ve reviewed the figures” before downloading the report to send.");
       return;
     }
-    const blob = new Blob([reportHtml], { type: "text/html" });
+    const html = (await requestReportHtml()) || reportHtml; // capture on-screen edits
+    const blob = new Blob([html], { type: "text/html" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     const safeName = accountName.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
@@ -871,6 +944,11 @@ ${reportHtml}`,
                 {currentReportMeta.generatedAt && (
                   <div style={{ marginTop: "3px", fontSize: "10px", color: "#b8b8b8", textTransform: "uppercase", letterSpacing: "0.10em" }}>
                     Generated {relativeTime(currentReportMeta.generatedAt)}
+                  </div>
+                )}
+                {lastAutosaveAt && (
+                  <div style={{ marginTop: "3px", fontSize: "10px", color: "#6b6b6b", fontStyle: "italic", fontFamily: "'Ovo', serif" }}>
+                    Edits auto-saved {relativeTime(new Date(lastAutosaveAt).toISOString())}
                   </div>
                 )}
               </div>
