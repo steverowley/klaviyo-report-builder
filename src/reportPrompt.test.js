@@ -29,6 +29,20 @@ describe('buildReportSystemPrompt', () => {
   it('demands a complete standalone HTML document', () => {
     expect(prompt).toContain('Output ONLY a complete <!DOCTYPE html>…</html>');
   });
+
+  it('marks the narrative prose sections as inline-editable', () => {
+    // Executive Summary, Key Insights, and Comparison Analysis all wrap their
+    // prose in .editable-prose so the reader can tweak wording before sending.
+    expect(prompt).toContain('class="editable-prose"');
+    expect(prompt).toContain('━━━ EDITABLE PROSE ━━━');
+    // The wiring that injects the ✎ toggle must be present verbatim.
+    expect(prompt).toContain('function bindProse(block)');
+    expect(prompt).toContain(".querySelectorAll('.editable-prose').forEach(bindProse)");
+  });
+
+  it('keeps every interactive control out of the printed/PDF report', () => {
+    expect(prompt).toContain('@media print { button{display:none!important}');
+  });
 });
 
 describe('buildReportUserMessage', () => {
