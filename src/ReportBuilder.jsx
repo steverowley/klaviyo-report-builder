@@ -4,6 +4,7 @@ import { friendlyErrorMessage } from "./errors.js";
 import { REPORT_PROMPT_VERSION } from "./reportPrompt.js";
 import { workerFetch } from "./workerApi.js";
 import { useReportGeneration } from "./useReportGeneration.js";
+import { wireProseEditing } from "./reportEditing.js";
 import { inputStyle } from "./theme.js";
 import { ActivityBanner, EmptyState, LoadingState } from "./components/ReportStates.jsx";
 import { Field, SegmentButton, ContextTextarea, SignOffCheckbox } from "./components/Controls.jsx";
@@ -610,7 +611,15 @@ ${reportHtml}`,
     // Block data exfiltration from the sandboxed report (fetch/XHR/WebSocket/beacon)
     // without affecting how the report renders or its print button.
     const csp = `<meta http-equiv="Content-Security-Policy" content="connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">`;
-    const headInjection = `${csp}<style>*{cursor:none!important}</style>${relayScript}`;
+    // Make the narrative prose editable in the preview. Injected here (not baked
+    // into the report HTML) so it works on every report — including ones saved
+    // before this feature shipped — and never lands in the downloaded file.
+    // Hide all controls and the editing outline when printing to PDF, so no edit
+    // affordance (new prose pencils or the report's own recommendation buttons)
+    // reaches the client PDF regardless of the report's own print CSS.
+    const editStyle = `<style>@media print{button{display:none!important}[contenteditable]{outline:none!important}}</style>`;
+    const editScript = `<script>(function(){function go(){try{(${wireProseEditing.toString()})(document);}catch(e){}}if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',go);}else{go();}})();<\/script>`;
+    const headInjection = `${csp}<style>*{cursor:none!important}</style>${editStyle}${relayScript}${editScript}`;
     // Always land the CSP inside a <head>; if a report has none, prepend one so the
     // exfiltration guard can never silently fail open.
     const injected = /<\/head>/i.test(reportHtml)
