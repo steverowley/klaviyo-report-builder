@@ -16,7 +16,7 @@ managing clients and users.
 3. [Generating a report](#3-generating-a-report)
 4. [The "incomplete data" warning](#4-the-incomplete-data-warning)
 5. [Reading the report](#5-reading-the-report)
-6. [Editing the recommendations](#6-editing-the-recommendations)
+6. [Editing the report text](#6-editing-the-report-text)
 7. [Reviewing and sending (sign-off)](#7-reviewing-and-sending-sign-off)
 8. [Exports: HTML, source data, and Speedy Slides](#8-exports-html-source-data-and-speedy-slides)
 9. [Past reports](#9-past-reports)
@@ -106,7 +106,7 @@ right client and dates.
 Each report contains, in order:
 
 1. **Header** — logo, title, client name, date range, and a Print / Save PDF button.
-2. **Executive summary** — the top-line story in a few sentences.
+2. **Executive summary** — the top-line story in a few sentences (editable — see §6).
 3. **Period snapshot** — four hero metrics: total revenue, campaigns sent, new
    subscribers, total orders (each with a comparison delta when a comparison is set).
 4. **List growth** — new subscribers per day, plus unsubscribes and net growth.
@@ -114,8 +114,8 @@ Each report contains, in order:
 6. **Campaign performance** — a table of email campaigns (opens, clicks, CTOR, CVR,
    revenue). SMS and push campaigns are excluded so the email figures are accurate.
 7. **Flow performance** — aggregated per flow.
-8. **Key insights** — AI-written analysis grounded in the data.
-9. **Comparison analysis** — shown only when a comparison period is selected.
+8. **Key insights** — AI-written analysis grounded in the data (editable — see §6).
+9. **Comparison analysis** — shown only when a comparison period is selected (editable — see §6).
 10. **Next steps for growth** — prioritised, editable recommendations.
 11. **Footer** — branding and a generation timestamp.
 
@@ -124,9 +124,18 @@ the period are marked on the charts where relevant.
 
 ---
 
-## 6. Editing the recommendations
+## 6. Editing the report text
 
-The **Next steps** are interactive before you download:
+The report is interactive in the preview, so you can fine-tune the AI's wording
+before it reaches a client.
+
+**Narrative sections** — the **Executive summary**, **Key insights**, and
+**Comparison analysis** each have a small **✎** button in their heading. Click it to
+edit that section's text in place (a dashed outline shows it's editable), then click
+**✓** to finish. Only the written prose is editable — the metric cards, charts, and
+data tables are locked so the figures can't be accidentally changed.
+
+**Next steps** — each recommendation has its own controls:
 
 - **Edit** (✎) a step to change its title or description inline; click ✓ to finish.
 - **Priority** — click the "High / Medium / Low priority" label to cycle it.
@@ -134,7 +143,10 @@ The **Next steps** are interactive before you download:
 - **Regenerate** (↺) — ask the AI for a fresh, non-duplicate recommendation in that slot.
 - **Delete** — remove a step.
 
-Your edits are captured in the HTML you download.
+Your edits appear in the live preview and in the report's **Print / Save PDF** output
+(the button at the top-right of the report), which is what you send to the client. The
+separate **Download HTML** button in the sidebar saves the original AI draft, so make
+your edits then use **Print / Save PDF** to capture them.
 
 ---
 
