@@ -8,7 +8,7 @@
 
 import { computeHeadlineMetrics } from "./reportMetrics.js";
 
-export const REPORT_PROMPT_VERSION = 2;
+export const REPORT_PROMPT_VERSION = 3;
 
 export function buildReportSystemPrompt({ accountName, reportType }) {
   return `You are generating a Klaviyo email marketing performance report for "${accountName}".
@@ -53,7 +53,7 @@ Meta bar: border-top:0.5px solid #e0e0da margin-top:20px padding-top:10px flex s
 
 **2. EXECUTIVE SUMMARY**
 <h2>Executive Summary</h2>
-3–4 sentences of top-line narrative a time-pressed reader can absorb in 20 seconds. Lead with the single most important number or finding, then the key opportunity or risk, then one forward-looking sentence. Wrap the paragraph(s) in a single <div class="editable-prose">…</div> (this marks the section as inline-editable — see EDITABLE PROSE below). Plain <p> tags inside: font-size:15px;line-height:1.8;color:#2a2a2a;font-weight:300;margin:0 0 36px. Bold key figures with <strong style="font-weight:500">.
+3–4 sentences of top-line narrative a time-pressed reader can absorb in 20 seconds. Lead with the single most important number or finding, then the key opportunity or risk, then one forward-looking sentence. Plain <p> tags: font-size:15px;line-height:1.8;color:#2a2a2a;font-weight:300;margin:0 0 36px. Bold key figures with <strong style="font-weight:500">.
 
 **3. PERIOD SNAPSHOT**
 <h2>Period Snapshot</h2>
@@ -132,13 +132,13 @@ Revenue cells: font-family:'Ovo',serif;font-size:14px;font-weight:600
 
 **8. KEY INSIGHTS**
 <h2>Key Insights</h2>
-4–5 paragraphs as plain <p> tags (font-size:13px;line-height:1.9;color:#1a1a1a;margin:0 0 14px), all wrapped in a single <div class="editable-prose">…</div> (marks the section inline-editable — see EDITABLE PROSE below). No background, no inline colours. Bold key figures with <strong style="font-weight:600">. NO bullets, NO icons, NO emojis.
+4–5 paragraphs as plain <p> tags (font-size:13px;line-height:1.9;color:#1a1a1a;margin:0 0 14px). No wrapper div, no background, no inline colours. Bold key figures with <strong style="font-weight:600">. NO bullets, NO icons, NO emojis.
 Where ecommerce events are provided, actively look for correlations in the data: revenue or order spikes near payday windows, subscriber lifts around gifting holidays, open-rate changes around sale events, and school-term effects for education/childrenswear brands. Name the event and the observed metric movement explicitly (e.g. "Order volume lifted <strong>34%</strong> in the 3 days surrounding Valentine's Day…"). If the data shows no notable correlation, note that too briefly.
 Where ADDITIONAL CONTEXT FROM USER is provided, use it directly in the analysis — reference any mentioned sales, campaigns, product launches, or platform changes as explanatory factors for metric movements.
 
 **9. COMPARISON ANALYSIS** (omit if no comparison data)
 <h2>Comparison Analysis</h2>
-Same as Key Insights: 4–5 sentences in plain <p> tags, all wrapped in a single <div class="editable-prose">…</div> (marks the section inline-editable — see EDITABLE PROSE below). What changed, why, what to watch.
+Same: plain <p> tags only. 4–5 sentences. What changed, why, what to watch.
 Reference ecommerce events where they explain year-on-year or period-on-period differences (e.g. "The prior period included Black Friday; the current period did not, which partly explains the revenue decline").
 
 **10. NEXT STEPS FOR GROWTH**
@@ -214,19 +214,6 @@ document.getElementById('addStep').onclick=function(){
   w.innerHTML='<div style="display:flex;gap:14px;padding:16px 0;border-bottom:0.5px solid #f0f0ec"><div class="num" style="width:28px;height:28px;border-radius:50%;background:#0a0a0a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex-shrink:0;margin-top:2px">'+(idx+1)+'</div><div style="flex:1"><div class="pri" style="font-size:9px;font-weight:500;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:4px"><span class="pri-level" style="cursor:pointer;color:#555">Medium priority</span><span style="color:#888"> — </span><span class="pri-area" contenteditable="true" style="color:#888;outline:1px dashed #ccc">New</span></div><div class="stitle" contenteditable="true" style="font-family:\'Ovo\',serif;font-size:17px;font-weight:400;color:#0a0a0a;margin-bottom:4px;outline:1px dashed #ccc">New recommendation</div><div class="sdesc" contenteditable="true" style="font-size:12px;color:#606060;line-height:1.6;font-weight:300;margin-bottom:8px;outline:1px dashed #ccc">Describe this recommendation…</div></div><div style="position:absolute;top:14px;right:0;display:flex;gap:8px"><button class="btn-edit" style="background:none;border:none;cursor:pointer;font-size:13px;color:#b8b8b8;padding:2px 4px" title="Edit">✓</button><button class="btn-regen" style="background:none;border:none;cursor:pointer;font-size:13px;color:#b8b8b8;padding:2px 4px" title="Regenerate">↺</button><button class="btn-del" style="background:none;border:none;cursor:pointer;font-size:13px;color:#b8b8b8;padding:2px 4px" title="Delete">×</button></div></div>';
   document.getElementById('stepsContainer').appendChild(w);bindStep(w);w.querySelector('.stitle').focus();
 };
-function bindProse(block){
-  var btn=document.createElement('button');btn.type='button';btn.className='btn-edit-prose';btn.title='Edit this section';btn.textContent='✎';
-  btn.style.cssText='float:right;background:none;border:none;cursor:pointer;font-size:14px;color:#b8b8b8;padding:0 0 0 10px;line-height:1;font-weight:400';
-  btn.onmouseenter=function(){if(!block.isContentEditable)btn.style.color='#6b6b6b';};
-  btn.onmouseleave=function(){btn.style.color=block.isContentEditable?'#0a0a0a':'#b8b8b8';};
-  btn.onclick=function(){var on=block.isContentEditable;block.contentEditable=on?'false':'true';block.style.outline=on?'':'1px dashed #ccc';block.style.outlineOffset=on?'':'8px';btn.textContent=on?'✎':'✓';btn.style.color=on?'#b8b8b8':'#0a0a0a';if(!on)block.focus();};
-  var h=block.previousElementSibling;
-  if(h&&h.tagName==='H2')h.insertBefore(btn,h.firstChild);else{block.style.position='relative';block.insertBefore(btn,block.firstChild);}
-}
-document.querySelectorAll('.editable-prose').forEach(bindProse);
-
-━━━ EDITABLE PROSE ━━━
-Executive Summary, Key Insights, and Comparison Analysis each wrap their <p> tags in a single <div class="editable-prose">. The bindProse() code above automatically injects an inline ✎ edit toggle into each of those sections' <h2> headings (click ✎ to make the prose editable in place, ✓ to finish), exactly like the recommendation editor. Do NOT hand-write edit buttons or contenteditable attributes for these sections — bindProse handles it. Only wrap genuine narrative prose this way; never the data tables, metric cards, or headings.
 
 **11. FOOTER**
 background:#0a0a0a;color:#555;padding:18px 48px;display:flex;justify-content:space-between;font-size:11px;margin:48px -48px -40px
