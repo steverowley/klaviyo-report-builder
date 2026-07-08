@@ -86,6 +86,40 @@ export function addSpend(current, costUsd) {
   return Math.round((base + Math.min(add, 50)) * 1e6) / 1e6;
 }
 
+// ── GitHub issue helpers (bug reports / feature requests) ────────────────────
+
+const ISSUE_TITLE_MAX = 200;
+const ISSUE_BODY_MAX = 8000;
+
+// Collapse a value onto a single trimmed line and cap its length — used for the
+// auto-appended metadata (page URL, browser) so untrusted browser values can't
+// break out of the issue footer's formatting.
+export function sanitiseMetaLine(value, max = 300) {
+  return String(value ?? '').replace(/[\r\n`]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
+}
+
+// Build the GitHub issues API payload from a validated feedback submission.
+// `type` is 'bug' | 'feature'. The title gets a [Bug]/[Feature] prefix and the
+// matching default label; a small footer records who filed it and the technical
+// context, so triage has what it needs without the user typing it.
+export function buildIssuePayload({ type, title, body, meta = {} }) {
+  const isBug = type === 'bug';
+  const cleanTitle = String(title ?? '').replace(/\s+/g, ' ').trim().slice(0, ISSUE_TITLE_MAX);
+  const cleanBody = String(body ?? '').trim().slice(0, ISSUE_BODY_MAX);
+
+  const footer = [];
+  if (meta.submittedBy) footer.push(`**Submitted by:** ${sanitiseMetaLine(meta.submittedBy, 80)}`);
+  if (meta.pageUrl)     footer.push(`**Page:** ${sanitiseMetaLine(meta.pageUrl)}`);
+  if (meta.userAgent)   footer.push(`**Browser:** ${sanitiseMetaLine(meta.userAgent)}`);
+  footer.push('_Filed from the Klaviyo Report Builder feedback form._');
+
+  return {
+    title: `${isBug ? '[Bug]' : '[Feature]'} ${cleanTitle}`,
+    body: `${cleanBody}\n\n---\n${footer.join('\n')}`,
+    labels: [isBug ? 'bug' : 'enhancement'],
+  };
+}
+
 // Read merged client list: KV-stored clients first, then CLIENTS_JSON secret fallback.
 async function readClients(env) {
   let kvClients = [];
@@ -636,6 +670,74 @@ async function handleRequest(request, env, origin) {
           ...cors(origin),
         },
       });
+    }
+
+    // ── POST /?action=github-issue — file a bug report / feature request ──────
+    // Creates an issue in the configured GitHub repo using a server-side token so
+    // users never need a GitHub login. Requires a valid app session (the whole app
+    // is gated behind sign-in anyway) to keep the endpoint from being abused for
+    // anonymous issue spam. GITHUB_TOKEN never leaves the worker.
+    if (request.method === 'POST' && action === 'github-issue') {
+      const authFail = await requireSession(request, env, origin);
+      if (authFail) return authFail;
+      if (!env.GITHUB_TOKEN) {
+        return new Response(JSON.stringify({ error: "Feedback isn't set up yet — an admin needs to add the GITHUB_TOKEN worker secret." }), {
+          status: 503, headers: { 'Content-Type': 'application/json', ...cors(origin) },
+        });
+      }
+      let body;
+      try { body = await request.json(); } catch {
+        return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
+          status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) },
+        });
+      }
+      const { type, title, description, pageUrl, userAgent } = body;
+      if ((type !== 'bug' && type !== 'feature') || !title || !String(title).trim()) {
+        return new Response(JSON.stringify({ error: 'A type (bug or feature) and a title are required.' }), {
+          status: 400, headers: { 'Content-Type': 'application/json', ...cors(origin) },
+        });
+      }
+      const repo = env.GITHUB_REPO || 'steverowley/klaviyo-report-builder';
+      // Attribute the issue to the verified session user, not a client-supplied field.
+      const ghSession = await verifyToken(getBearerToken(request), env.TOKEN_SECRET);
+      const payload = buildIssuePayload({
+        type, title, body: description,
+        meta: { submittedBy: ghSession?.sub, pageUrl, userAgent },
+      });
+      try {
+        const gh = await fetch(`https://api.github.com/repos/${repo}/issues`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${env.GITHUB_TOKEN}`,
+            'Accept': 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
+            'Content-Type': 'application/json',
+            'User-Agent': 'klaviyo-report-builder',
+          },
+          body: JSON.stringify(payload),
+        });
+        if (!gh.ok) {
+          // Log the upstream detail server-side only — never echo GitHub's body (or
+          // anything token-related) back to the browser.
+          const detail = await gh.text().catch(() => '');
+          console.error(`GitHub issue create failed (${gh.status}): ${detail.slice(0, 400)}`);
+          const msg = (gh.status === 401 || gh.status === 403)
+            ? 'Feedback is misconfigured — GitHub rejected the token. Please tell an admin.'
+            : "Couldn't file this on GitHub just now — please try again shortly.";
+          return new Response(JSON.stringify({ error: msg }), {
+            status: 502, headers: { 'Content-Type': 'application/json', ...cors(origin) },
+          });
+        }
+        const issue = await gh.json();
+        return new Response(JSON.stringify({ created: true, url: issue.html_url, number: issue.number }), {
+          headers: { 'Content-Type': 'application/json', ...cors(origin) },
+        });
+      } catch (e) {
+        console.error('GitHub issue create error:', e);
+        return new Response(JSON.stringify({ error: "Couldn't reach GitHub — please try again shortly." }), {
+          status: 502, headers: { 'Content-Type': 'application/json', ...cors(origin) },
+        });
+      }
     }
 
     // ── GET /?action=admin-users ──────────────────────────────────────────────

@@ -4,6 +4,8 @@ import {
   trimReportWarnings,
   spendMonthKey,
   addSpend,
+  sanitiseMetaLine,
+  buildIssuePayload,
   extractResults,
   processAggregate,
   normaliseCampaigns,
@@ -74,6 +76,49 @@ describe('addSpend', () => {
   });
   it('clamps a single contribution so one bad value cannot blow up the total', () => {
     expect(addSpend(0, 9999)).toBe(50);
+  });
+});
+
+describe('sanitiseMetaLine', () => {
+  it('collapses newlines and backticks to spaces and trims', () => {
+    expect(sanitiseMetaLine('a\nb\t`c`  ')).toBe('a b c');
+  });
+  it('caps the length', () => {
+    expect(sanitiseMetaLine('x'.repeat(500), 10)).toHaveLength(10);
+  });
+  it('coerces nullish to an empty string', () => {
+    expect(sanitiseMetaLine(undefined)).toBe('');
+    expect(sanitiseMetaLine(null)).toBe('');
+  });
+});
+
+describe('buildIssuePayload', () => {
+  it('prefixes the title and applies the bug label', () => {
+    const p = buildIssuePayload({ type: 'bug', title: 'It broke', body: 'Steps here' });
+    expect(p.title).toBe('[Bug] It broke');
+    expect(p.labels).toEqual(['bug']);
+    expect(p.body).toContain('Steps here');
+  });
+  it('uses the enhancement label and [Feature] prefix for feature requests', () => {
+    const p = buildIssuePayload({ type: 'feature', title: 'Add export' });
+    expect(p.title).toBe('[Feature] Add export');
+    expect(p.labels).toEqual(['enhancement']);
+  });
+  it('appends the submitter and technical context to the body', () => {
+    const p = buildIssuePayload({
+      type: 'bug', title: 'x', body: 'y',
+      meta: { submittedBy: 'sam@swankyagency.com', pageUrl: 'https://app/report', userAgent: 'Chrome' },
+    });
+    expect(p.body).toContain('**Submitted by:** sam@swankyagency.com');
+    expect(p.body).toContain('**Page:** https://app/report');
+    expect(p.body).toContain('**Browser:** Chrome');
+    expect(p.body).toContain('Filed from the Klaviyo Report Builder');
+  });
+  it('collapses whitespace in the title and caps its length', () => {
+    const p = buildIssuePayload({ type: 'bug', title: '  spaced   out  ' });
+    expect(p.title).toBe('[Bug] spaced out');
+    const long = buildIssuePayload({ type: 'bug', title: 't'.repeat(500) });
+    expect(long.title.length).toBeLessThanOrEqual('[Bug] '.length + 200);
   });
 });
 

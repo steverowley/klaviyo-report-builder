@@ -67,8 +67,20 @@ All secrets are set via **Workers & Pages → klaviyo-proxy → Settings → Var
 | `ADMIN_PASSWORD` | Admin login password |
 | `SHARED_ANTHROPIC_KEY` | Anthropic API key — used server-side by the Worker's Anthropic proxy; never sent to the browser |
 | `KLAVIYO_KEY_<clientId>` | Per-client Klaviyo private API key (one per client) |
+| `GITHUB_TOKEN` | GitHub token with **Issues: read & write** on the issues repo — used server-side by the Worker's `?action=github-issue` proxy so the in-app feedback form can file bug reports / feature requests without anyone logging in to GitHub |
+| `GITHUB_REPO` *(optional)* | `owner/repo` to file feedback issues into (defaults to `steverowley/klaviyo-report-builder`). This is a plain variable, not a secret |
 
 `SHARED_ANTHROPIC_KEY` stays server-side: the browser calls the Worker's authenticated `?action=anthropic` proxy, so users never see or paste an API key.
+
+### Feedback (bug reports & feature requests)
+
+The bug icon in the app header opens a feedback form. Submissions are turned into
+GitHub issues (labelled `bug` or `enhancement`) via the Worker's `?action=github-issue`
+proxy, which injects `GITHUB_TOKEN` server-side — the token never reaches the browser
+and users never need a GitHub account. Until `GITHUB_TOKEN` is set, the form shows a
+"not set up yet" message instead of failing. Create the token as a
+[fine-grained personal access token](https://github.com/settings/personal-access-tokens/new)
+scoped to the issues repo with **Issues: Read and write**.
 
 ---
 
