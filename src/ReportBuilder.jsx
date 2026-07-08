@@ -8,6 +8,7 @@ import { inputStyle } from "./theme.js";
 import { ActivityBanner, EmptyState, LoadingState } from "./components/ReportStates.jsx";
 import { Field, SegmentButton, ContextTextarea, SignOffCheckbox } from "./components/Controls.jsx";
 import { AddClientModal, OffboardClientModal } from "./components/ClientModals.jsx";
+import { FeedbackModal } from "./components/FeedbackModal.jsx";
 import { useFocusTrap } from "./useFocusTrap.js";
 import { DEFAULT_WORKER_URL as BAKED_WORKER_URL } from "./config.js";
 
@@ -79,6 +80,7 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, 
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [showAddClientModal, setShowAddClientModal] = useState(false);
   const [showOffboardModal, setShowOffboardModal] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [savedReports, setSavedReports] = useState([]);
   const [currentReportMeta, setCurrentReportMeta] = useState(null);
   const [loadingSavedReport, setLoadingSavedReport] = useState(false);
@@ -770,6 +772,32 @@ ${reportHtml}`,
                 <div style={{ width: "1px", height: "12px", background: "#ededed" }} />
               </>
             )}
+            <button
+              onClick={() => setShowFeedbackModal(true)}
+              title="Report a bug or request a feature"
+              aria-label="Send feedback"
+              style={{
+                background: "transparent", border: "none", cursor: "pointer", padding: "4px",
+                color: "#b8b8b8", display: "flex", alignItems: "center", justifyContent: "center",
+                transition: "color 0.15s ease",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = "#6b6b6b")}
+              onMouseLeave={(e) => (e.currentTarget.style.color = "#b8b8b8")}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m8 2 1.88 1.88" />
+                <path d="M14.12 3.88 16 2" />
+                <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
+                <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
+                <path d="M12 20v-9" />
+                <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
+                <path d="M6 13H2" />
+                <path d="M3 21c0-2.1 1.7-3.9 3.8-4" />
+                <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
+                <path d="M22 13h-4" />
+                <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
+              </svg>
+            </button>
             {onOpenSettings && (
               <button
                 onClick={onOpenSettings}
@@ -1625,6 +1653,15 @@ ${reportHtml}`,
             }
             refreshSavedReports();
           }}
+        />
+      )}
+
+      {/* Bug report / feature request modal */}
+      {showFeedbackModal && (
+        <FeedbackModal
+          onClose={() => setShowFeedbackModal(false)}
+          sessionToken={sessionToken}
+          onSignOut={onSignOut}
         />
       )}
 
