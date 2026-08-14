@@ -11,9 +11,8 @@ import { Field, SegmentButton, ContextTextarea, SignOffCheckbox } from "./compon
 import { AddClientModal, OffboardClientModal } from "./components/ClientModals.jsx";
 import { FeedbackModal } from "./components/FeedbackModal.jsx";
 import { useFocusTrap } from "./useFocusTrap.js";
-import { DEFAULT_WORKER_URL as BAKED_WORKER_URL } from "./config.js";
+import { getWorkerUrl } from "./config.js";
 
-const WORKER_URL = "swanky_worker_url";
 const MODEL_KEY = "swanky_model";
 const DEFAULT_MODEL = "claude-sonnet-4-6";
 
@@ -240,7 +239,7 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, 
       return;
     }
 
-    const workerUrl = localStorage.getItem(WORKER_URL) || BAKED_WORKER_URL;
+    const workerUrl = getWorkerUrl();
 
     if (!workerUrl) {
       if (onOpenSettings) onOpenSettings();
@@ -294,7 +293,7 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, 
 
   // Fetch this month's Anthropic spend vs the cap, for the sidebar meter.
   const refreshSpendStatus = async () => {
-    const workerUrl = localStorage.getItem(WORKER_URL) || BAKED_WORKER_URL;
+    const workerUrl = getWorkerUrl();
     if (!workerUrl) return;
     try {
       const res = await workerFetch(workerUrl, { action: "spend-status", token: sessionToken });
@@ -304,7 +303,7 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, 
 
   // Record a finished report's cost against the monthly total.
   const trackSpend = async (costUsd) => {
-    const workerUrl = localStorage.getItem(WORKER_URL) || BAKED_WORKER_URL;
+    const workerUrl = getWorkerUrl();
     if (!workerUrl || !(costUsd > 0)) return;
     try {
       await workerFetch(workerUrl, { action: "track-spend", method: "POST", token: sessionToken, body: { costUsd } });
@@ -314,7 +313,7 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, 
 
   // Refresh the past-reports list from worker KV.
   const refreshSavedReports = async () => {
-    const workerUrl = localStorage.getItem(WORKER_URL);
+    const workerUrl = getWorkerUrl();
     if (!workerUrl) return;
     try {
       const res = await workerFetch(workerUrl, {
@@ -335,7 +334,7 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, 
   // Save a freshly generated report to KV for cross-device access. Returns the
   // server-assigned key (or null) so the caller can highlight it as the current report.
   const saveReportToWorker = async (html, metadata, inputData) => {
-    const workerUrl = localStorage.getItem(WORKER_URL);
+    const workerUrl = getWorkerUrl();
     if (!workerUrl) return null;
     try {
       const res = await workerFetch(workerUrl, {
@@ -354,7 +353,7 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, 
     // Optimistically remove from state immediately
     setSavedReports(prev => prev.filter(r => r.key !== key));
     if (currentReportMeta?.key === key) handleNewReport();
-    const workerUrl = localStorage.getItem(WORKER_URL);
+    const workerUrl = getWorkerUrl();
     if (workerUrl) {
       try {
         const res = await workerFetch(workerUrl, { action: "delete-report", params: { key }, method: "POST", token: sessionToken });
@@ -367,7 +366,7 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, 
   const loadSavedReport = async (key) => {
     setLoadingSavedReport(true);
     try {
-      const workerUrl = localStorage.getItem(WORKER_URL);
+      const workerUrl = getWorkerUrl();
       if (!workerUrl) return;
       let html, meta;
       try {
@@ -444,7 +443,7 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, 
       }
       if (event.data?.type !== 'regenerate-step') return;
       const { sid } = event.data;
-      const workerUrl = localStorage.getItem(WORKER_URL) || BAKED_WORKER_URL;
+      const workerUrl = getWorkerUrl();
       if (!workerUrl) {
         setError("Worker URL missing — open Settings to add it.");
         return;
@@ -502,7 +501,7 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, 
 
   // Fetch client list from worker whenever settings change or on first load
   useEffect(() => {
-    const workerUrl = localStorage.getItem(WORKER_URL);
+    const workerUrl = getWorkerUrl();
     if (!workerUrl) return;
     setClientsError("");
     workerFetch(workerUrl, { token: sessionToken })
@@ -532,7 +531,7 @@ export default function KlaviyoReportBuilder({ onOpenSettings, settingsVersion, 
   };
 
   const handleCreateSlidesPrompt = async () => {
-    const workerUrl = localStorage.getItem(WORKER_URL) || BAKED_WORKER_URL;
+    const workerUrl = getWorkerUrl();
     if (!workerUrl || !reportHtml) return;
     setIsCreatingSlides(true);
     setSlidesProgress(0);
@@ -661,7 +660,7 @@ ${reportHtml}`,
   // number can be reconstructed. Only available once a report has been saved (has a key).
   const handleDownloadData = async () => {
     const key = currentReportMeta?.key;
-    const workerUrl = localStorage.getItem(WORKER_URL) || BAKED_WORKER_URL;
+    const workerUrl = getWorkerUrl();
     if (!key || !workerUrl) { setError("Source data is available once the report has saved — try again in a moment."); return; }
     try {
       const res = await workerFetch(workerUrl, { action: "get-report-data", params: { key }, token: sessionToken });

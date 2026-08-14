@@ -609,8 +609,8 @@ async function handleRequest(request, env, origin) {
       }
       const emailVerified = tokenInfo.email_verified === true || tokenInfo.email_verified === 'true';
       const email = (tokenInfo.email || '').toLowerCase();
-      if (!emailVerified || !email.endsWith('@swankyagency.com')) {
-        return new Response(JSON.stringify({ error: 'Access restricted to verified @swankyagency.com accounts' }), { status: 403, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
+      if (!emailVerified || !email) {
+        return new Response(JSON.stringify({ error: 'A verified Google email address is required' }), { status: 403, headers: { 'Content-Type': 'application/json', ...cors(origin) } });
       }
       if (!env.USERS) {
         return new Response(JSON.stringify({ error: 'User store not configured.' }), { status: 503, headers: { 'Content-Type': 'application/json', ...cors(origin) } });

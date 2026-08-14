@@ -11,3 +11,13 @@
 // still override it at runtime in Settings.
 export const DEFAULT_WORKER_URL =
   import.meta.env.VITE_WORKER_URL || "https://klaviyo-proxy.rowley-778.workers.dev";
+
+// Single source of truth for the Worker URL. An admin-set override in Settings
+// (localStorage) wins; otherwise the baked-in URL above is used. Always call
+// this rather than reading localStorage directly — a missing key must never
+// leave a caller without a URL.
+export const WORKER_URL_KEY = "swanky_worker_url";
+
+export function getWorkerUrl() {
+  return localStorage.getItem(WORKER_URL_KEY) || DEFAULT_WORKER_URL;
+}

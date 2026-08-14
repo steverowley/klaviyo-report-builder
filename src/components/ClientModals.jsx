@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { workerFetch } from "../workerApi.js";
 import { useFocusTrap } from "../useFocusTrap.js";
+import { getWorkerUrl } from "../config.js";
 
 const modalLabelStyle = {
   fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.16em",
@@ -46,7 +47,7 @@ export function AddClientModal({ onClose, onAdded, sessionToken }) {
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
-    const workerUrl = localStorage.getItem("swanky_worker_url");
+    const workerUrl = getWorkerUrl();
     if (!workerUrl) {
       setStatus("error");
       setErrorMsg("Worker URL not set. Open Settings and add it first.");
@@ -228,7 +229,7 @@ export function OffboardClientModal({ clients, sessionToken, onClose, onSignOut,
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
-    const workerUrl = localStorage.getItem("swanky_worker_url");
+    const workerUrl = getWorkerUrl();
     if (!workerUrl) { setStatus("error"); setErrorMsg("Worker URL not set. Open Settings and add it first."); return; }
     setStatus("loading"); setErrorMsg("");
     try {

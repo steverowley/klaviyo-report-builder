@@ -31,7 +31,7 @@ managing clients and users.
 
 There are two ways in:
 
-- **Sign in with Google** — use your `@swankyagency.com` account. The first time you
+- **Sign in with Google** — use any Google account. The first time you
   sign in, your account goes into a **pending** queue and an admin has to approve it
   before you can use the tool. You'll see a "waiting for approval" message until then.
 - **Admin sign-in** — admins can use the "Admin sign-in" toggle and enter the admin

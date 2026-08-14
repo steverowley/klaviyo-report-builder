@@ -45,7 +45,7 @@ Klaviyo's private API requires a server-side key and does not support browser CO
 
 The app is gated behind a login screen. Access works as follows:
 
-1. Swanky staff **sign in with Google** — access is restricted to verified `@swankyagency.com` accounts, which are provisioned automatically on first sign-in.
+1. Users **sign in with Google** — any verified Google account can sign in, but the first sign-in only creates a **pending** account. An admin must approve it in the Users panel before it can be used.
 2. **Admins** can also sign in with a username and password (the "Admin sign-in" toggle), bootstrapped from the `ADMIN_USERNAME` / `ADMIN_PASSWORD` worker secrets.
 
 No API key setup is required — the user just signs in and the app is fully configured.
