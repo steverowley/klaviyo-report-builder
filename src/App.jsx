@@ -5,6 +5,7 @@ import SignIn from "./SignIn.jsx";
 import ErrorBoundary from "./ErrorBoundary.jsx";
 import { workerFetch } from "./workerApi.js";
 import { useFocusTrap } from "./useFocusTrap.js";
+import { getWorkerUrl } from "./config.js";
 
 function CursorDot() {
   const dotRef = useRef(null);
@@ -100,7 +101,7 @@ function AdminPanel({ session, onClose, onSignOut }) {
   const panelRef = useRef(null);
   useFocusTrap(panelRef);
 
-  const workerUrl = localStorage.getItem("swanky_worker_url") || "";
+  const workerUrl = getWorkerUrl();
 
   const fetchUsers = async () => {
     setLoading(true);

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
-
-const WORKER_URL = "swanky_worker_url";
+import { WORKER_URL_KEY as WORKER_URL } from "./config.js";
 
 export default function Settings({ onSave }) {
   const [workerUrl, setWorkerUrl] = useState("");

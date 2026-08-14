@@ -4,6 +4,7 @@
 import { useState, useEffect, useRef } from "react";
 import { workerFetch } from "../workerApi.js";
 import { useFocusTrap } from "../useFocusTrap.js";
+import { getWorkerUrl } from "../config.js";
 import { SegmentButton } from "./Controls.jsx";
 
 const labelStyle = {
@@ -46,7 +47,7 @@ export function FeedbackModal({ onClose, sessionToken, onSignOut }) {
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
-    const workerUrl = localStorage.getItem("swanky_worker_url");
+    const workerUrl = getWorkerUrl();
     if (!workerUrl) {
       setStatus("error");
       setErrorMsg("Worker URL not set. Open Settings and add it first.");

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import { DEFAULT_WORKER_URL } from "./config.js";
+import { getWorkerUrl } from "./config.js";
 
-const WORKER_URL_KEY = "swanky_worker_url";
 const GOOGLE_CLIENT_ID = "603699639407-kufvngv1tcjbr38bp2bi7i7f21o3rvbb.apps.googleusercontent.com";
 
 function signInErrorMessage(data, status) {
@@ -12,21 +11,19 @@ function signInErrorMessage(data, status) {
 }
 
 export default function SignIn({ onSignIn, onOpenSettings, notice }) {
-  // Build-time URL always wins; localStorage is only a fallback for local dev
-  const [workerUrl, setWorkerUrl] = useState(
-    () => DEFAULT_WORKER_URL || localStorage.getItem(WORKER_URL_KEY) || ""
-  );
+  const [workerUrl, setWorkerUrl] = useState(getWorkerUrl);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showAdminForm, setShowAdminForm] = useState(false);
   const [adminUsername, setAdminUsername] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
 
+  // Not persisted: the URL comes from getWorkerUrl(), and writing it back would
+  // pin the current value in localStorage, shadowing the baked-in URL for every
+  // existing browser after the Worker is ever repointed. Settings is the only
+  // place that stores an override.
   const workerUrlRef = useRef(workerUrl);
-  useEffect(() => {
-    workerUrlRef.current = workerUrl;
-    if (workerUrl) localStorage.setItem(WORKER_URL_KEY, workerUrl);
-  }, [workerUrl]);
+  useEffect(() => { workerUrlRef.current = workerUrl; }, [workerUrl]);
 
   const onSignInRef = useRef(onSignIn);
   useEffect(() => { onSignInRef.current = onSignIn; }, [onSignIn]);
@@ -53,7 +50,6 @@ export default function SignIn({ onSignIn, onOpenSettings, notice }) {
       sessionStorage.setItem("swanky_session", data.token);
       sessionStorage.setItem("swanky_session_user", data.username);
       sessionStorage.setItem("swanky_session_admin", String(data.admin));
-      if (data.workerUrl) localStorage.setItem(WORKER_URL_KEY, data.workerUrl);
       onSignInRef.current({ token: data.token, username: data.username, admin: data.admin });
     } catch {
       setError(`Could not reach the worker at ${url} — verify the URL in Settings.`);
@@ -113,7 +109,6 @@ export default function SignIn({ onSignIn, onOpenSettings, notice }) {
       sessionStorage.setItem("swanky_session", data.token);
       sessionStorage.setItem("swanky_session_user", data.username);
       sessionStorage.setItem("swanky_session_admin", String(data.admin));
-      if (data.workerUrl) localStorage.setItem(WORKER_URL_KEY, data.workerUrl);
       onSignInRef.current({ token: data.token, username: data.username, admin: data.admin });
     } catch {
       setError("Network error — check the Worker URL.");
