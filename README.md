@@ -97,12 +97,17 @@ Client list and keys are stored in the `CLIENTS_KV` Cloudflare KV namespace.
 
 ## Deploying the Worker
 
+> Setting this up on fresh accounts? Follow [docs/self-host-setup.md](docs/self-host-setup.md)
+> instead — it covers the Cloudflare account, KV namespaces, every secret, the
+> Google OAuth client and the GitHub Actions secrets, in order.
+
 The Worker lives in `worker/index.js`. Deploy with [Wrangler](https://developers.cloudflare.com/workers/wrangler/):
 
 ```bash
 cd worker
 npm install
 npx wrangler login
+export CLOUDFLARE_ACCOUNT_ID=<your account id>
 npx wrangler deploy
 ```
 
@@ -110,7 +115,9 @@ After deploy, set the required secrets in the Cloudflare dashboard (see table ab
 
 ### KV namespaces
 
-Two KV namespaces are required and already referenced in `wrangler.toml`:
+Two KV namespaces are required. `wrangler.toml` ships with placeholder IDs —
+KV namespaces are account-specific, so you must create your own and paste the
+IDs in:
 
 | Binding | Purpose |
 |---|---|

@@ -1,13 +1,22 @@
 name = "klaviyo-proxy"
 main = "index.js"
 compatibility_date = "2026-06-01"
-account_id = "77880cca6d7b7876167d1dbbf0494d26"
 workers_dev = true
 
+# account_id is deliberately not set here — Wrangler reads it from the
+# CLOUDFLARE_ACCOUNT_ID environment variable (a GitHub Actions secret in CI, or
+# your shell locally). Keeping it out of the file means moving the Worker to a
+# different Cloudflare account is a secret change, not a code change.
+
+# These IDs are account-specific: KV namespaces created in one Cloudflare
+# account cannot be read from another. Create them with
+#   npx wrangler kv namespace create CLIENTS_KV
+#   npx wrangler kv namespace create USERS
+# and paste the returned IDs here. See docs/self-host-setup.md.
 [[kv_namespaces]]
 binding = "CLIENTS_KV"
-id = "4b9a981938ac4fc6bebea9ba1f5c8290"
+id = "REPLACE_WITH_YOUR_CLIENTS_KV_ID"
 
 [[kv_namespaces]]
 binding = "USERS"
-id = "06fd92e3b6a7407f86113278b31e02b2"
+id = "REPLACE_WITH_YOUR_USERS_KV_ID"

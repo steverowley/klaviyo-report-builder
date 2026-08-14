@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { getWorkerUrl } from "./config.js";
-
-const GOOGLE_CLIENT_ID = "603699639407-kufvngv1tcjbr38bp2bi7i7f21o3rvbb.apps.googleusercontent.com";
+import { getWorkerUrl, GOOGLE_CLIENT_ID } from "./config.js";
 
 function signInErrorMessage(data, status) {
   if (data?.error === "pending") {
