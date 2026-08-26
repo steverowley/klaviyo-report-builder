@@ -262,4 +262,4 @@ Claude can take 60–120 seconds for a full report — this is normal. If it nev
 
 ---
 
-> **Internal tool — Swanky Agency only. Not publicly released. Version 1 (not yet live).**
+> **Internal tool Not publicly released. Version 1 (not yet live).**
