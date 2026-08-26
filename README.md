@@ -1,8 +1,6 @@
 # Klaviyo Report Builder
 
-A browser-based tool for Swanky Agency that pulls live data from client Klaviyo accounts and uses Claude AI to generate polished, print-ready email marketing performance reports in minutes.
-
-![Swanky Agency](https://swankyagency.com/wp-content/uploads/2022/05/swanky-2020-black.png)
+A browser-based tool for Agencies that pulls live data from client Klaviyo accounts and uses Claude AI to generate polished, print-ready email marketing performance reports in minutes.
 
 ---
 
