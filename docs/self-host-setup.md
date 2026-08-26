@@ -62,6 +62,18 @@ npx wrangler kv namespace create USERS
 Each prints an `id`. Open `worker/wrangler.toml` and replace
 `REPLACE_WITH_YOUR_CLIENTS_KV_ID` and `REPLACE_WITH_YOUR_USERS_KV_ID` with them.
 
+### Check the config before deploying
+
+This builds the Worker and prints its bindings without contacting Cloudflare, so
+it works before any credentials are set up:
+
+```bash
+npx wrangler deploy --dry-run --outdir /tmp/worker-check
+```
+
+If it still lists `REPLACE_WITH_YOUR_...` against a binding, the KV IDs above
+haven't been pasted in yet.
+
 ### First deploy
 
 ```bash
@@ -147,12 +159,35 @@ Google Cloud project, so you need your own — an inherited client ID will rejec
 every sign-in.
 
 1. Go to [console.cloud.google.com](https://console.cloud.google.com) and create a project.
-2. APIs & Services → OAuth consent screen. Choose **External**, fill in app name and your email, and save. It can stay in "Testing" mode — that's fine for a small number of users.
-3. APIs & Services → Credentials → Create Credentials → **OAuth client ID** → **Web application**.
+2. APIs & Services → **Google Auth Platform**. (Google renamed this from "OAuth
+   consent screen" — if a guide elsewhere mentions that name, this is the same
+   thing.) A fresh project shows a **Get started** wizard; work through it,
+   setting **Audience** to **External** and filling in the app name and your
+   support email.
+3. Still under Google Auth Platform → **Clients** → **Create client** →
+   **Web application**.
 4. Under **Authorised JavaScript origins**, add every URL the app is served from:
    - `https://<your-github-username>.github.io`
    - `http://localhost:5173` (for local development)
+
+   This app signs in with Google Identity Services, which validates the page's
+   origin rather than redirecting. You do **not** need to fill in Authorised
+   redirect URIs — leave that section empty.
 5. Create, then copy the **Client ID** (ends in `.apps.googleusercontent.com`).
+
+### Testing mode: add every user
+
+An External app left in **Testing** is restricted to accounts listed as test
+users — up to 100. Anyone not on that list is refused at the Google prompt,
+before the app ever sees them.
+
+So under Google Auth Platform → **Audience** → **Test users**, add your own
+Google address and anyone else who needs in. Do this now; it's the most common
+reason a correctly-configured sign-in still fails.
+
+Publishing the app removes that limit but sends it into Google's verification
+process. For a handful of users, staying in Testing and maintaining the list is
+the simpler path.
 
 That one ID goes in two places, and they must match:
 
@@ -193,7 +228,8 @@ at the old Worker, and it's what local development uses when
 ## 6. First sign-in
 
 1. Open the app and use **Admin sign-in** with the username and password from step 2.
-2. Sign in with Google separately — that creates a **pending** account.
+2. Sign in with Google separately — that creates a **pending** account. If Google
+   itself refuses the account, you've hit the test-user list from step 4.
 3. Back as admin, open the Users panel and approve it.
 
 Every Google sign-in lands in the pending queue first; nobody gets in until an
@@ -211,6 +247,7 @@ share it.
 | `account_id ... does not match any of your authenticated accounts` | `CLOUDFLARE_ACCOUNT_ID` belongs to a different account than the token. |
 | Google button appears, sign-in returns "Token not issued for this application" | Frontend `VITE_GOOGLE_CLIENT_ID` and Worker `GOOGLE_CLIENT_ID` disagree. |
 | Google popup errors before reaching the app | The app's URL isn't in the OAuth client's authorised JavaScript origins. |
+| Google refuses the account at its own prompt, before the app loads | The app is in Testing mode and that address isn't a test user (step 4). |
 | Client dropdown empty | `CLIENTS_JSON` unset or `[]`. |
 | A client errors on report generation | Missing or wrong `KLAVIYO_KEY_<id>`, or the key lacks read scopes. |
 | Reports fail with a 503 about the Anthropic key | `SHARED_ANTHROPIC_KEY` unset, or the account is out of credit. |
